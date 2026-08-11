@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>곡 리스트 - 대파밀수단</title>
+  <link rel="stylesheet" href="/common/common.css" />
+  <link rel="stylesheet" href="css/songs.css" />
+</head>
+<body>
+  <header id="app-header" class="app-bar"></header>
+  <div class="container">
+    <section class="card">
+      <div class="section-head">
+        <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> 곡 리스트</h2>
+        <select id="filter" class="filter-select" aria-label="곡 상태 필터">
+          <option value="all">전체</option>
+          <option value="candidate">후보</option>
+          <option value="expected">예정</option>
+          <option value="done">완료</option>
+        </select>
+      </div>
+
+      <button type="button" class="pink add-btn" id="add-btn">＋ 곡 추가</button>
+
+      <div id="add-form" class="form-col" hidden>
+        <input id="in-title" placeholder="곡명" />
+        <input id="in-artist" placeholder="아티스트" />
+        <input id="in-youtube" placeholder="유튜브 URL (선택)" />
+        <div class="role-picker">
+          <span class="role-picker-label">세션</span>
+          <div class="role-toggles" id="role-toggles"></div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="pink" id="save-btn">추가</button>
+          <button type="button" class="secondary" id="close-btn">닫기</button>
+        </div>
+      </div>
+
+      <div id="song-list" class="song-list"></div>
+    </section>
+  </div>
+
+  <nav id="app-tabbar" class="tab-bar"></nav>
+  <script src="/common/common.js"></script>
+  <script src="js/songs.js"></script>
+</body>
+</html>

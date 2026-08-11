@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>후보곡 추첨 - 대파밀수단</title>
+  <link rel="stylesheet" href="/common/common.css" />
+  <link rel="stylesheet" href="css/lottery.css" />
+</head>
+<body>
+  <header id="app-header" class="app-bar"></header>
+  <div class="container">
+    <section class="card">
+      <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 8h.01M16 8h.01M8 16h.01M16 16h.01M12 12h.01"/></svg> 후보곡 추첨</h2>
+      <p class="muted">추첨에 참여할 곡을 선택하세요.</p>
+
+      <div id="pool" class="lottery-pool"></div>
+
+      <div class="lottery-controls">
+        <span class="muted">추첨 수</span>
+        <div class="stepper">
+          <button type="button" class="secondary" id="minus">−</button>
+          <span class="stepper-value" id="count">1</span>
+          <button type="button" class="secondary" id="plus">＋</button>
+        </div>
+      </div>
+
+      <button type="button" class="pink add-btn" id="draw-btn">추첨하기</button>
+
+      <div id="result"></div>
+      <div id="history"></div>
+    </section>
+  </div>
+
+  <nav id="app-tabbar" class="tab-bar"></nav>
+  <script src="/common/common.js"></script>
+  <script src="js/lottery.js"></script>
+</body>
+</html>

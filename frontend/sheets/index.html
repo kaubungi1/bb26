@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>악보 공유 - 대파밀수단</title>
+  <link rel="stylesheet" href="/common/common.css" />
+  <link rel="stylesheet" href="css/sheets.css" />
+</head>
+<body>
+  <header id="app-header" class="app-bar"></header>
+  <div class="container">
+    <section class="card">
+      <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8"/></svg> 악보 공유</h2>
+      <form id="add-form" class="form-col">
+        <select id="song-select">
+          <option value="">곡 선택</option>
+        </select>
+        <select id="session-select">
+          <option value="">세션 선택</option>
+        </select>
+        <label class="file-field">
+          <input type="file" id="file-input" aria-label="악보 파일 선택" />
+          <span class="file-fake" id="file-fake"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg> 파일 선택</span>
+        </label>
+        <button type="submit" class="pink" id="upload-btn">업로드</button>
+      </form>
+      <div id="list" class="plain-list"></div>
+    </section>
+  </div>
+
+  <nav id="app-tabbar" class="tab-bar"></nav>
+  <script src="/common/common.js"></script>
+  <script src="js/sheets.js"></script>
+</body>
+</html>

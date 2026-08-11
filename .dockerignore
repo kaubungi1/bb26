@@ -1,0 +1,10 @@
+.git
+.gitignore
+MEMORY.md
+.env
+**/__pycache__
+**/*.pyc
+backend/app.db
+backend/uploads
+frontend/node_modules
+*.log

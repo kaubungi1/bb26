@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>합주 이력 - 대파밀수단</title>
+  <link rel="stylesheet" href="/common/common.css" />
+  <link rel="stylesheet" href="css/history.css" />
+</head>
+<body>
+  <header id="app-header" class="app-bar"></header>
+  <div class="container">
+    <section class="card">
+      <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg> 합주 이력 · 일정</h2>
+      <form id="add-form" class="form-row">
+        <select id="song-select">
+          <option value="">곡 선택</option>
+        </select>
+        <input type="date" id="date-input" />
+        <button type="submit" class="pink">이력 추가</button>
+      </form>
+      <div id="list" class="plain-list"></div>
+    </section>
+  </div>
+
+  <nav id="app-tabbar" class="tab-bar"></nav>
+  <script src="/common/common.js"></script>
+  <script src="js/history.js"></script>
+</body>
+</html>

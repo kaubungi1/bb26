@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>일정 - 대파밀수단</title>
+  <link rel="stylesheet" href="/common/common.css" />
+  <link rel="stylesheet" href="css/schedule.css" />
+</head>
+<body>
+  <header id="app-header" class="app-bar"></header>
+  <div class="container">
+    <section class="card">
+      <div class="section-head">
+        <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> 일정</h2>
+        <div class="cal-nav">
+          <button type="button" class="ghost cal-nav-btn" id="prev-month">‹</button>
+          <span id="cal-title" class="cal-title"></span>
+          <button type="button" class="ghost cal-nav-btn" id="next-month">›</button>
+        </div>
+      </div>
+      <div id="calendar" class="calendar"></div>
+      <div class="cal-legend">
+        <span><i class="legend-dot confirmed"></i>확정</span>
+        <span><i class="legend-dot polling"></i>조율중</span>
+        <button type="button" class="ghost" id="today-btn">오늘</button>
+      </div>
+    </section>
+
+    <section class="card" id="polls-card">
+      <div class="section-head">
+        <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> 조율 중</h2>
+        <button type="button" class="pink add-btn-sm" id="add-poll-btn">＋ 일정 추가</button>
+      </div>
+      <div id="poll-list" class="poll-list"></div>
+    </section>
+
+    <section class="card" id="day-card" hidden>
+      <h2 id="day-title"></h2>
+      <div id="day-list" class="plain-list"></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="add-modal" hidden>
+    <div class="modal">
+      <h3 class="modal-title">＋ 합주 후보 만들기</h3>
+      <p class="modal-desc">후보 기간을 정하면 멤버들이 날짜별로 가능 여부를 체크합니다.</p>
+      <form id="add-form" class="modal-form">
+        <input id="in-title" placeholder="일정 제목 (예: 미쿠탄생17돐기념합주)" required />
+        <div class="range-row">
+          <input type="date" id="in-from" required />
+          <span class="range-tilde">~</span>
+          <input type="date" id="in-to" required />
+        </div>
+        <input id="in-note" placeholder="메모 (선택)" />
+        <button type="submit" class="pink">후보 생성</button>
+        <button type="button" class="ghost" id="add-cancel">취소</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="fullscreen" id="poll-view" hidden>
+    <header class="poll-view-head">
+      <button type="button" class="ghost" id="poll-back">‹ 뒤로</button>
+      <div class="poll-view-title">
+        <strong id="poll-title"></strong>
+        <span id="poll-meta" class="muted"></span>
+      </div>
+      <button type="button" class="ghost" id="poll-delete">삭제</button>
+    </header>
+    <div class="poll-body">
+      <div class="poll-toolbar">
+        <label class="chk"><input type="checkbox" id="weekend-only" /> 주말만</label>
+        <span id="poll-hint" class="muted">내 열(점선)을 탭해 가능 표시 · 다시 탭하면 해제</span>
+      </div>
+      <div id="matrix" class="matrix-wrap"></div>
+      <div class="confirm-bar">
+        <div class="confirm-row">
+          <select id="confirm-date" class="confirm-select"></select>
+          <input type="time" id="confirm-start" placeholder="시작" />
+          <input type="time" id="confirm-end" placeholder="종료" />
+        </div>
+        <div class="confirm-row">
+          <input id="confirm-place" placeholder="장소 (선택)" />
+          <button type="button" class="pink" id="confirm-btn">이 날짜로 확정</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav id="app-tabbar" class="tab-bar"></nav>
+  <script src="/common/common.js"></script>
+  <script src="js/schedule.js"></script>
+</body>
+</html>
