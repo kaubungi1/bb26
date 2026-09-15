@@ -165,11 +165,22 @@ CREATE TABLE IF NOT EXISTS eventLineups (
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE ("eventId", "songId", "role", "nickname")
 );
+
+-- 곡에 남기는 한마디. 자켓 아래에서 한 줄씩 돌아가며 보인다.
+CREATE TABLE IF NOT EXISTS songComments (
+  "id" SERIAL PRIMARY KEY,
+  "songId" INTEGER NOT NULL REFERENCES songs("id") ON DELETE CASCADE,
+  "nickname" TEXT NOT NULL,
+  "body" TEXT NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 """
 
 
 # 이미 만들어진 DB를 새 구조로 맞춘다. 전부 멱등이라 매 기동마다 돌려도 무해하다.
 MIGRATIONS = [
+    'CREATE INDEX IF NOT EXISTS idx_songcomments_song ON songComments ("songId", "id")',
+    'CREATE INDEX IF NOT EXISTS idx_songs_guild ON songs ("guildId")',
     # 악보: 곡과의 결합 제거 + 분류/검색용 컬럼
     'ALTER TABLE sheets ADD COLUMN IF NOT EXISTS "artist" TEXT',
     'ALTER TABLE sheets ADD COLUMN IF NOT EXISTS "role" TEXT',
@@ -201,12 +212,20 @@ MIGRATIONS = [
     'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "bumpNote" TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "label" TEXT',
     'ALTER TABLE sessionSupports ADD COLUMN IF NOT EXISTS "comment" TEXT',
+    # 시트에 적힌 원문 표기. nickname 은 누구인지(신원), label 은 그날 뭐라고 적었는지(표기).
+    # 둘을 나눠야 "3개월뒤쯤의식빵" 을 식빵으로 합치면서도 농담을 잃지 않는다.
+    'ALTER TABLE sessionSupports ADD COLUMN IF NOT EXISTS "label" TEXT',
+    # 길드 명단에도 같은 원칙. nickname 은 신원, label 은 시트에 적혀 있던 표기.
+    'ALTER TABLE guildMembers ADD COLUMN IF NOT EXISTS "label" TEXT',
     'CREATE INDEX IF NOT EXISTS idx_songs_guild ON songs("guildId")',
     'CREATE INDEX IF NOT EXISTS idx_events_guild ON events("guildId")',
     'CREATE INDEX IF NOT EXISTS idx_eventsongs_event ON eventSongs("eventId")',
     'CREATE INDEX IF NOT EXISTS idx_eventsongs_song ON eventSongs("songId")',
     'CREATE INDEX IF NOT EXISTS idx_eventlineups_event ON eventLineups("eventId")',
     'CREATE INDEX IF NOT EXISTS idx_guildmembers_guild ON guildMembers("guildId")',
+    # 2단계: 멤버 캐릭터 이미지 (256px 정사각형 WebP)
+    'ALTER TABLE members ADD COLUMN IF NOT EXISTS "image" BYTEA',
+    'ALTER TABLE members ADD COLUMN IF NOT EXISTS "imageUpdatedAt" TIMESTAMPTZ',
 ]
 
 

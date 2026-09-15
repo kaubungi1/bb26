@@ -1,32 +1,50 @@
-# React + TypeScript + Vite
+# 불법이륙 프론트엔드
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+HTML/CSS/JavaScript 정적 페이지를 FastAPI가 함께 제공한다. 프론트 빌드 단계는 없다.
 
-Currently, two official plugins are available:
+## 화면
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| 주소 | 기능 |
+| --- | --- |
+| `/` | 실제 곡 선곡, 혼합 추천, 검색·필터·정렬, 파트 지원, 모임·내 참여 |
+| `/songs/` | 곡·세션 지원, 길드 필터, 끌올 |
+| `/schedule/` | 날짜 투표, 확정, 셋리스트와 라인업 |
+| `/schedule/?event=<id>` | 해당 일정을 바로 열기 |
+| `/sheets/` | 공용 악보 라이브러리 |
+| `/guilds/` | 길드 검색·생성, 파트별 명단 |
+| `/guild/<slug>/` | 길드 곡 선곡·일정, 명단·합류·탈퇴·길드 정보 편집 |
+| `/members/` | 멤버 검색, 파트 필터, 소개·가능 시간·소속, 내 프로필 편집 |
 
-## React Compiler
+길드 안의 곡·일정 화면도 같은 파일을 사용한다. `common/common.js`의 `Site`가 주소에서 길드를 읽어 API 필터에 반영한다. 악보와 끌올은 전체 공용이다.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 파일 배치
 
-## Expanding the Oxlint configuration
+- 각 화면의 `index.html`, `css/`, `js/`를 같은 디렉터리에 둔다.
+- `common/common.js`: API, 닉네임, 길드 문맥, 헤더·탭, 아바타와 프로필 캐시.
+- `common/profile.js`, `profile.css`: 홈·멤버 화면에서 공유하는 프로필 편집기와 스타일.
+- `common/guild.js`: 길드 생성·정보 편집 폼.
+- `home/js/home.js`: 실제 songs/events/guilds API 기반 선곡과 지원. 날짜별 편성은 일정 화면에서 관리한다.
+- `common/game.css`: 전체 페이지가 마지막에 로드하는 공통 게임 UI 테마. 기존 각 페이지의 기능 DOM과 API는 유지한다.
+- 메인 장르색: 보컬로이드 민트, J-POP 여 핑크, J-POP 남 블루, 애니송·게임 라벤더, 미분류 블루그레이.
+- 메인 추천은 방문별 장르·길드·빈 파트·등록 시점 가중치로 무작위 순서를 만든다. 뒤로 이동할 때 필터·정렬·선택을 복원한다. 시트 가져오기 날짜를 실제 등록일로 취급하지 않는다.
+- `/songs/?song=<id>`, `/songs/?add=1`, `/songs/?mine=1`은 각각 곡 위치, 등록 폼, 지원한 곡으로 연결한다.
+- 프로필 연주 파트는 선택사항이며 복수 선택이 가능하다. 새 이미지 업로드는 전체 구도를 유지한다.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## 실행
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+백엔드 의존성은 `backend/requirements.txt`에 있다. PostgreSQL의 `DATABASE_URL`을 설정하고 `backend/`에서 실행한다.
+
+```powershell
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+닉네임은 브라우저의 localStorage에 보관하며 로그인·권한 확인 기능은 현재 없다. API와 정적 페이지는 같은 서버를 사용한다. 서버 시작 시 `backend/db.py`의 `init_db()`가 스키마를 적용하므로 검증에는 별도 DB를 사용한다.
+
+## 2단계 검증 기록
+
+2026-09-16에 별도 메모리 PGlite(PostgreSQL 호환)와 로컬 FastAPI, Edge/Playwright로 검증했다. 운영 DB에는 연결하지 않았다.
+
+- API: 빈 홈, 길드 범위, 프로필·이미지, 참석 토글, 다음 합주, 끌올, 알림 개수.
+- 날짜: 한국 자정, UTC 날짜 차이, 월말·연말·윤일 경계.
+- 화면: 320·390·768·1440px, 검색·파트 필터, 프로필 저장, 길드 생성·편집, 일정 바로 열기, 요청 실패 후 복구.
+- 로컬 검증 스크립트·캡처는 Git에서 제외된 `Temp/phase2-check/`에 있다. 초기 API 검증 스크립트는 비어 있는 검증 DB를 전제로 한다.

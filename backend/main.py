@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from db import init_db
-from routers import events, guilds, histories, members, pairs, sessions, sheets, songs
+from routers import (comments, events, guilds, histories, home, members, pairs, sessions, sheets, songs)
 
 BASE_DIR = os.path.dirname(__file__)
 FRONTEND_DIR = os.path.normpath(os.path.join(BASE_DIR, '..', 'frontend'))
@@ -19,6 +19,7 @@ app = FastAPI(title='불법이륙 API')
 # (모듈, prefix, 태그). 새 리소스는 여기 한 줄만 보태면 된다.
 ROUTERS = [
     (songs, '/api/songs', '곡'),
+    (comments, '/api/songs', '곡 한마디'),
     (sessions, '/api/sessions', '세션'),
     (histories, '/api/histories', '합주 이력'),
     (sheets, '/api/sheets', '악보'),
@@ -26,6 +27,7 @@ ROUTERS = [
     (events, '/api/events', '일정'),
     (guilds, '/api/guilds', '길드'),
     (members, '/api/members', '멤버'),
+    (home, '/api/home', '홈'),
 ]
 for module, prefix, tag in ROUTERS:
     app.include_router(module.router, prefix=prefix, tags=[tag])
@@ -39,12 +41,12 @@ def health():
 # ---------- 정적 프론트 ----------
 @app.get('/')
 def index():
-    return RedirectResponse('/songs/')
+    return FileResponse(os.path.join(FRONTEND_DIR, 'index.html'))
 
 
 @app.get('/guild/{slug}')
 def guild_root(slug: str):
-    return RedirectResponse(f'/guild/{slug}/songs/')
+    return RedirectResponse(f'/guild/{slug}/')
 
 
 @app.get('/guild/{slug}/{path:path}')
@@ -52,7 +54,7 @@ def guild_page(slug: str, path: str, request: Request):
     """길드 사이트는 같은 정적 페이지를 /guild/<slug>/ 아래서 그대로 낸다.
     화면은 주소에서 slug 를 읽어 그 길드 것만 보여준다. 데이터는 하나, 얼굴만 여럿."""
     if not path:
-        return RedirectResponse(f'/guild/{slug}/songs/')
+        return FileResponse(os.path.join(FRONTEND_DIR, 'index.html'))
     full = os.path.normpath(os.path.join(FRONTEND_DIR, path))
     if not full.startswith(FRONTEND_DIR):
         raise HTTPException(404)

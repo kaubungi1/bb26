@@ -993,3 +993,13 @@ a.brand { text-decoration: none; }
 }
 .guild-badge > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
 .guild-badge.lg { font-size: 12px; padding: 3px 10px; }
+
+/* 이미지·이모지 아바타 */
+.avatar-chip { overflow: hidden; }
+.avatar-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-chip.has-img { background: #fff; }
+.avatar-chip .emoji { font-size: 1.05em; line-height: 1; }
+.avatar-chip.has-emoji { background: var(--chip-bg); }
+.avatar-chip.xl { width: 44px; height: 44px; font-size: 18px; box-shadow: none; flex: none; }
+.avatar-chip.xl .emoji { font-size: 24px; }
+.form-error { color: #a52b3d; font-size: 13px; overflow-wrap: anywhere; }

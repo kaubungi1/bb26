@@ -6,6 +6,7 @@ calDate.setDate(1);
 let selectedDate = null;
 let pollEvent = null;
 let weekendOnly = false;
+let pendingEventId = Number(new URLSearchParams(location.search).get('event'));
 
 const calEl = document.getElementById('calendar');
 const calTitle = document.getElementById('cal-title');
@@ -88,11 +89,19 @@ async function refresh() {
     events = await api.get(Site.q('/events'));
   } catch (err) {
     console.error('일정 로드 실패:', err);
+    if (!events.length) pollListEl.textContent = '일정을 불러오지 못했습니다. 잠시 후 다시 시도합니다.';
+    return;
   }
   renderCalendar();
   renderPolls();
   renderDayCard();
   renderPast();
+  if (Number.isSafeInteger(pendingEventId) && pendingEventId > 0) {
+    const id = pendingEventId;
+    pendingEventId = null;
+    if (events.some((e) => e.id === id)) openPoll(id);
+    else alert('이 일정을 찾을 수 없습니다. 삭제되었거나 다른 길드의 일정입니다.');
+  }
   if (pollView.hidden === false) {
     const found = events.find((e) => e.id === (pollEvent && pollEvent.id));
     if (found) {
@@ -783,3 +792,4 @@ document.addEventListener('nickchange', () => {
   currentUser = Nick.get();
   if (pollView.hidden === false) renderPollView();
 });
+document.addEventListener('profiles', () => { renderPolls(); if (pollView.hidden === false) renderPollView(); });

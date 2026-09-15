@@ -1,0 +1,65 @@
+/* 프로필 편집 모달 */
+.profile-modal { max-width: 420px; }
+.pf-top { display: flex; align-items: center; gap: 14px; margin-bottom: 4px; }
+.pf-preview {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--chip-bg, #e7faf8);
+  color: var(--chip-fg, #00b8ad);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 800;
+  overflow: hidden;
+  box-shadow: 0 0 0 3px #fff, var(--shadow-md);
+}
+.pf-preview img { width: 100%; height: 100%; object-fit: cover; }
+.pf-preview .emoji { font-size: 38px; line-height: 1; }
+.pf-top-fields { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.pf-nick { font-weight: 800; font-size: 15px; }
+.pf-file { cursor: pointer; }
+.pf-short { width: 70px; flex: none; }
+.pf-colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pf-color {
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 0 2px #fff;
+  cursor: pointer;
+}
+.pf-color.is-on { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--c, var(--ink-muted)); }
+.pf-color.none { background: rgba(22, 40, 47, 0.08); color: var(--ink-muted); font-size: 11px; font-weight: 800; }
+.pf-color.custom { position: relative; background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); overflow: hidden; display: inline-block; }
+.pf-color.custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.profile-form textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+.profile-form textarea:focus { outline: none; border-color: var(--teal); }
+.profile-form .field-row { align-items: center; }
+.profile-form .field-label { width: 48px; padding-top: 0; }
+
+/* 모달 안 작은 선택 버튼은 공통의 전체 너비 버튼 규칙에서 제외한다. */
+.profile-form .chip, .profile-form .ghost { width: auto; }
+.profile-form .pf-color { width: 24px; min-height: 24px; }
+.profile-form .pf-short { width: 70px; }
+.profile-modal, .guild-modal { max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; }
+.profile-form .field-row { flex-wrap: wrap; }
+.profile-form .field-label { flex: 0 0 48px; }
+.pf-file { display: inline-flex; align-items: center; min-height: 34px; font-size: 13px; color: var(--teal-deep); text-decoration: underline; }
+.guild-modal { max-width: 420px; }
+.guild-modal label { display: grid; gap: 5px; font-size: 12px; color: var(--ink-muted); }
+.guild-editor-row { display: grid; grid-template-columns: 1fr 84px; gap: 12px; }
+.guild-editor-row input[type=color] { padding: 4px; }

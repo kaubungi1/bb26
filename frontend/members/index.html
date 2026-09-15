@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>멤버 - 불법이륙</title>
+  <link rel="stylesheet" href="/common/common.css?v=4" />
+  <link rel="stylesheet" href="/common/profile.css?v=4" />
+  <link rel="stylesheet" href="/members/css/members.css?v=4" />
+  <link rel="stylesheet" href="/common/game.css?v=4" />
+</head>
+<body>
+  <header id="app-header" class="app-bar"></header>
+  <main class="container">
+    <section class="card">
+      <div class="section-head"><h2>멤버</h2><button id="edit-me" type="button" class="add-btn-sm">내 캐릭터</button></div>
+      <input id="member-search" type="search" placeholder="닉네임 · 소개 · 길드 검색" aria-label="멤버 검색" />
+      <div id="role-filter" class="chip-set member-filters" role="group" aria-label="파트별 보기"></div>
+      <p id="member-error" class="form-error" role="alert" hidden></p>
+      <div id="member-list" class="member-list"></div>
+    </section>
+  </main>
+  <nav id="app-tabbar" class="tab-bar"></nav>
+  <script src="/common/common.js?v=4"></script>
+  <script src="/common/profile.js?v=4"></script>
+  <script src="/members/js/members.js?v=4"></script>
+</body>
+</html>

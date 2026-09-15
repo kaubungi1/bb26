@@ -126,11 +126,23 @@ def support_session(session_id: int, body: dict):
 
 @router.put('/{session_id}/support/{support_id}')
 def update_support(session_id: int, support_id: int, body: dict):
-    comment = (body.get('comment') or '').strip()[:COMMENT_MAX] or None
+    """한마디와 표시 이름을 바꾼다. nickname 은 신원이라 여기서 바꾸지 않는다.
+       label 을 비우면 표시 이름이 없어지고 화면에는 nickname 이 그대로 나온다."""
+    fields = []
+    values = []
+    if 'comment' in body:
+        fields.append('comment=%s')
+        values.append((body.get('comment') or '').strip()[:COMMENT_MAX] or None)
+    if 'label' in body:
+        fields.append('"label"=%s')
+        values.append((body.get('label') or '').strip()[:LABEL_MAX] or None)
+    if not fields:
+        raise HTTPException(400, '수정할 내용이 없습니다.')
+    values.extend([support_id, session_id])
     conn = get_db()
     cur = conn.execute(
-        'UPDATE sessionSupports SET comment=%s WHERE "id"=%s AND "sessionId"=%s',
-        (comment, support_id, session_id),
+        f'UPDATE sessionSupports SET {", ".join(fields)} WHERE "id"=%s AND "sessionId"=%s',
+        values,
     )
     conn.commit()
     if cur.rowcount == 0:

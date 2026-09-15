@@ -11,7 +11,7 @@ let bump = null;              /* 지금 끌올된 곡 {songId, bumpedBy, bumpNot
 let filterTags = new Set();   /* 태그 필터. 여러 개 고를 수 있고, 비어 있으면 전체 */
 let guildFilter = '';         /* 길드 필터. '' 전체 | 'none' 소속 없음 | slug */
 let query = '';               /* 검색어. 제목·아티스트·업로더에 부분 일치 */
-let mineFilter = '';          /* 지원 여부. '' 전체 | 'in' 지원함 | 'out' 미지원 */
+let mineFilter = new URLSearchParams(location.search).has('mine') ? 'in' : ''; /* 지원 여부 */
 let sortBy = 'recent';        /* 정렬 기준 — SORTS 의 키 */
 let sortDesc = true;          /* true 면 내림차순. 기본은 최신이 위 */
 let openDrop = null;          /* 열려 있는 메뉴 — 'mine' | 'guild' | 'tag' | 'sort' | null */
@@ -20,6 +20,7 @@ let newGuild = Site.slug || '';   /* 곡 추가 폼에서 고른 소속. 길드 
 let selectedRoles = new Set(PRESET_ROLES);
 let editingSongId = null;
 let moreId = null;            /* 액션을 펼쳐 둔 곡. 평소엔 ⋯ 하나만 보인다 */
+let songRouteHandled = false;
 
 const listEl = document.getElementById('song-list');
 const bumpSlotEl = document.getElementById('bump-slot');
@@ -189,7 +190,7 @@ function renderTools() {
 function sessionCell(song, session) {
   const supports = session.supports;
   const mine = supports.some((s) => s.nickname === Nick.get());
-  const names = supports.map((s) => s.nickname);
+  const names = supports.map(supportName);
   const editing = editingSongId === song.id;
   const full = session.label || session.role;
   const short = session.label || ROLE_SHORT[session.role] || session.role;
@@ -297,7 +298,7 @@ function rolePicker(song) {
 
 function songItem(song) {
   return `
-    <div class="song-item${bump && bump.songId === song.id ? ' is-bumped' : ''}" data-song-id="${song.id}">
+    <div id="song-${song.id}" class="song-item${bump && bump.songId === song.id ? ' is-bumped' : ''}" data-song-id="${song.id}">
       <div class="song-item-head">
         <div class="song-item-info">
           <div class="song-title-row">
@@ -368,6 +369,15 @@ function render() {
   }
 
   listEl.innerHTML = visible.map(songItem).join('');
+  if (!songRouteHandled) {
+    const id = Number(new URLSearchParams(location.search).get('song'));
+    const target = document.getElementById(`song-${id}`);
+    if (target) {
+      songRouteHandled = true;
+      target.setAttribute('tabindex', '-1');
+      requestAnimationFrame(() => { target.scrollIntoView({ block: 'center' }); target.focus({ preventScroll: true }); });
+    }
+  }
 }
 
 /* 이벤트 */
@@ -657,7 +667,7 @@ function renderSheet() {
     ? sess.supports.map((sp) => `
         <div class="sheet-member${sp.nickname === me ? ' me' : ''}">
           ${avatarChip(sp.nickname, 'lg')}
-          <span class="sheet-member-name">${escapeHtml(sp.nickname)}</span>
+          <span class="sheet-member-name">${escapeHtml(supportName(sp))}</span>
           ${sp.comment ? `<span class="sheet-member-comment">${escapeHtml(sp.comment)}</span>` : ''}
           ${sp.nickname === me ? `<button type="button" class="sheet-member-tag" data-sheet-comment="${sp.id}" data-comment="${escapeHtml(sp.comment || '')}" title="한마디 수정">나 ✎</button>` : ''}
         </div>`).join('')
@@ -713,3 +723,5 @@ startPolling(refresh);
 document.addEventListener('nickchange', refresh);
 /* 끌올 남은 시간은 1분마다 다시 그린다 (5초 폴링과 별개로 시계만 맞춘다) */
 setInterval(() => { if (bump) render(); }, 60000);
+document.addEventListener('profiles', () => render());
+if (new URLSearchParams(location.search).has('add')) addBtn.click();
