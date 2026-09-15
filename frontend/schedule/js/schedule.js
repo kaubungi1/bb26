@@ -1,4 +1,4 @@
-/* 일정 */
+/* 일정 — 날짜 투표, 날짜별 가능 곡, 확정 후 셋리스트와 라인업, 지난 합주 */
 let events = [];
 let currentUser = Nick.get();
 let calDate = new Date();
@@ -13,6 +13,8 @@ const pollListEl = document.getElementById('poll-list');
 const dayCardEl = document.getElementById('day-card');
 const dayListEl = document.getElementById('day-list');
 const dayTitleEl = document.getElementById('day-title');
+const pastCardEl = document.getElementById('past-card');
+const pastListEl = document.getElementById('past-list');
 
 const addModal = document.getElementById('add-modal');
 const addForm = document.getElementById('add-form');
@@ -38,25 +40,24 @@ const unconfirmBtn = document.getElementById('unconfirm-btn');
 const addMemberBtn = document.getElementById('add-member-btn');
 const playableSection = document.getElementById('playable-section');
 const playableListEl = document.getElementById('playable-list');
+const psTitleEl = document.getElementById('ps-title');
+const psDatesEl = document.getElementById('ps-dates');
 const psToggleBtn = document.getElementById('ps-toggle');
+const setlistSection = document.getElementById('setlist-section');
+const setlistEl = document.getElementById('setlist');
+const pollHintEl = document.getElementById('poll-hint');
 const NICK_MAX = 20;
 
 /* 세션 지원이 채워지면 이 값을 올리면 된다 */
 const MIN_FILLED = 3;
-/* ROLE_ORDER · ROLE_SHORT 는 common.js 에서 정의한다. 여기서 다시 선언하면
-   같은 전역 스코프라 SyntaxError 가 나고 이 파일 전체가 죽는다.
-   곡마다 열 위치를 고정해야 세로로 훑어보기 좋다. */
+/* ROLE_ORDER · ROLE_SHORT 는 common.js 에서 정의한다. */
 
 let playable = null;
 let playableKey = '';
 let playableAll = false;
-const pollHintEl = document.getElementById('poll-hint');
+let playableDate = null;      /* 조율 중에 고른 후보 날짜. 확정 후엔 확정일 */
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
 
 function pad(n) { return String(n).padStart(2, '0'); }
 
@@ -78,16 +79,20 @@ function isWeekend(iso) {
 
 function todayStr() { return toDateStr(new Date()); }
 
+/* 길드 밖(메인)에서만 배지를 단다. 길드 안에서는 전부 그 길드 것이다. */
+function badge(ev) { return Site.slug ? '' : guildBadge(ev.guild); }
+
 async function refresh() {
   if (events.length === 0 && pollListEl.innerHTML.trim() === '') showLoading(pollListEl);
   try {
-    events = await api.get('/events');
+    events = await api.get(Site.q('/events'));
   } catch (err) {
     console.error('일정 로드 실패:', err);
   }
   renderCalendar();
   renderPolls();
   renderDayCard();
+  renderPast();
   if (pollView.hidden === false) {
     const found = events.find((e) => e.id === (pollEvent && pollEvent.id));
     if (found) {
@@ -130,7 +135,8 @@ function renderCalendar() {
 
     let bars = '';
     confirmedHere.slice(0, 2).forEach((e) => {
-      bars += `<div class="cal-event confirmed" title="${escapeHtml(e.title)}"><span class="cal-event-icon">${icon('check', 10)}</span><span class="cal-event-text">${escapeHtml(e.title)}</span></div>`;
+      const style = e.guild && e.guild.color ? ` style="--g:${escapeHtml(e.guild.color)}"` : '';
+      bars += `<div class="cal-event confirmed${e.guild ? ' guild' : ''}"${style} title="${escapeHtml(e.title)}"><span class="cal-event-icon">${icon('check', 10)}</span><span class="cal-event-text">${escapeHtml(e.title)}</span></div>`;
     });
     if (confirmedHere.length > 2) bars += `<div class="cal-event-more">+${confirmedHere.length - 2}</div>`;
 
@@ -183,13 +189,18 @@ document.getElementById('today-btn').addEventListener('click', () => {
   renderDayCard();
 });
 
-/* ---------- 조율 중 목록 ---------- */
+/* ---------- 조율 중 · 다가오는 목록 ---------- */
 function firstDate(ev) { return ev.dates.length ? ev.dates[0].date : null; }
 function lastDate(ev) { return ev.dates.length ? ev.dates[ev.dates.length - 1].date : null; }
+function isPast(ev) { return ev.status === 'confirmed' && !!ev.date && ev.date < todayStr(); }
+
+function timeText(e) {
+  return e.startTime ? `${e.startTime}${e.endTime ? ' ~ ' + e.endTime : ''}` : '시간 미정';
+}
 
 function renderPolls() {
   const sortKey = (e) => (e.status === 'confirmed' ? e.date : firstDate(e)) || '9999';
-  const list = [...events].sort((a, b) => {
+  const list = events.filter((e) => !isPast(e)).sort((a, b) => {
     if (a.status !== b.status) return a.status === 'poll' ? -1 : 1;
     const ka = sortKey(a), kb = sortKey(b);
     return ka < kb ? -1 : ka > kb ? 1 : b.id - a.id;
@@ -201,15 +212,15 @@ function renderPolls() {
   pollListEl.innerHTML = list.map((e) => {
     if (e.status === 'confirmed') {
       const cnt = e.avails.filter((a) => a.date === e.date).length;
-      const time = e.startTime ? `${e.startTime}${e.endTime ? ' ~ ' + e.endTime : ''}` : '시간 미정';
-      const meta = [e.date ? monthDay(e.date) + ' (' + DOW[parseDate(e.date).getDay()] + ')' : '', time, e.place]
+      const meta = [e.date ? monthDay(e.date) + ' (' + DOW[parseDate(e.date).getDay()] + ')' : '', timeText(e), e.place]
         .filter(Boolean).map(escapeHtml).join(' · ');
+      const songs = e.songs.length ? ` · ${e.songs.length}곡` : '';
       return `
       <div class="poll-item" data-open-poll="${e.id}">
         <span class="poll-item-badge confirmed"><span>확정</span></span>
         <div class="poll-item-info">
-          <div class="poll-item-title">${escapeHtml(e.title)}</div>
-          <div class="poll-item-meta">${meta}</div>
+          <div class="poll-item-title">${escapeHtml(e.title)} ${badge(e)}</div>
+          <div class="poll-item-meta">${meta}${songs}</div>
         </div>
         <span class="poll-item-count">참석 ${cnt}명</span>
       </div>`;
@@ -220,10 +231,30 @@ function renderPolls() {
       <div class="poll-item" data-open-poll="${e.id}">
         <span class="poll-item-badge"><span>조율중</span></span>
         <div class="poll-item-info">
-          <div class="poll-item-title">${escapeHtml(e.title)}</div>
+          <div class="poll-item-title">${escapeHtml(e.title)} ${badge(e)}</div>
           <div class="poll-item-meta">${f ? monthDay(f) : ''}${l && l !== f ? ' ~ ' + monthDay(l) : ''} · ${e.dates.length}일${e.createdBy ? ' · ' + escapeHtml(e.createdBy) : ''}</div>
         </div>
         <span class="poll-item-count${best > 0 ? ' max' : ''}">최다 ${best}명</span>
+      </div>`;
+  }).join('');
+}
+
+/* ---------- 지난 합주 — 확정일이 지난 일정과 그날의 셋리스트 ---------- */
+function renderPast() {
+  const list = events.filter(isPast).sort((a, b) => (a.date < b.date ? 1 : -1));
+  pastCardEl.hidden = list.length === 0;
+  if (!list.length) return;
+  pastListEl.innerHTML = list.map((e) => {
+    const cnt = e.avails.filter((a) => a.date === e.date).length;
+    const titles = e.songs.map((s) => escapeHtml(s.title)).join(' · ');
+    return `
+      <div class="poll-item" data-open-poll="${e.id}">
+        <span class="poll-item-badge past"><span>${monthDay(e.date)}</span></span>
+        <div class="poll-item-info">
+          <div class="poll-item-title">${escapeHtml(e.title)} ${badge(e)}</div>
+          <div class="poll-item-meta">${titles || '셋리스트 없음'}</div>
+        </div>
+        <span class="poll-item-count">${cnt}명</span>
       </div>`;
   }).join('');
 }
@@ -243,16 +274,15 @@ function renderDayCard() {
   }
   const parts = [];
   confirmed.forEach((e) => {
-    const time = e.startTime ? `${e.startTime}${e.endTime ? ' ~ ' + e.endTime : ''}` : '시간 미정';
     const cnt = e.avails.filter((a) => a.date === e.date).length;
-    const sub = [time, e.place, e.note, e.createdBy].filter(Boolean).map(escapeHtml).join(' · ');
+    const sub = [timeText(e), e.place, e.note, e.createdBy].filter(Boolean).map(escapeHtml).join(' · ');
     parts.push(`
       <div class="day-item" data-open-poll="${e.id}">
         <div class="day-item-head">
           <div>
-            <div class="day-item-title">${icon('check', 14)} ${escapeHtml(e.title)}</div>
+            <div class="day-item-title">${icon('check', 14)} ${escapeHtml(e.title)} ${badge(e)}</div>
             <div class="day-item-sub">${sub}</div>
-            <div class="day-item-sub">참석 ${cnt}명 · 탭해서 인원 수정</div>
+            <div class="day-item-sub">참석 ${cnt}명${e.songs.length ? ' · ' + e.songs.length + '곡' : ''} · 탭해서 보기</div>
           </div>
           <button type="button" class="ghost" data-del-event="${e.id}">삭제</button>
         </div>
@@ -264,7 +294,7 @@ function renderDayCard() {
       <div class="day-item" data-open-poll="${e.id}">
         <div class="day-item-head">
           <div>
-            <div class="day-item-title">${icon('clock', 14)} ${escapeHtml(e.title)}</div>
+            <div class="day-item-title">${icon('clock', 14)} ${escapeHtml(e.title)} ${badge(e)}</div>
             <div class="day-item-sub">조율중 · 이 날짜 체크 ${cnt}명 · 탭해서 확인</div>
           </div>
         </div>
@@ -298,13 +328,13 @@ addForm.addEventListener('submit', async (e) => {
   if (!title || !from || !to) return;
   const name = await Nick.ensure();
   if (!name) return;
-  await api.post('/events', {
+  await api.post('/events', Site.body({
     title,
     note: inNote.value.trim() || null,
     createdBy: name,
     dateFrom: from,
     dateTo: to,
-  });
+  }));
   inTitle.value = '';
   inNote.value = '';
   closeAddModal();
@@ -323,6 +353,12 @@ function matrixMembers() {
 
 function countAvail(day) { return pollEvent.avails.filter((a) => a.date === day).length; }
 
+function bestDate(ev) {
+  const counts = ev.dates.map((dr) => countAvail(dr.date));
+  const best = counts.length ? Math.max(...counts) : 0;
+  return ev.dates.find((dr, i) => counts[i] === best)?.date || null;
+}
+
 function renderMatrix() {
   const ev = pollEvent;
   const locked = ev.status === 'confirmed';
@@ -333,7 +369,7 @@ function renderMatrix() {
   const t = todayStr();
   const counts = dates.map((dr) => countAvail(dr.date));
   const best = counts.length ? Math.max(...counts) : 0;
-  const bestDate = dates.find((dr, i) => counts[i] === best)?.date;
+  const bestDay = dates.find((dr, i) => counts[i] === best)?.date;
 
   let html = `<table class="matrix"><thead><tr><th class="date-head">후보 날짜</th>`;
   members.forEach((m) => {
@@ -352,8 +388,10 @@ function renderMatrix() {
     else if (!locked && cnt === best && best > 0) cls.push('hot');
     if (locked && !isFixed) cls.push('locked');
     if (dr.date < t) cls.push('past');
+    if (!locked && dr.date === playableDate) cls.push('picked');
     html += `<tr class="${cls.join(' ')}">`;
-    html += `<td class="date-cell">${monthDay(dr.date)} <span class="dow${dow === '일' ? ' sunday' : ''}${dow === '토' ? ' saturday' : ''}">(${dow})</span><span class="date-cnt"><span>${cnt}명</span></span>${isFixed ? '<span class="date-fixed"><span>확정</span></span>' : ''}</td>`;
+    // 날짜 칸을 누르면 아래 '되는 곡' 표가 그 날짜 기준으로 바뀐다
+    html += `<td class="date-cell"${locked ? '' : ` data-pick-date="${dr.date}"`}>${monthDay(dr.date)} <span class="dow${dow === '일' ? ' sunday' : ''}${dow === '토' ? ' saturday' : ''}">(${dow})</span><span class="date-cnt"><span>${cnt}명</span></span>${isFixed ? '<span class="date-fixed"><span>확정</span></span>' : ''}</td>`;
     const canToggle = !locked || isFixed;
     members.forEach((m) => {
       const on = m.name && ev.avails.some((a) => a.date === dr.date && a.nickname === m.name);
@@ -374,7 +412,7 @@ function renderMatrix() {
   if (locked) return;
   const prev = confirmDateEl.value;
   confirmDateEl.innerHTML = dates.map((dr) =>
-    `<option value="${dr.date}"${dr.date === bestDate ? ' selected' : ''}>${monthDay(dr.date)} (${DOW[parseDate(dr.date).getDay()]}) · ${countAvail(dr.date)}명</option>`
+    `<option value="${dr.date}"${dr.date === bestDay ? ' selected' : ''}>${monthDay(dr.date)} (${DOW[parseDate(dr.date).getDay()]}) · ${countAvail(dr.date)}명</option>`
   ).join('');
   if (prev) confirmDateEl.value = prev;
 }
@@ -383,38 +421,65 @@ function renderPollView() {
   const ev = pollEvent;
   if (!ev) return;
   const locked = ev.status === 'confirmed';
-  pollTitle.textContent = ev.title;
+  pollTitle.innerHTML = escapeHtml(ev.title) + ' ' + badge(ev);
   const f = firstDate(ev), l = lastDate(ev);
   if (locked) {
     const d = ev.date ? parseDate(ev.date) : null;
     const when = d ? `${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]})` : '날짜 미정';
-    const time = ev.startTime ? `${ev.startTime}${ev.endTime ? ' ~ ' + ev.endTime : ''}` : '시간 미정';
-    pollMeta.textContent = [when, time, ev.place, ev.createdBy].filter(Boolean).join(' · ');
-    confirmedDetail.textContent = `${when} · ${time}${ev.place ? ' · ' + ev.place : ''}`;
+    pollMeta.textContent = [when, timeText(ev), ev.place, ev.createdBy].filter(Boolean).join(' · ');
+    confirmedDetail.textContent = `${when} · ${timeText(ev)}${ev.place ? ' · ' + ev.place : ''}`;
     pollHintEl.textContent = '확정된 일정입니다 · 확정 날짜의 참석 인원만 수정할 수 있습니다';
+    playableDate = ev.date;
   } else {
     pollMeta.textContent = `후보 ${ev.dates.length}일${f ? ' · ' + monthDay(f) : ''}${l && l !== f ? ' ~ ' + monthDay(l) : ''}${ev.createdBy ? ' · ' + ev.createdBy : ''}`;
-    pollHintEl.textContent = '내 열(점선)을 탭해 가능 표시 · 다시 탭하면 해제';
+    pollHintEl.textContent = '내 열(점선)을 탭해 가능 표시 · 날짜를 탭하면 그날 되는 곡';
+    if (!playableDate || !ev.dates.some((dr) => dr.date === playableDate)) playableDate = bestDate(ev);
   }
   confirmBar.hidden = locked;
   confirmedBar.hidden = !locked;
-  playableSection.hidden = !locked;
+  setlistSection.hidden = !locked;
+  playableSection.hidden = !playableDate;
   renderMatrix();
-  if (locked) syncPlayable();
+  if (locked) renderSetlist();
+  renderPsDates();
+  syncPlayable();
 }
 
-/* ---------- 참석 인원 기준 가능 곡 ---------- */
-function attendeeKey(ev) {
-  return [ev.id, ev.date, ...ev.avails.filter((a) => a.date === ev.date).map((a) => a.nickname).sort()].join('|');
+/* ---------- 날짜별 가능 곡 ---------- */
+function renderPsDates() {
+  const ev = pollEvent;
+  if (ev.status === 'confirmed') {
+    psDatesEl.innerHTML = '';
+    psTitleEl.textContent = '이 인원으로 되는 곡';
+    return;
+  }
+  psTitleEl.textContent = playableDate ? `${monthDay(playableDate)} (${DOW[parseDate(playableDate).getDay()]})이면 되는 곡` : '되는 곡';
+  const dates = [...ev.dates].sort((a, b) => (a.date < b.date ? -1 : 1));
+  psDatesEl.innerHTML = dates.map((dr) =>
+    `<button type="button" class="chip${dr.date === playableDate ? ' is-on' : ''}" data-ps-date="${dr.date}">${monthDay(dr.date)}<i>${countAvail(dr.date)}</i></button>`
+  ).join('');
+}
+
+psDatesEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-ps-date]');
+  if (!btn) return;
+  playableDate = btn.dataset.psDate;
+  renderMatrix();
+  renderPsDates();
+  syncPlayable();
+});
+
+function attendeeKey(ev, day) {
+  return [ev.id, day, ...ev.avails.filter((a) => a.date === day).map((a) => a.nickname).sort()].join('|');
 }
 
 async function syncPlayable() {
   const ev = pollEvent;
-  if (!ev) return;
-  const key = attendeeKey(ev);
+  if (!ev || !playableDate) return;
+  const key = attendeeKey(ev, playableDate);
   if (key === playableKey) { renderPlayable(); return; }
   try {
-    const data = await api.get(`/events/${ev.id}/playable`);
+    const data = await api.get(`/events/${ev.id}/playable?date=${playableDate}`);
     if (!pollEvent || pollEvent.id !== ev.id) return;
     playable = data;
     playableKey = key;
@@ -434,11 +499,15 @@ function roleColumns(songs) {
   return [...known, ...extra];
 }
 
+function inSetlist(songId) {
+  return !!pollEvent && pollEvent.songs.some((s) => s.songId === songId);
+}
+
 function renderPlayable() {
   if (!playable) { showLoading(playableListEl); return; }
   const all = playable.songs;
   if (!playable.attendees.length) {
-    playableListEl.innerHTML = `<p class="muted empty-msg">참석 인원을 먼저 등록해 주세요.</p>`;
+    playableListEl.innerHTML = `<p class="muted empty-msg">이 날짜에 가능한 사람이 아직 없습니다.</p>`;
     psToggleBtn.hidden = true;
     return;
   }
@@ -452,6 +521,7 @@ function renderPlayable() {
     return;
   }
 
+  const locked = pollEvent.status === 'confirmed';
   const cols = roleColumns(all);
   let html = `<table class="ps-table"><thead><tr>`;
   html += `<th class="ps-score-head">충족</th><th class="ps-song-head">곡</th>`;
@@ -461,6 +531,7 @@ function renderPlayable() {
       `<span class="ps-role-short">${escapeHtml(short)}</span>` +
       `<span class="ps-role-full">${escapeHtml(r)}</span></th>`;
   });
+  if (locked) html += `<th class="ps-role-head"></th>`;
   html += `</tr></thead><tbody>`;
 
   let lastFilled = null;
@@ -471,14 +542,15 @@ function renderPlayable() {
     const tier = ratio >= 1 ? 'full' : ratio >= 0.66 ? 'good' : ratio >= 0.5 ? 'half' : 'low';
     const gap = lastFilled !== null && lastFilled !== s.filled ? ' ps-gap' : '';
     lastFilled = s.filled;
-    html += `<tr class="ps-row ${tier}${gap}">`;
+    const picked = inSetlist(s.songId);
+    html += `<tr class="ps-row ${tier}${gap}${picked ? ' picked' : ''}">`;
     const pct = s.needed ? (s.filled / s.needed) * 100 : 0;
     html += `<td class="ps-score"><strong>${s.filled}</strong><span>/${s.needed}</span>` +
       `<span class="skew-gauge${s.filled === s.needed ? ' full' : ''}">` +
       `<i style="width:${pct}%"></i></span></td>`;
     html += `<td class="ps-song" title="${escapeHtml(s.title)}${s.artist ? ' · ' + escapeHtml(s.artist) : ''}">` +
       `<div class="ps-song-title">${escapeHtml(s.title)}</div>` +
-      `<div class="ps-song-sub">${escapeHtml(s.artist || '')}</div></td>`;
+      `<div class="ps-song-sub">${escapeHtml(s.artist || '')}${!Site.slug && s.guild ? ' ' + guildBadge(s.guild) : ''}</div></td>`;
     cols.forEach((role) => {
       const r = byRole[role];
       if (!r) { html += `<td class="ps-cell none"></td>`; return; }
@@ -487,6 +559,9 @@ function renderPlayable() {
       html += `<td class="ps-cell on"><span class="ps-chips">` +
         r.members.map((n) => avatarChip(n)).join('') + `</span></td>`;
     });
+    if (locked) {
+      html += `<td class="ps-cell act"><button type="button" class="ps-add${picked ? ' is-on' : ''}" data-set-song="${s.songId}" title="${picked ? '셋리스트에서 빼기' : '셋리스트에 넣기'}">${picked ? '✓' : '＋'}</button></td>`;
+    }
     html += `</tr>`;
   });
   html += `</tbody></table>`;
@@ -496,6 +571,79 @@ function renderPlayable() {
 psToggleBtn.addEventListener('click', () => {
   playableAll = !playableAll;
   renderPlayable();
+});
+
+playableListEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-set-song]');
+  if (!btn || !pollEvent) return;
+  const id = Number(btn.dataset.setSong);
+  const ids = pollEvent.songs.map((s) => s.songId);
+  const next = ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
+  pollEvent = await api.put(`/events/${pollEvent.id}/songs`, { songIds: next });
+  renderSetlist();
+  renderPlayable();
+  refresh();
+});
+
+/* ---------- 셋리스트 · 라인업 ---------- */
+function renderSetlist() {
+  const ev = pollEvent;
+  if (!ev.songs.length) {
+    setlistEl.innerHTML = `<p class="muted empty-msg">아직 곡이 없습니다. 아래 표에서 ＋ 를 눌러 넣으세요.</p>`;
+    return;
+  }
+  const me = Nick.get();
+  setlistEl.innerHTML = ev.songs.map((s, i) => {
+    const byRole = {};
+    s.lineup.forEach((l) => { (byRole[l.role] = byRole[l.role] || []).push(l.nickname); });
+    const roles = ROLE_ORDER.filter((r) => byRole[r]).concat(Object.keys(byRole).filter((r) => !ROLE_ORDER.includes(r)));
+    const cells = roles.map((r) => `
+      <span class="sl-role" data-lineup-role="${escapeHtml(r)}" data-lineup-song="${s.songId}">
+        <span class="sl-role-name">${escapeHtml(ROLE_SHORT[r] || r)}</span>
+        ${byRole[r].map((n) => `<span class="sl-name${n === me ? ' me' : ''}" data-lineup-nick="${escapeHtml(n)}">${escapeHtml(n)}</span>`).join('')}
+      </span>`).join('');
+    return `
+      <div class="sl-item">
+        <span class="sl-no"><span>${i + 1}</span></span>
+        <div class="sl-info">
+          <div class="sl-title">${escapeHtml(s.title)} ${!Site.slug ? guildBadge(s.guild) : ''}</div>
+          <div class="sl-lineup">${cells}<button type="button" class="sl-add" data-lineup-add="${s.songId}" title="라인업에 사람 넣기">＋</button></div>
+        </div>
+        <button type="button" class="ghost" data-set-song="${s.songId}">빼기</button>
+      </div>`;
+  }).join('');
+}
+
+setlistEl.addEventListener('click', async (e) => {
+  const ev = pollEvent;
+  if (!ev) return;
+  const rm = e.target.closest('[data-set-song]');
+  if (rm) {
+    const id = Number(rm.dataset.setSong);
+    pollEvent = await api.put(`/events/${ev.id}/songs`, { songIds: ev.songs.map((s) => s.songId).filter((x) => x !== id) });
+    renderSetlist();
+    renderPlayable();
+    refresh();
+    return;
+  }
+  const nick = e.target.closest('[data-lineup-nick]');
+  if (nick) {
+    const roleEl = nick.closest('[data-lineup-role]');
+    const name = nick.dataset.lineupNick;
+    if (!confirm(`${name}님을 ${roleEl.dataset.lineupRole}에서 뺄까요?`)) return;
+    await api.post(`/events/${ev.id}/songs/${roleEl.dataset.lineupSong}/lineup`, { role: roleEl.dataset.lineupRole, nickname: name });
+    await refresh();
+    return;
+  }
+  const add = e.target.closest('[data-lineup-add]');
+  if (add) {
+    const role = (prompt('파트 (예: 드럼)') || '').trim();
+    if (!role) return;
+    const name = (prompt('닉네임', Nick.get()) || '').trim();
+    if (!name) return;
+    await api.post(`/events/${ev.id}/songs/${add.dataset.lineupAdd}/lineup`, { role, nickname: name });
+    await refresh();
+  }
 });
 
 function openPoll(id) {
@@ -510,6 +658,9 @@ function openPoll(id) {
   weekendOnlyEl.checked = false;
   weekendOnlyEl.closest('.chk').classList.remove('is-on');
   weekendOnly = false;
+  playable = null;
+  playableKey = '';
+  playableDate = null;
   renderPollView();
   pollView.hidden = false;
   document.body.style.overflow = 'hidden';
@@ -520,21 +671,20 @@ function closePoll() {
   playable = null;
   playableKey = '';
   playableAll = false;
+  playableDate = null;
   pollView.hidden = true;
   document.body.style.overflow = '';
 }
 
-pollListEl.addEventListener('click', (e) => {
+function onOpenClick(e) {
   const item = e.target.closest('[data-open-poll]');
   if (item) openPoll(Number(item.dataset.openPoll));
-});
+}
+pollListEl.addEventListener('click', onOpenClick);
+pastListEl.addEventListener('click', onOpenClick);
 dayListEl.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-del-event]');
-  if (!btn) {
-    const item = e.target.closest('[data-open-poll]');
-    if (item) openPoll(Number(item.dataset.openPoll));
-    return;
-  }
+  if (!btn) { onOpenClick(e); return; }
   const id = Number(btn.dataset.delEvent);
   const ev = events.find((x) => x.id === id);
   if (!ev) return;
@@ -558,6 +708,14 @@ weekendOnlyEl.addEventListener('change', () => {
 });
 
 matrixEl.addEventListener('click', async (e) => {
+  const pick = e.target.closest('[data-pick-date]');
+  if (pick) {
+    playableDate = pick.dataset.pickDate;
+    renderMatrix();
+    renderPsDates();
+    syncPlayable();
+    return;
+  }
   const td = e.target.closest('[data-toggle]');
   if (!td) return;
   const target = td.dataset.member || '';

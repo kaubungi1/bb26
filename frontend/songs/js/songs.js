@@ -1,25 +1,33 @@
-/* 곡 리스트 */
+/* 곡 리스트 — 풀은 하나, 길드는 꼬리표. 끌올은 전체에서 한 곡만 30분. */
 const PRESET_ROLES = ROLE_ORDER;   /* 목록은 common.js 에서 한 번만 정의한다 */
 
 /* 좁은 화면에서 역할 라벨이 폭을 다 먹지 않도록 */
 const CHIP_MAX = 3;
+const BUMP_MINUTES = 30;
 
 let songs = [];
+let guilds = [];              /* 길드 목록 — 필터 메뉴와 소속 선택에 쓴다 */
+let bump = null;              /* 지금 끌올된 곡 {songId, bumpedBy, bumpNote, expiresAt} */
 let filterTags = new Set();   /* 태그 필터. 여러 개 고를 수 있고, 비어 있으면 전체 */
+let guildFilter = '';         /* 길드 필터. '' 전체 | 'none' 소속 없음 | slug */
 let query = '';               /* 검색어. 제목·아티스트·업로더에 부분 일치 */
 let mineFilter = '';          /* 지원 여부. '' 전체 | 'in' 지원함 | 'out' 미지원 */
 let sortBy = 'recent';        /* 정렬 기준 — SORTS 의 키 */
 let sortDesc = true;          /* true 면 내림차순. 기본은 최신이 위 */
-let openDrop = null;          /* 열려 있는 메뉴 — 'tag' | 'sort' | null */
+let openDrop = null;          /* 열려 있는 메뉴 — 'mine' | 'guild' | 'tag' | 'sort' | null */
 let newTag = '';              /* 곡 추가 폼에서 고른 태그 */
+let newGuild = Site.slug || '';   /* 곡 추가 폼에서 고른 소속. 길드 안이면 고정 */
 let selectedRoles = new Set(PRESET_ROLES);
 let editingSongId = null;
 let moreId = null;            /* 액션을 펼쳐 둔 곡. 평소엔 ⋯ 하나만 보인다 */
 
 const listEl = document.getElementById('song-list');
+const bumpSlotEl = document.getElementById('bump-slot');
 const searchEl = document.getElementById('search');
 const mineLabelEl = document.getElementById('mine-label');
 const menuMineEl = document.getElementById('menu-mine');
+const guildLabelEl = document.getElementById('guild-label');
+const menuGuildEl = document.getElementById('menu-guild');
 const tagLabelEl = document.getElementById('tag-label');
 const sortLabelEl = document.getElementById('sort-label');
 const sortDirEl = document.getElementById('sort-dir');
@@ -29,6 +37,7 @@ const addBtn = document.getElementById('add-btn');
 const addForm = document.getElementById('add-form');
 const roleTogglesEl = document.getElementById('role-toggles');
 const tagTogglesEl = document.getElementById('tag-toggles');
+const guildTogglesEl = document.getElementById('guild-toggles');
 const sheetEl = document.getElementById('session-sheet');
 const sheetTitleEl = document.getElementById('sheet-title');
 const sheetSubEl = document.getElementById('sheet-sub');
@@ -36,9 +45,21 @@ const sheetMembersEl = document.getElementById('sheet-members');
 const sheetActionsEl = document.getElementById('sheet-actions');
 let sheetSessionId = null;
 
+/* 길드 안에서는 길드 필터와 소속 선택이 필요 없다 — 이미 그 길드다 */
+if (Site.slug) {
+  document.getElementById('drop-guild').hidden = true;
+  document.getElementById('guild-picker-row').hidden = true;
+}
+
 /* 태그는 한 곡에 하나. 고른 태그가 없으면 전체, 있으면 그중 하나에 걸리면 된다. */
 function matchesTag(song) {
   return filterTags.size === 0 || filterTags.has(song.tags);
+}
+
+function matchesGuild(song) {
+  if (!guildFilter) return true;
+  if (guildFilter === 'none') return !song.guild;
+  return !!song.guild && song.guild.slug === guildFilter;
 }
 
 /* 검색은 제목·아티스트·업로더 중 하나라도 부분 일치하면 된다. 대소문자는 가리지 않는다. */
@@ -72,6 +93,8 @@ const SORTS = {
   artist:  { label: '아티스트', value: (s) => s.artist || '' },
   creator: { label: '업로더',   value: (s) => s.createdBy || '' },
   members: { label: '인원',     value: supportCount },
+  filled:  { label: '충족',     value: (s) => (s.sessions.length ? filledCount(s) / s.sessions.length : 0) },
+  played:  { label: '합주일',   value: (s) => s.lastPlayed || '' },
 };
 
 function compareSongs(a, b) {
@@ -96,12 +119,19 @@ function sortSessions(sessions) {
 
 async function refresh() {
   if (songs.length === 0) showLoading(listEl);
-  songs = await api.get('/songs');
+  const [s, b, g] = await Promise.all([
+    api.get(Site.q('/songs')),
+    api.get('/songs/bump').catch(() => null),
+    Site.slug ? Promise.resolve(guilds) : api.get('/guilds').catch(() => guilds),
+  ]);
+  songs = s;
+  bump = b;
+  guilds = g;
   render();
   if (!sheetEl.hidden) renderSheet();
 }
 
-/* ---------- 도구줄: 태그 · 정렬 메뉴 ----------
+/* ---------- 도구줄: 지원 · 길드 · 태그 · 정렬 메뉴 ----------
    줄에는 현재 값만 글자로 보이고, 누르면 아래로 메뉴가 열린다.
    태그는 여러 개를 체크하고 메뉴가 열린 채로 즉시 걸러진다.
    정렬은 하나를 고르면 닫히고, 현재 항목을 다시 누르면 방향이 뒤집힌다. */
@@ -113,6 +143,23 @@ function renderTools() {
   document.getElementById('drop-mine').classList.toggle('is-set', !!mineFilter);
   menuMineEl.innerHTML = Object.keys(MINE).map((k) =>
     `<button type="button" class="menu-item${k === mineFilter ? ' is-on' : ''}" data-pick-mine="${k}">${k ? MINE[k] : '전체'}</button>`).join('');
+
+  if (!Site.slug) {
+    const gcount = { none: 0 };
+    songs.forEach((s) => {
+      const k = s.guild ? s.guild.slug : 'none';
+      gcount[k] = (gcount[k] || 0) + 1;
+    });
+    const cur = guilds.find((g) => g.slug === guildFilter);
+    guildLabelEl.textContent = !guildFilter ? '길드' : guildFilter === 'none' ? '소속 없음' : (cur ? cur.name : guildFilter);
+    document.getElementById('drop-guild').classList.toggle('is-set', !!guildFilter);
+    menuGuildEl.innerHTML =
+      `<button type="button" class="menu-item${guildFilter ? '' : ' is-on'}" data-pick-guild="">전체<i>${songs.length}</i></button>` +
+      `<button type="button" class="menu-item${guildFilter === 'none' ? ' is-on' : ''}" data-pick-guild="none">소속 없음<i>${gcount.none || ''}</i></button>` +
+      guilds.map((g) =>
+        `<button type="button" class="menu-item${guildFilter === g.slug ? ' is-on' : ''}" data-pick-guild="${escapeHtml(g.slug)}">` +
+        `${escapeHtml(g.name)}${gcount[g.slug] ? `<i>${gcount[g.slug]}</i>` : ''}</button>`).join('');
+  }
 
   const picked = TAGS.filter((t) => filterTags.has(t));
   tagLabelEl.textContent = picked.length === 0 ? '태그'
@@ -132,20 +179,20 @@ function renderTools() {
     `<button type="button" class="menu-item${k === sortBy ? ' is-on' : ''}" data-pick-sort="${k}">` +
     `${SORTS[k].label}${k === sortBy ? `<i>${sortDesc ? '▼' : '▲'}</i>` : ''}</button>`).join('');
 
-  menuMineEl.hidden = openDrop !== 'mine';
-  menuTagEl.hidden = openDrop !== 'tag';
-  menuSortEl.hidden = openDrop !== 'sort';
-  document.getElementById('drop-mine').classList.toggle('is-open', openDrop === 'mine');
-  document.getElementById('drop-tag').classList.toggle('is-open', openDrop === 'tag');
-  document.getElementById('drop-sort').classList.toggle('is-open', openDrop === 'sort');
+  for (const k of ['mine', 'guild', 'tag', 'sort']) {
+    document.getElementById(`menu-${k}`).hidden = openDrop !== k;
+    document.getElementById(`drop-${k}`).classList.toggle('is-open', openDrop === k);
+  }
 }
 
+/* 세션 칸. 라벨이 있으면 파트명 대신 라벨을 보여준다 (정렬은 여전히 파트 순). */
 function sessionCell(song, session) {
   const supports = session.supports;
   const mine = supports.some((s) => s.nickname === Nick.get());
   const names = supports.map((s) => s.nickname);
   const editing = editingSongId === song.id;
-  const short = ROLE_SHORT[session.role] || session.role;
+  const full = session.label || session.role;
+  const short = session.label || ROLE_SHORT[session.role] || session.role;
 
   let body;
   if (!names.length) {
@@ -166,11 +213,13 @@ function sessionCell(song, session) {
   if (names.length) cls.push('filled');
   if (mine) cls.push('mine');
   if (editing) cls.push('editing');
+  if (session.label) cls.push('labeled');
   return `
     <div class="${cls.join(' ')}" data-session="${session.id}" data-song="${escapeHtml(song.title)}" data-role="${escapeHtml(session.role)}">
-      <span class="role short">${escapeHtml(short)}</span><span class="role full">${escapeHtml(session.role)}</span>
+      <span class="role short">${escapeHtml(short)}</span><span class="role full">${escapeHtml(full)}</span>
       ${body}
-      ${editing ? `<button type="button" class="session-del" data-del-session="${session.id}" data-role="${escapeHtml(session.role)}" data-supports="${names.length}" title="세션 삭제">✕</button>` : ''}
+      ${editing ? `<button type="button" class="session-label" data-label-session="${session.id}" data-role="${escapeHtml(session.role)}" data-label="${escapeHtml(session.label || '')}" title="파트 이름 바꾸기">✎</button>` : ''}
+      ${editing ? `<button type="button" class="session-del" data-del-session="${session.id}" data-role="${escapeHtml(full)}" data-supports="${names.length}" title="세션 삭제">✕</button>` : ''}
     </div>`;
 }
 
@@ -195,11 +244,17 @@ function missingRoles(song) {
   return PRESET_ROLES.filter((r) => !have.has(r));
 }
 
-/* 제목 아래 한 줄: 아티스트 · 충원현황 · 유튜브 */
+function monthDay(iso) {
+  const [, m, d] = iso.split('-');
+  return `${Number(m)}/${Number(d)}`;
+}
+
+/* 제목 아래 한 줄: 아티스트 · 충원현황 · 마지막 합주 · 유튜브 */
 function metaLine(song) {
   const parts = [`<span class="song-artist">${escapeHtml(song.artist)}</span>`];
   const badge = fillBadge(song);
   if (badge) parts.push(badge);
+  if (song.lastPlayed) parts.push(`<span class="song-played" title="마지막 합주">${icon('history', 12)} ${monthDay(song.lastPlayed)}</span>`);
   if (song.youtubeUrl) {
     parts.push(`<a class="song-yt" href="${song.youtubeUrl}" target="_blank" rel="noreferrer">▶ 유튜브</a>`);
   }
@@ -212,6 +267,23 @@ function sessionEditBtn(song) {
     <button type="button" class="session-edit${open ? ' open' : ''}" data-add-session="${song.id}" title="세션 추가/삭제">${open ? '닫기' : '＋세션'}</button>`;
 }
 
+/* 끌올 버튼. 누가 잡고 있으면 남은 시간을 보여주고, 내가 잡은 곡이면 내릴 수 있다. */
+function bumpBtn(song) {
+  const me = Nick.get();
+  if (bump && bump.songId === song.id) {
+    return bump.bumpedBy === me
+      ? `<button type="button" class="session-edit" data-unbump="${song.id}">끌올 내리기</button>`
+      : `<span class="song-by">${icon('up', 13)} 끌올 중</span>`;
+  }
+  if (bump) return `<span class="song-by" title="${escapeHtml(bump.bumpedBy)}님이 끌올 중">${icon('up', 13)} ${bumpRemain()}분 뒤</span>`;
+  return `<button type="button" class="session-edit" data-bump="${song.id}">${icon('up', 13)} 끌올</button>`;
+}
+
+function bumpRemain() {
+  if (!bump) return 0;
+  return Math.max(0, Math.ceil((new Date(bump.expiresAt) - Date.now()) / 60000));
+}
+
 function rolePicker(song) {
   if (editingSongId !== song.id) return '';
   const missing = missingRoles(song);
@@ -219,34 +291,18 @@ function rolePicker(song) {
     <div class="session-picker">
       ${missing.map((r) => `<button type="button" class="role-chip" data-new-role="${r}" data-song-id="${song.id}">${r}</button>`).join('')}
       <button type="button" class="role-chip custom" data-new-role="" data-song-id="${song.id}">직접 입력</button>
-      <span class="session-picker-hint">세션 칸의 ✕ 를 눌러 삭제할 수 있어요.</span>
+      <span class="session-picker-hint">✎ 이름 바꾸기 · ✕ 삭제</span>
     </div>`;
 }
 
-function render() {
-  const visible = songs.filter((s) => matchesMine(s) && matchesTag(s) && matchesQuery(s)).sort(compareSongs);
-
-  renderTools();
-
-  if (songs.length === 0) {
-    listEl.innerHTML = `<p class="muted song-empty">곡이 없습니다. 첫 곡을 추가해 보세요.</p>`;
-    return;
-  }
-  if (visible.length === 0) {
-    const why = query ? '검색 결과가 없습니다.'
-      : mineFilter === 'in' ? '지원한 곡이 없습니다.'
-      : mineFilter === 'out' ? '모든 곡에 지원했습니다.'
-      : '이 태그의 곡이 없습니다.';
-    listEl.innerHTML = `<p class="muted song-empty">${why}</p>`;
-    return;
-  }
-
-  listEl.innerHTML = visible.map((song) => `
-    <div class="song-item">
+function songItem(song) {
+  return `
+    <div class="song-item${bump && bump.songId === song.id ? ' is-bumped' : ''}" data-song-id="${song.id}">
       <div class="song-item-head">
         <div class="song-item-info">
           <div class="song-title-row">
             <span class="song-title">${escapeHtml(song.title)}</span>
+            ${!Site.slug ? guildBadge(song.guild) : ''}
             <button type="button" class="song-tag${song.tags ? '' : ' none'}" data-tag-of="${song.id}" title="탭하여 태그 변경">
               <span>${escapeHtml(song.tags || '태그 없음')}</span>
             </button>
@@ -256,6 +312,7 @@ function render() {
         <div class="song-item-actions${moreId === song.id ? ' is-open' : ''}">
           ${song.createdBy ? `<span class="song-by">${icon('user', 13)} ${escapeHtml(song.createdBy)}</span>` : ''}
           <span class="row-more-set">
+            ${bumpBtn(song)}
             ${sessionEditBtn(song)}
             <button type="button" class="ghost" data-del="${song.id}">삭제</button>
           </span>
@@ -266,11 +323,51 @@ function render() {
         ${sortSessions(song.sessions).map((s) => sessionCell(song, s)).join('')}
       </div>
       ${rolePicker(song)}
-    </div>`).join('');
+    </div>`;
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/* 끌올된 곡은 필터와 정렬을 무시하고 맨 위에 고정된다. 남은 시간이 게이지로 줄어든다. */
+function renderBump() {
+  const song = bump && songs.find((s) => s.id === bump.songId);
+  if (!song) { bumpSlotEl.innerHTML = ''; return; }
+  const remain = bumpRemain();
+  const pct = Math.min(100, (remain / BUMP_MINUTES) * 100);
+  bumpSlotEl.innerHTML = `
+    <div class="bump-wrap">
+      <div class="bump-strip">
+        <span class="bump-label"><span>${icon('up', 12)} 끌올</span></span>
+        <span class="bump-by">${avatarChip(bump.bumpedBy)} ${escapeHtml(bump.bumpedBy)}</span>
+        ${bump.bumpNote ? `<span class="bump-note">“${escapeHtml(bump.bumpNote)}”</span>` : ''}
+        <span class="bump-timer">${remain}분<span class="skew-gauge"><i style="width:${pct}%"></i></span></span>
+      </div>
+      ${songItem(song)}
+    </div>`;
+}
+
+function render() {
+  renderTools();
+  renderBump();
+
+  const visible = songs
+    .filter((s) => !(bump && bump.songId === s.id))
+    .filter((s) => matchesMine(s) && matchesGuild(s) && matchesTag(s) && matchesQuery(s))
+    .sort(compareSongs);
+
+  if (songs.length === 0) {
+    listEl.innerHTML = `<p class="muted song-empty">곡이 없습니다. 첫 곡을 추가해 보세요.</p>`;
+    return;
+  }
+  if (visible.length === 0) {
+    const why = query ? '검색 결과가 없습니다.'
+      : mineFilter === 'in' ? '지원한 곡이 없습니다.'
+      : mineFilter === 'out' ? '모든 곡에 지원했습니다.'
+      : guildFilter ? '이 소속의 곡이 없습니다.'
+      : '이 태그의 곡이 없습니다.';
+    listEl.innerHTML = bump ? '' : `<p class="muted song-empty">${why}</p>`;
+    return;
+  }
+
+  listEl.innerHTML = visible.map(songItem).join('');
 }
 
 /* 이벤트 */
@@ -293,6 +390,13 @@ document.querySelector('.tool-line').addEventListener('click', async (e) => {
     const k = mine.dataset.pickMine;
     if (k && !(await Nick.ensure())) return;   /* 누구인지 알아야 지원 여부를 가른다 */
     mineFilter = k;
+    openDrop = null;
+    render();
+    return;
+  }
+  const guild = e.target.closest('[data-pick-guild]');
+  if (guild) {
+    guildFilter = guild.dataset.pickGuild;
     openDrop = null;
     render();
     return;
@@ -324,6 +428,7 @@ document.addEventListener('click', (e) => {
 addBtn.addEventListener('click', () => {
   addForm.hidden = false;
   addBtn.hidden = true;
+  renderNewGuild();
 });
 
 document.getElementById('close-btn').addEventListener('click', () => {
@@ -334,8 +439,10 @@ document.getElementById('close-btn').addEventListener('click', () => {
   document.getElementById('in-youtube').value = '';
   selectedRoles = new Set(PRESET_ROLES);
   newTag = '';
+  newGuild = Site.slug || '';
   renderRoles();
   renderNewTag();
+  renderNewGuild();
 });
 
 function renderNewTag() {
@@ -347,6 +454,21 @@ tagTogglesEl.addEventListener('click', (e) => {
   if (!btn) return;
   newTag = (btn.dataset.newtag === newTag) ? '' : btn.dataset.newtag;   /* 다시 누르면 해제 */
   renderNewTag();
+});
+
+/* 소속 선택 — 길드 밖에서만. 안 고르면 전체(정기합주) 곡이다. */
+function renderNewGuild() {
+  if (Site.slug) return;
+  guildTogglesEl.innerHTML =
+    `<button type="button" class="chip${newGuild ? '' : ' is-on'}" data-newguild="">전체</button>` +
+    guilds.map((g) =>
+      `<button type="button" class="chip${g.slug === newGuild ? ' is-on' : ''}" data-newguild="${escapeHtml(g.slug)}">${escapeHtml(g.name)}</button>`).join('');
+}
+guildTogglesEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-newguild]');
+  if (!btn) return;
+  newGuild = btn.dataset.newguild;
+  renderNewGuild();
 });
 
 function renderRoles() {
@@ -368,7 +490,9 @@ document.getElementById('save-btn').addEventListener('click', async () => {
   if (!title || !artist) return alert('곡명과 아티스트를 입력하세요.');
   const name = await Nick.ensure();
   if (!name) return;
-  const song = await api.post('/songs', { title, artist, createdBy: name, youtubeUrl: document.getElementById('in-youtube').value.trim() || null, tags: newTag });
+  const body = { title, artist, createdBy: name, youtubeUrl: document.getElementById('in-youtube').value.trim() || null, tags: newTag };
+  if (newGuild) body.guildSlug = newGuild;
+  const song = await api.post('/songs', body);
   await Promise.all(PRESET_ROLES.filter((r) => selectedRoles.has(r)).map((r) => api.post('/sessions', { songId: song.id, role: r })));
   document.getElementById('close-btn').click();
   await refresh();
@@ -380,7 +504,7 @@ let tagEditId = null;
 function paintTagPicker() {
   document.querySelectorAll('.song-tag-picker').forEach((el) => el.remove());
   if (tagEditId === null) return;
-  const btn = listEl.querySelector(`[data-tag-of="${tagEditId}"]`);
+  const btn = document.querySelector(`[data-tag-of="${tagEditId}"]`);
   if (!btn) return;
   const song = songs.find((s) => s.id === tagEditId);
   const box = document.createElement('div');
@@ -390,7 +514,7 @@ function paintTagPicker() {
   btn.closest('.song-item-info').appendChild(box);
 }
 
-listEl.addEventListener('click', async (e) => {
+async function onListClick(e) {
   const more = e.target.closest('[data-more]');
   if (more) {
     const id = Number(more.dataset.more);
@@ -414,9 +538,37 @@ listEl.addEventListener('click', async (e) => {
     await refresh();
     return;
   }
+  const bumpBtnEl = e.target.closest('[data-bump]');
+  if (bumpBtnEl) {
+    const name = await Nick.ensure();
+    if (!name) return;
+    const note = prompt('한마디 (선택, 60자)') ;
+    if (note === null) return;
+    try {
+      await api.post(`/songs/${bumpBtnEl.dataset.bump}/bump`, { nickname: name, note: note.trim() });
+    } catch (err) {
+      alert(err.message);
+    }
+    moreId = null;
+    await refresh();
+    return;
+  }
+  const unbump = e.target.closest('[data-unbump]');
+  if (unbump) {
+    const name = Nick.get();
+    if (!name) return;
+    try {
+      await api.del(`/songs/${unbump.dataset.unbump}/bump?nickname=${encodeURIComponent(name)}`);
+    } catch (err) {
+      alert(err.message);
+    }
+    moreId = null;
+    await refresh();
+    return;
+  }
   const del = e.target.closest('[data-del]');
   if (del) {
-    if (!confirm('이 곡과 연결된 세션/악보가 모두 삭제됩니다. 진행할까요?')) return;
+    if (!confirm('이 곡과 연결된 세션이 모두 삭제됩니다. 진행할까요?')) return;
     await api.del(`/songs/${del.dataset.del}`);
     await refresh();
     return;
@@ -426,6 +578,15 @@ listEl.addEventListener('click', async (e) => {
     const id = Number(addSess.dataset.addSession);
     editingSongId = editingSongId === id ? null : id;
     render();
+    return;
+  }
+  const labelBtn = e.target.closest('[data-label-session]');
+  if (labelBtn) {
+    const cur = labelBtn.dataset.label;
+    const input = prompt(`${labelBtn.dataset.role} 자리에 보일 이름 (비우면 원래대로)`, cur);
+    if (input === null) return;
+    await api.put(`/sessions/${labelBtn.dataset.labelSession}`, { label: input.trim() });
+    await refresh();
     return;
   }
   const delSess = e.target.closest('[data-del-session]');
@@ -456,7 +617,9 @@ listEl.addEventListener('click', async (e) => {
   }
   const cell = e.target.closest('.session-cell');
   if (cell) openSheet(Number(cell.dataset.session));
-});
+}
+listEl.addEventListener('click', onListClick);
+bumpSlotEl.addEventListener('click', onListClick);
 
 /* ---------- 세션 상세 시트 ---------- */
 function findSession(id) {
@@ -487,7 +650,7 @@ function renderSheet() {
   const me = Nick.get();
   const mine = sess.supports.find((sp) => sp.nickname === me);
 
-  sheetTitleEl.textContent = sess.role;
+  sheetTitleEl.textContent = sess.label ? `${sess.label} (${sess.role})` : sess.role;
   sheetSubEl.textContent = `${song.title} · ${song.artist}`;
 
   sheetMembersEl.innerHTML = sess.supports.length
@@ -495,14 +658,16 @@ function renderSheet() {
         <div class="sheet-member${sp.nickname === me ? ' me' : ''}">
           ${avatarChip(sp.nickname, 'lg')}
           <span class="sheet-member-name">${escapeHtml(sp.nickname)}</span>
-          ${sp.nickname === me ? '<span class="sheet-member-tag">나</span>' : ''}
+          ${sp.comment ? `<span class="sheet-member-comment">${escapeHtml(sp.comment)}</span>` : ''}
+          ${sp.nickname === me ? `<button type="button" class="sheet-member-tag" data-sheet-comment="${sp.id}" data-comment="${escapeHtml(sp.comment || '')}" title="한마디 수정">나 ✎</button>` : ''}
         </div>`).join('')
     : `<p class="sheet-empty">아직 지원한 멤버가 없습니다.</p>`;
 
   sheetActionsEl.innerHTML = mine
     ? `<button type="button" class="secondary" data-sheet-cancel="${mine.id}">지원 취소</button>
        <button type="button" class="ghost" data-sheet-close>닫기</button>`
-    : `<button type="button" class="pink" data-sheet-support>지원하기</button>
+    : `<input id="sheet-comment" class="sheet-comment" placeholder="한마디 (선택, 40자)" maxlength="40" />
+       <button type="button" class="pink" data-sheet-support>지원하기</button>
        <button type="button" class="ghost" data-sheet-close>닫기</button>`;
 }
 
@@ -517,10 +682,19 @@ sheetEl.addEventListener('click', async (e) => {
     await refresh();
     return;
   }
+  const editComment = e.target.closest('[data-sheet-comment]');
+  if (editComment) {
+    const input = prompt('한마디 (비우면 지움, 40자)', editComment.dataset.comment);
+    if (input === null) return;
+    await api.put(`/sessions/${id}/support/${editComment.dataset.sheetComment}`, { comment: input.trim() });
+    await refresh();
+    return;
+  }
   if (e.target.closest('[data-sheet-support]')) {
     const name = await Nick.ensure();
     if (!name) return;
-    await api.post(`/sessions/${id}/support`, { nickname: name });
+    const comment = (document.getElementById('sheet-comment')?.value || '').trim();
+    await api.post(`/sessions/${id}/support`, { nickname: name, comment });
     await refresh();
   }
 });
@@ -537,3 +711,5 @@ renderNewTag();
 startPolling(refresh);
 
 document.addEventListener('nickchange', refresh);
+/* 끌올 남은 시간은 1분마다 다시 그린다 (5초 폴링과 별개로 시계만 맞춘다) */
+setInterval(() => { if (bump) render(); }, 60000);

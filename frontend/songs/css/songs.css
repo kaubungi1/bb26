@@ -153,3 +153,87 @@
   color: var(--ink-muted);
   white-space: nowrap;
 }
+
+/* ===== 끌올 — 맨 위 고정, 남은 시간이 게이지로 줄어든다 ===== */
+.bump-wrap {
+  position: relative;
+  margin: 2px 0 14px;
+  padding: 10px 12px 4px;
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(0, 184, 173, 0.16), transparent 55%),
+    radial-gradient(120% 90% at 100% 100%, rgba(236, 72, 153, 0.12), transparent 55%),
+    rgba(255, 255, 255, 0.6);
+  box-shadow: var(--glow-teal);
+  animation: bump-breathe 3.2s ease-in-out infinite;
+}
+@keyframes bump-breathe {
+  0%, 100% { box-shadow: 0 6px 18px -7px rgba(0, 165, 175, 0.85); }
+  50% { box-shadow: 0 10px 28px -8px rgba(0, 165, 175, 0.95), 0 0 0 1px rgba(0, 184, 173, 0.25); }
+}
+.bump-wrap .song-item { border: none; background: transparent; padding-top: 6px; }
+.bump-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(0, 184, 173, 0.18);
+  font-size: 12.5px;
+}
+.bump-label {
+  display: inline-block;
+  padding: 2px 9px;
+  transform: skewX(var(--skew));
+  border-radius: 4px;
+  background: var(--grad-teal);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+.bump-label > span { display: inline-flex; align-items: center; gap: 3px; transform: skewX(calc(var(--skew) * -1)); }
+.bump-by { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.bump-note { color: var(--ink-muted); font-weight: 600; overflow-wrap: anywhere; }
+.bump-timer {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  color: var(--teal-deep);
+  font-variant-numeric: tabular-nums;
+}
+.bump-timer .skew-gauge { width: 60px; height: 5px; }
+
+/* 마지막 합주일 */
+.song-played { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 600; color: var(--ink-muted); }
+
+/* 라벨로 덮어쓴 파트 — 원래 파트명과 구분되게 살짝 기울인다 */
+.session-cell.labeled .role { font-style: italic; }
+.session-label {
+  flex-shrink: 0;
+  min-height: 0;
+  padding: 0 2px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1;
+  box-shadow: none;
+  cursor: pointer;
+}
+.session-label:hover { color: var(--teal-deep); background: transparent; box-shadow: none; }
+
+/* 지원 한마디 */
+.sheet-member-comment { font-size: 12px; color: var(--ink-muted); overflow-wrap: anywhere; }
+.sheet-comment {
+  flex: 1 1 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  font-size: 13px;
+}
+.sheet-comment:focus { outline: none; border-color: var(--teal); }
+button.sheet-member-tag { border: none; background: transparent; cursor: pointer; }

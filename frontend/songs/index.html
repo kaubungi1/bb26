@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>곡 리스트 - 대파밀수단</title>
-  <link rel="stylesheet" href="/common/common.css?v=2" />
-  <link rel="stylesheet" href="css/songs.css?v=2" />
+  <title>곡 리스트 - 불법이륙</title>
+  <link rel="stylesheet" href="/common/common.css?v=3" />
+  <link rel="stylesheet" href="/songs/css/songs.css?v=3" />
 </head>
 <body>
   <header id="app-header" class="app-bar"></header>
@@ -18,12 +18,16 @@
         </div>
       </div>
 
-      <!-- 검색 · 태그 · 정렬을 한 줄에. 태그와 정렬은 글자만 두고 누르면 아래로 메뉴가 열린다 -->
+      <!-- 검색 · 지원 · 길드 · 태그 · 정렬을 한 줄에. 글자만 두고 누르면 아래로 메뉴가 열린다 -->
       <div class="tool-line">
         <input type="search" id="search" class="search-box" placeholder="제목 · 아티스트 · 업로더 검색" autocomplete="off" />
         <div class="drop" id="drop-mine">
           <button type="button" class="drop-btn" data-drop="mine"><span id="mine-label">지원</span></button>
           <div class="drop-menu" id="menu-mine" hidden></div>
+        </div>
+        <div class="drop" id="drop-guild">
+          <button type="button" class="drop-btn" data-drop="guild"><span id="guild-label">길드</span></button>
+          <div class="drop-menu" id="menu-guild" hidden></div>
         </div>
         <div class="drop" id="drop-tag">
           <button type="button" class="drop-btn" data-drop="tag"><span id="tag-label">태그</span></button>
@@ -43,6 +47,10 @@
           <span class="role-picker-label">태그</span>
           <div class="chip-set" id="tag-toggles"></div>
         </div>
+        <div class="role-picker" id="guild-picker-row">
+          <span class="role-picker-label">소속</span>
+          <div class="chip-set" id="guild-toggles"></div>
+        </div>
         <div class="role-picker">
           <span class="role-picker-label">세션</span>
           <div class="role-toggles" id="role-toggles"></div>
@@ -53,6 +61,7 @@
         </div>
       </div>
 
+      <div id="bump-slot"></div>
       <div id="song-list" class="song-list"></div>
     </section>
   </div>
@@ -68,7 +77,7 @@
   </div>
 
   <nav id="app-tabbar" class="tab-bar"></nav>
-  <script src="/common/common.js?v=2"></script>
-  <script src="js/songs.js?v=2"></script>
+  <script src="/common/common.js?v=3"></script>
+  <script src="/songs/js/songs.js?v=3"></script>
 </body>
 </html>

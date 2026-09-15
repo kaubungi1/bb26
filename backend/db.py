@@ -75,20 +75,6 @@ CREATE TABLE IF NOT EXISTS pairs (
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS lotteries (
-  "id" SERIAL PRIMARY KEY,
-  "drawnBy" TEXT,
-  "poolJson" TEXT,
-  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS lotteryItems (
-  "id" SERIAL PRIMARY KEY,
-  "lotteryId" INTEGER NOT NULL REFERENCES lotteries("id") ON DELETE CASCADE,
-  "songId" INTEGER NOT NULL REFERENCES songs("id") ON DELETE CASCADE,
-  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
 CREATE TABLE IF NOT EXISTS events (
   "id" SERIAL PRIMARY KEY,
   "title" TEXT NOT NULL,
@@ -119,6 +105,66 @@ CREATE TABLE IF NOT EXISTS eventAvails (
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE ("eventId", "date", "nickname")
 );
+-- 길드. 곡·일정에 꼬리표로 붙는 소속이며, 데이터는 전체가 하나로 공유된다.
+CREATE TABLE IF NOT EXISTS guilds (
+  "id" SERIAL PRIMARY KEY,
+  "slug" TEXT NOT NULL UNIQUE,
+  "name" TEXT NOT NULL,
+  "leader" TEXT,
+  "slogan" TEXT,
+  "recruitNote" TEXT,
+  "color" TEXT,
+  "emblem" TEXT,
+  "createdBy" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 길드 명단. 한 사람이 한 길드에서 여러 파트를 맡을 수 있다.
+CREATE TABLE IF NOT EXISTS guildMembers (
+  "id" SERIAL PRIMARY KEY,
+  "guildId" INTEGER NOT NULL REFERENCES guilds("id") ON DELETE CASCADE,
+  "nickname" TEXT NOT NULL,
+  "role" TEXT NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE ("guildId", "nickname", "role")
+);
+
+-- 멤버 프로필. 닉네임이 곧 열쇠다. 본인이 색·아바타·칭호를 정한다.
+CREATE TABLE IF NOT EXISTS members (
+  "nickname" TEXT PRIMARY KEY,
+  "mainRoles" TEXT,
+  "availability" TEXT,
+  "intro" TEXT,
+  "color" TEXT,
+  "avatar" TEXT,
+  "title" TEXT,
+  "status" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 확정된 일정의 셋리스트.
+CREATE TABLE IF NOT EXISTS eventSongs (
+  "id" SERIAL PRIMARY KEY,
+  "eventId" INTEGER NOT NULL REFERENCES events("id") ON DELETE CASCADE,
+  "songId" INTEGER NOT NULL REFERENCES songs("id") ON DELETE CASCADE,
+  "order" INTEGER NOT NULL DEFAULT 0,
+  "note" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE ("eventId", "songId")
+);
+
+-- 그날 누가 어느 파트를 쳤는지. 확정 시점의 스냅샷이라 지원자가 뒤에 바뀌어도 남는다.
+CREATE TABLE IF NOT EXISTS eventLineups (
+  "id" SERIAL PRIMARY KEY,
+  "eventId" INTEGER NOT NULL REFERENCES events("id") ON DELETE CASCADE,
+  "songId" INTEGER NOT NULL REFERENCES songs("id") ON DELETE CASCADE,
+  "role" TEXT NOT NULL,
+  "nickname" TEXT NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE ("eventId", "songId", "role", "nickname")
+);
 """
 
 
@@ -144,10 +190,23 @@ MIGRATIONS = [
     # 외래키/조회 컬럼 인덱스. 유니크 제약이 이미 덮는 곳은 뺐다.
     'CREATE INDEX IF NOT EXISTS idx_sessions_song ON sessions("songId")',
     'CREATE INDEX IF NOT EXISTS idx_histories_song ON sessionHistories("songId")',
-    'CREATE INDEX IF NOT EXISTS idx_lotteryitems_lottery ON lotteryItems("lotteryId")',
-    'CREATE INDEX IF NOT EXISTS idx_lotteryitems_song ON lotteryItems("songId")',
     'CREATE INDEX IF NOT EXISTS idx_sheets_role ON sheets("role")',
     'CREATE INDEX IF NOT EXISTS idx_sheets_created ON sheets("createdAt" DESC)',
+
+    # 불법이륙 2.0: 길드 꼬리표, 끌올, 파트명 덮어쓰기, 지원 코멘트
+    'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "guildId" INTEGER REFERENCES guilds("id") ON DELETE SET NULL',
+    'ALTER TABLE events ADD COLUMN IF NOT EXISTS "guildId" INTEGER REFERENCES guilds("id") ON DELETE SET NULL',
+    'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "bumpedBy" TEXT',
+    'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "bumpedAt" TIMESTAMPTZ',
+    'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "bumpNote" TEXT',
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "label" TEXT',
+    'ALTER TABLE sessionSupports ADD COLUMN IF NOT EXISTS "comment" TEXT',
+    'CREATE INDEX IF NOT EXISTS idx_songs_guild ON songs("guildId")',
+    'CREATE INDEX IF NOT EXISTS idx_events_guild ON events("guildId")',
+    'CREATE INDEX IF NOT EXISTS idx_eventsongs_event ON eventSongs("eventId")',
+    'CREATE INDEX IF NOT EXISTS idx_eventsongs_song ON eventSongs("songId")',
+    'CREATE INDEX IF NOT EXISTS idx_eventlineups_event ON eventLineups("eventId")',
+    'CREATE INDEX IF NOT EXISTS idx_guildmembers_guild ON guildMembers("guildId")',
 ]
 
 

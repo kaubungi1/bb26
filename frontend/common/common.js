@@ -1,4 +1,4 @@
-/* 대파밀수단 공통 모듈 */
+/* 불법이륙 공통 모듈 */
 
 /* 파트와 태그는 여기서만 정의한다. 페이지마다 따로 두면 순서가 어긋난다. */
 const ROLE_ORDER = ['보컬', '일렉1', '일렉2', '베이스', '키보드', '드럼'];
@@ -8,10 +8,32 @@ const SHEET_ROLES = [...ROLE_ORDER, '공용'];
 /* 곡과 악보가 같은 목록을 쓴다. 한 곡에 하나만 붙는다. */
 const TAGS = ['보컬로이드', '애니송(게임)', 'J-POP(남)', 'J-POP(여)', '불법'];
 
+const SITE_NAME = '불법이륙';
+
+/* ---------- 길드 문맥 ----------
+   /guild/<slug>/… 아래에 있으면 그 길드의 얼굴로 같은 페이지를 보여준다.
+   데이터는 하나이고, 목록 API 에 guild=<slug> 만 붙는다. */
+const Site = (() => {
+  const m = location.pathname.match(/^\/guild\/([a-z0-9-]+)(\/|$)/);
+  const slug = m ? m[1] : null;
+  return {
+    slug,
+    base: slug ? `/guild/${slug}` : '',
+    info: null,                       /* 길드 정보. mountChrome 이 채운다 */
+    /* 목록 API 에 길드 조건을 붙인다. 길드 밖에서는 그대로. */
+    q(url) {
+      if (!slug) return url;
+      return url + (url.includes('?') ? '&' : '?') + 'guild=' + encodeURIComponent(slug);
+    },
+    /* 만들기 요청 본문에 소속을 붙인다 */
+    body(obj) { return slug ? { ...obj, guildSlug: slug } : obj; },
+  };
+})();
+
 const api = {
   async get(url) {
     const res = await fetch('/api' + url);
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? '요청 실패');
+    if (!res.ok) throw new Error(await apiError(res));
     return res.json();
   },
   async post(url, body) {
@@ -21,12 +43,12 @@ const api = {
       headers: isForm ? undefined : { 'Content-Type': 'application/json' },
       body: isForm ? body : JSON.stringify(body),
     });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? '요청 실패');
+    if (!res.ok) throw new Error(await apiError(res));
     return res.status === 204 ? undefined : res.json();
   },
   async del(url) {
     const res = await fetch('/api' + url, { method: 'DELETE' });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? '요청 실패');
+    if (!res.ok) throw new Error(await apiError(res));
   },
   async put(url, body) {
     const res = await fetch('/api' + url, {
@@ -34,10 +56,19 @@ const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? '요청 실패');
+    if (!res.ok) throw new Error(await apiError(res));
     return res.json();
   },
 };
+
+/* FastAPI 는 {detail: 문자열 | 객체} 로 실패를 알린다. 사람이 읽을 문장만 꺼낸다. */
+async function apiError(res) {
+  const data = await res.json().catch(() => ({}));
+  const d = data.detail ?? data.error;
+  if (typeof d === 'string') return d;
+  if (d && typeof d.message === 'string') return d.message;
+  return '요청 실패';
+}
 
 const Nick = {
   get() { return localStorage.getItem('nickname') || ''; },
@@ -86,7 +117,6 @@ function escapeHtml(s) {
 
 const ICONS = {
   music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
-  dice: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 8h.01M16 8h.01M8 16h.01M16 16h.01M12 12h.01"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8"/>',
   user: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>',
@@ -95,6 +125,8 @@ const ICONS = {
   upload: '<path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
   paperclip: '<path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
   history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
+  flag: '<path d="M4 22V4"/><path d="M4 4h12l-2 4 2 4H4"/>',
+  up: '<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>',
 };
 
 function icon(name, size = 18) {
@@ -149,12 +181,20 @@ function startPolling(fn, ms = 5000) {
   setInterval(() => fn().catch(console.error), ms);
 }
 
+/* 탭. 악보는 길드 밖 공용이라 길드 안에서도 공용 주소로 간다. */
 const TABS = [
-  { key: 'songs', label: '곡', icon: 'music', href: '/songs/' },
-  { key: 'lottery', label: '추첨', icon: 'dice', href: '/lottery/' },
-  { key: 'schedule', label: '일정', icon: 'calendar', href: '/schedule/' },
-  { key: 'sheets', label: '악보', icon: 'fileText', href: '/sheets/' },
+  { key: 'songs', label: '곡', icon: 'music', href: '/songs/', scoped: true },
+  { key: 'schedule', label: '일정', icon: 'calendar', href: '/schedule/', scoped: true },
+  { key: 'sheets', label: '악보', icon: 'fileText', href: '/sheets/', scoped: false },
 ];
+
+/* 길드 배지 — 곡·일정 옆에 붙는 작은 소속 표시. 색은 길드가 정한 색. */
+function guildBadge(guild, extra = '') {
+  if (!guild) return '';
+  const color = guild.color || 'var(--teal-deep)';
+  return `<span class="guild-badge ${extra}" style="--g:${escapeHtml(color)}" title="${escapeHtml(guild.name)}">` +
+    `<span>${guild.emblem ? escapeHtml(guild.emblem) + ' ' : ''}${escapeHtml(guild.name)}</span></span>`;
+}
 
 function mountChrome(activeKey) {
   const header = document.getElementById('app-header');
@@ -167,9 +207,16 @@ function mountChrome(activeKey) {
         ? `<button type="button" class="name-text is-chip" id="name-btn" title="${n}">${avatarChip(n)}</button>`
         : '<button type="button" class="name-text" id="name-btn">닉네임 입력</button>';
     };
-    const paintHeader = () => {
-      header.innerHTML = '<span class="brand">대파밀수단</span>' + nameBtn();
+    const brand = () => {
+      if (!Site.slug) return `<a class="brand" href="/">${SITE_NAME}</a>`;
+      const g = Site.info;
+      const name = g ? g.name : Site.slug;
+      const emblem = g && g.emblem ? `<span class="brand-emblem">${escapeHtml(g.emblem)}</span>` : '';
+      return `<span class="brand-set">` +
+        `<a class="brand-home" href="/">${SITE_NAME}</a>` +
+        `<a class="brand is-guild" href="${Site.base}/songs/">${emblem}${escapeHtml(name)}</a></span>`;
     };
+    const paintHeader = () => { header.innerHTML = brand() + nameBtn(); };
     paintHeader();
     header.addEventListener('click', async (e) => {
       if (!e.target.closest('#name-btn')) return;
@@ -179,12 +226,23 @@ function mountChrome(activeKey) {
     });
     /* 악보 올리기 등 다른 곳에서 닉네임을 정해도 아바타가 따라온다 */
     document.addEventListener('nickchange', paintHeader);
+
+    /* 길드 안이면 이름과 색을 받아 헤더를 그 길드로 물들인다 */
+    if (Site.slug) {
+      api.get(`/guilds/${encodeURIComponent(Site.slug)}`).then((g) => {
+        Site.info = g;
+        if (g.color) document.documentElement.style.setProperty('--accent', g.color);
+        document.title = document.title.replace(SITE_NAME, g.name);
+        paintHeader();
+        document.dispatchEvent(new Event('guildinfo'));
+      }).catch(() => {});
+    }
   }
 
   const tabbar = document.getElementById('app-tabbar');
   if (tabbar) {
     tabbar.innerHTML = TABS.map((t) => `
-      <a class="tab-item${t.key === activeKey ? ' active' : ''}" href="${t.href}">
+      <a class="tab-item${t.key === activeKey ? ' active' : ''}" href="${t.scoped ? Site.base : ''}${t.href}">
         <span class="tab-icon">${icon(t.icon, 20)}</span>
         <span>${t.label}</span>
       </a>`).join('');
