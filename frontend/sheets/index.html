@@ -3,34 +3,168 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>악보 공유 - 대파밀수단</title>
-  <link rel="stylesheet" href="/common/common.css" />
-  <link rel="stylesheet" href="css/sheets.css" />
+  <title>악보 - 대파밀수단</title>
+  <link rel="stylesheet" href="/common/common.css?v=2" />
+  <link rel="stylesheet" href="css/sheets.css?v=2" />
 </head>
 <body>
   <header id="app-header" class="app-bar"></header>
+
   <div class="container">
+    <section class="card" id="upload-card">
+      <div class="upload-head" id="upload-toggle" role="button" tabindex="0">
+        <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg> 악보 올리기</h2>
+        <span class="fold-ic" aria-hidden="true">▾</span>
+      </div>
+
+      <div id="upload-body" hidden>
+      <div class="field-row">
+        <span class="field-label">파트</span>
+        <div class="chip-set" id="up-role"></div>
+      </div>
+      <div class="field-row">
+        <span class="field-label">태그</span>
+        <div class="chip-set" id="up-tags"></div>
+      </div>
+
+      <label class="file-pick" for="file-input">
+        <span id="file-fake">파일 선택 · 드래그</span>
+      </label>
+      <input type="file" id="file-input" accept="application/pdf" multiple hidden />
+
+      <div id="preview" class="preview" hidden>
+        <div class="preview-head">
+          <span id="preview-count"></span>
+          <button type="button" class="ghost mini" id="preview-clear">비우기</button>
+        </div>
+        <ul id="preview-list" class="preview-list"></ul>
+        <button type="button" class="pink upload-go" id="upload-btn">올리기</button>
+      </div>
+      <p class="muted upload-status" id="upload-status" hidden></p>
+      </div>
+    </section>
+
     <section class="card">
-      <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8"/></svg> 악보 공유</h2>
-      <form id="add-form" class="form-col">
-        <select id="song-select">
-          <option value="">곡 선택</option>
-        </select>
-        <select id="session-select">
-          <option value="">세션 선택</option>
-        </select>
-        <label class="file-field">
-          <input type="file" id="file-input" aria-label="악보 파일 선택" />
-          <span class="file-fake" id="file-fake"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg> 파일 선택</span>
-        </label>
-        <button type="submit" class="pink" id="upload-btn">업로드</button>
-      </form>
-      <div id="list" class="plain-list"></div>
+      <h2>악보 목록</h2>
+      <input type="search" id="search" class="search-box" placeholder="제목 · 아티스트 · 태그 검색" />
+      <div class="field-row tight">
+        <span class="field-label">파트</span>
+        <div class="chip-set" id="filter-role"></div>
+      </div>
+      <div class="field-row tight">
+        <span class="field-label">태그</span>
+        <div class="chip-set" id="filter-tags"></div>
+      </div>
+
+      <div class="list-tools">
+        <button type="button" class="ghost mini" id="select-toggle">선택 모드</button>
+        <button type="button" class="ghost mini" id="select-all" hidden>전체 선택</button>
+        <button type="button" class="ghost mini" id="pair-btn">페어</button>
+        <span class="muted list-count" id="list-count"></span>
+      </div>
+
+      <ul id="list" class="sheet-list"></ul>
     </section>
   </div>
 
+  <!-- 선택했을 때 뜨는 일괄 처리 바 -->
+  <div class="bulk-bar" id="bulk-bar" hidden>
+    <div class="bulk-head">
+      <strong id="bulk-count">0개 선택됨</strong>
+      <button type="button" class="ghost mini" id="bulk-close">해제</button>
+    </div>
+    <div class="bulk-row">
+      <span class="field-label">태그</span>
+      <div class="chip-set" id="bulk-tags"></div>
+    </div>
+    <div class="bulk-row">
+      <span class="field-label">파트</span>
+      <div class="chip-set" id="bulk-role"></div>
+      <button type="button" class="ghost mini danger" id="bulk-delete">삭제</button>
+    </div>
+  </div>
+
+  <!-- 아이패드 페어 — 1번이 QR을 띄우고 2번이 스캔하면 홀/짝쪽으로 나눠 본다 -->
+  <div class="pair-modal" id="pair-modal" hidden>
+    <div class="pair-panel">
+      <h3>아이패드 페어</h3>
+      <div class="pair-qr" id="pair-qr"></div>
+      <p class="pair-code" id="pair-code"></p>
+      <p class="muted pair-guide">2번 아이패드 카메라로 QR 스캔<br />
+        본 기기엔 홀수쪽, 2번엔 짝수쪽이 표시되며 페이지 전환이 연동됩니다.</p>
+      <p class="pair-peers" id="pair-peers"></p>
+      <div class="pair-actions">
+        <button type="button" class="ghost mini danger" id="pair-stop">페어 해제</button>
+        <button type="button" class="pink" id="pair-close">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2번(보조) 아이패드 대기 화면 — 1번이 악보를 열면 뷰어가 이 위에 뜬다 -->
+  <div class="pair-standby" id="pair-standby" hidden>
+    <div class="standby-inner">
+      <p class="standby-logo">대파밀수단</p>
+      <p class="standby-state" id="standby-state">연결 중...</p>
+      <p class="muted standby-last" id="standby-last"></p>
+      <button type="button" class="ghost mini" id="standby-stop">페어 해제</button>
+    </div>
+  </div>
+
+  <!-- 페어 연결이 끊긴 동안 떠 있는 뱃지 -->
+  <div class="pair-lost" id="pair-lost" hidden>페어 연동 끊김 · 재접속 중...</div>
+
+  <!-- 전체화면이 풀려 있는 동안만 위 가장자리에 걸리는 글래스 띠.
+       띠 전체가 누르는 자리다 — 조준할 필요가 없다. -->
+  <button type="button" class="fs-cue" id="fs-cue" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    <span>탭하면 화면을 꽉 채웁니다</span>
+  </button>
+
+  <!-- 전체화면 뷰어 — 악보 한 장이 주인공. 크롬은 부를 때만 떠오른다 -->
+  <div class="viewer" id="viewer" hidden>
+    <div class="viewer-stage" id="viewer-stage">
+      <img id="page-img" class="page-img" alt="" draggable="false" />
+      <p class="viewer-loading" id="viewer-loading">악보를 불러오는 중...</p>
+    </div>
+
+    <!-- 어디를 누르면 무엇이 되는지 열 때 잠깐 -->
+    <div class="tap-hint" id="tap-hint" aria-hidden="true">
+      <span class="hint-zone hint-prev"><b>이전</b></span>
+      <span class="hint-zone hint-menu"><b>메뉴</b></span>
+      <span class="hint-zone hint-next"><b>다음</b></span>
+    </div>
+
+    <!-- 쪽수 — 악보를 가리지 않게 평소엔 숨고, 넘긴 직후에만 잠깐 떠오른다 -->
+    <div class="page-mark" id="viewer-page"><b>1</b><em>/</em><span>1</span></div>
+
+    <!-- 떠 있는 글래스 독 — 닫기부터 넘김까지 여기 한 자리에 모인다 -->
+    <div class="dock" id="viewer-dock">
+      <button type="button" class="dock-btn dock-close" id="viewer-close" aria-label="닫기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <span class="dock-info">
+        <span class="dock-title" id="viewer-title"></span>
+        <span class="dock-page" id="dock-page"></span>
+        <span class="dock-ready" id="viewer-ready" hidden></span>
+      </span>
+      <span class="dock-turn">
+        <button type="button" class="dock-btn" id="viewer-fs" aria-label="전체화면" hidden>
+          <svg class="fs-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          <svg class="fs-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+        </button>
+        <button type="button" class="dock-btn" id="page-prev" aria-label="이전 장">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <button type="button" class="dock-btn" id="page-next" aria-label="다음 장">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </span>
+    </div>
+  </div>
+
   <nav id="app-tabbar" class="tab-bar"></nav>
-  <script src="/common/common.js"></script>
-  <script src="js/sheets.js"></script>
+  <script src="/common/common.js?v=2"></script>
+  <script src="/vendor/qrcode/qrcode.js"></script>
+  <script type="module" src="js/sheets.js?v=2"></script>
 </body>
 </html>

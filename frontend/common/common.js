@@ -1,5 +1,13 @@
 /* 대파밀수단 공통 모듈 */
 
+/* 파트와 태그는 여기서만 정의한다. 페이지마다 따로 두면 순서가 어긋난다. */
+const ROLE_ORDER = ['보컬', '일렉1', '일렉2', '베이스', '키보드', '드럼'];
+const ROLE_SHORT = { 보컬: 'Vo', 일렉1: 'Gt1', 일렉2: 'Gt2', 베이스: 'Ba', 키보드: 'Key', 드럼: 'Dr' };
+/* 악보에만 있는 파트 — 파트를 가리지 않는 악보용 */
+const SHEET_ROLES = [...ROLE_ORDER, '공용'];
+/* 곡과 악보가 같은 목록을 쓴다. 한 곡에 하나만 붙는다. */
+const TAGS = ['보컬로이드', '애니송(게임)', 'J-POP(남)', 'J-POP(여)', '불법'];
+
 const api = {
   async get(url) {
     const res = await fetch('/api' + url);
@@ -151,17 +159,26 @@ const TABS = [
 function mountChrome(activeKey) {
   const header = document.getElementById('app-header');
   if (header) {
-    header.innerHTML = `
-      <span class="brand">대파밀수단</span>
-      <button type="button" class="name-text" id="name-btn">${Nick.get() || '닉네임 입력'}</button>`;
-    header.querySelector('#name-btn').addEventListener('click', async () => {
-      if (Nick.get()) {
-        await nameModal();
-      } else {
-        await Nick.ensure();
-      }
-      header.querySelector('#name-btn').textContent = Nick.get() || '닉네임 입력';
+    /* 닉네임을 정했으면 아바타 칩으로 — 사이트 어디서나 사람은 같은 모양이다.
+       아직 안 정했으면 뭘 눌러야 할지 알 수 있게 글자로 둔다. */
+    const nameBtn = () => {
+      const n = Nick.get();
+      return n
+        ? `<button type="button" class="name-text is-chip" id="name-btn" title="${n}">${avatarChip(n)}</button>`
+        : '<button type="button" class="name-text" id="name-btn">닉네임 입력</button>';
+    };
+    const paintHeader = () => {
+      header.innerHTML = '<span class="brand">대파밀수단</span>' + nameBtn();
+    };
+    paintHeader();
+    header.addEventListener('click', async (e) => {
+      if (!e.target.closest('#name-btn')) return;
+      if (Nick.get()) await nameModal();
+      else await Nick.ensure();
+      paintHeader();
     });
+    /* 악보 올리기 등 다른 곳에서 닉네임을 정해도 아바타가 따라온다 */
+    document.addEventListener('nickchange', paintHeader);
   }
 
   const tabbar = document.getElementById('app-tabbar');
@@ -176,6 +193,31 @@ function mountChrome(activeKey) {
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString();
+}
+
+/* 닉네임 → 항상 같은 색. 사람마다 색이 고정돼야 색만으로 구분이 된다. */
+const AVATAR_COLORS = [
+  ['#00b8ad', '#e7faf8'],
+  ['#ec4899', '#fdeef7'],
+  ['#6366f1', '#eef0fe'],
+  ['#f59e0b', '#fef5e6'],
+  ['#22b8e6', '#e8f7fd'],
+  ['#8b5cf6', '#f3eefe'],
+  ['#2f9e54', '#e9f6ed'],
+  ['#ef4444', '#fdecec'],
+];
+
+function nickColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+/* 첫 글자 아바타 칩. 한글은 1글자, 영문은 2글자까지. */
+function avatarChip(name, extraClass = '') {
+  const [fg, bg] = nickColor(name);
+  const initial = /^[a-zA-Z]/.test(name) ? name.slice(0, 2).toUpperCase() : name.slice(0, 1);
+  return `<span class="avatar-chip ${extraClass}" style="--chip-fg:${fg};--chip-bg:${bg}" title="${name}">${initial}</span>`;
 }
 
 function showLoading(el) {

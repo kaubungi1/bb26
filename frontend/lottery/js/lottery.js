@@ -12,16 +12,15 @@ const historyEl = document.getElementById('history');
 const countEl = document.getElementById('count');
 const drawBtn = document.getElementById('draw-btn');
 
-const candidates = () => songs.filter((s) => s.isCandidate || s.status === 'candidate');
+const candidates = () => songs;
 
 async function refresh() {
   const [s, h] = await Promise.all([api.get('/songs'), api.get('/lotteries')]);
   songs = s;
   history = h;
-  if (!initialized && songs.length > 0) {
-    initialized = true;
-    pool = new Set(candidates().map((x) => x.id));
-  }
+  /* 전체 선택이 아니라 빈 상태로 시작한다 — 고른 곡만 추첨에 들어간다 */
+  initialized = true;
+  pool = new Set([...pool].filter((id) => songs.some((s) => s.id === id)));
   renderPool();
   renderHistory();
   syncControls();
@@ -38,7 +37,7 @@ function renderPool() {
     return;
   }
   poolEl.innerHTML = list.map((song) => `
-    <label class="lottery-item">
+    <label class="lottery-item${pool.has(song.id) ? ' is-on' : ''}">
       <input type="checkbox" data-id="${song.id}" ${pool.has(song.id) ? 'checked' : ''} />
       <span class="lottery-item-title">${escapeHtml(song.title)}</span>
       <span class="lottery-item-artist">${escapeHtml(song.artist)}</span>
@@ -49,15 +48,31 @@ poolEl.addEventListener('change', (e) => {
   const id = Number(e.target.dataset.id);
   if (e.target.checked) pool.add(id);
   else pool.delete(id);
+  /* 타일 전체가 켜지고 꺼지므로 클래스도 같이 옮긴다 */
+  e.target.closest('.lottery-item').classList.toggle('is-on', e.target.checked);
   syncControls();
 });
 
 function syncControls() {
+  const list = candidates();
+  document.getElementById('pool-count').textContent =
+    pool.size ? pool.size + '곡 선택됨' : '고른 곡 없음';
+  document.getElementById('pool-all').textContent =
+    (list.length > 0 && list.every((s) => pool.has(s.id))) ? '전체 해제' : '전체 선택';
   drawBtn.disabled = pool.size === 0;
   document.getElementById('plus').disabled = count >= pool.size;
   document.getElementById('minus').disabled = count <= 1;
   countEl.textContent = count;
 }
+
+document.getElementById('pool-all').addEventListener('click', () => {
+  const list = candidates();
+  const all = list.length > 0 && list.every((s) => pool.has(s.id));
+  pool = all ? new Set() : new Set(list.map((s) => s.id));
+  count = Math.min(Math.max(1, count), Math.max(1, pool.size));
+  renderPool();
+  syncControls();
+});
 
 document.getElementById('minus').addEventListener('click', () => {
   count = Math.max(1, count - 1);
@@ -68,12 +83,46 @@ document.getElementById('plus').addEventListener('click', () => {
   syncControls();
 });
 
+/* 뽑은 곡을 바로 보여주지 않고 후보 사이를 훑다가 멈춘다.
+   결과는 이미 정해져 있고, 연출만 얹는 것이다. */
+const ROLL_MS = 900;
+const ROLL_TICK = 70;
+let rolling = false;
+
+function roll(poolSongs, done) {
+  const stage = document.createElement('div');
+  stage.className = 'draw-roll';
+  stage.innerHTML = '<div class="draw-roll-label">추첨 중</div><strong></strong>';
+  resultEl.innerHTML = '';
+  resultEl.appendChild(stage);
+  const nameEl = stage.querySelector('strong');
+
+  let i = 0;
+  const timer = setInterval(() => {
+    nameEl.textContent = poolSongs[i++ % poolSongs.length].title;
+  }, ROLL_TICK);
+
+  setTimeout(() => {
+    clearInterval(timer);
+    stage.classList.add('is-landing');
+    setTimeout(done, 180);
+  }, ROLL_MS);
+}
+
 drawBtn.addEventListener('click', () => {
+  if (rolling) return;
   const poolSongs = songs.filter((s) => pool.has(s.id));
   if (!poolSongs.length) return;
   const drawn = [...poolSongs].sort(() => Math.random() - 0.5).slice(0, count);
-  pending = { drawn, poolIds: [...pool] };
-  renderResult();
+
+  rolling = true;
+  drawBtn.disabled = true;
+  roll(poolSongs, () => {
+    pending = { drawn, poolIds: [...pool] };
+    renderResult();
+    rolling = false;
+    syncControls();
+  });
 });
 
 function renderResult() {
@@ -83,9 +132,9 @@ function renderResult() {
   }
   resultEl.innerHTML = `
     <div class="draw-result">
-      <div class="draw-result-title">오늘의 곡</div>
-      ${pending.drawn.map((s) => `
-        <div class="draw-result-song">
+      <div class="draw-result-title"><span class="skew-badge grad"><span>오늘의 곡</span></span></div>
+      ${pending.drawn.map((s, i) => `
+        <div class="draw-result-song" style="animation-delay:${i * 90}ms">
           <strong>${escapeHtml(s.title)}</strong>
           <span>${escapeHtml(s.artist)}</span>
         </div>`).join('')}

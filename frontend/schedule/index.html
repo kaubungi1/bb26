@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>일정 - 대파밀수단</title>
-  <link rel="stylesheet" href="/common/common.css" />
-  <link rel="stylesheet" href="css/schedule.css" />
+  <link rel="stylesheet" href="/common/common.css?v=2" />
+  <link rel="stylesheet" href="css/schedule.css?v=2" />
 </head>
 <body>
   <header id="app-header" class="app-bar"></header>
@@ -22,14 +22,14 @@
       <div id="calendar" class="calendar"></div>
       <div class="cal-legend">
         <span><i class="legend-dot confirmed"></i>확정</span>
-        <span><i class="legend-dot polling"></i>조율중</span>
+        <span><i class="legend-dot polling"></i>조율 중</span>
         <button type="button" class="ghost" id="today-btn">오늘</button>
       </div>
     </section>
 
     <section class="card" id="polls-card">
       <div class="section-head">
-        <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> 조율 중</h2>
+        <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> 합주 일정</h2>
         <button type="button" class="pink add-btn-sm" id="add-poll-btn">＋ 일정 추가</button>
       </div>
       <div id="poll-list" class="poll-list"></div>
@@ -44,7 +44,7 @@
   <div class="modal-backdrop" id="add-modal" hidden>
     <div class="modal">
       <h3 class="modal-title">＋ 합주 후보 만들기</h3>
-      <p class="modal-desc">후보 기간을 정하면 멤버들이 날짜별로 가능 여부를 체크합니다.</p>
+      <p class="modal-desc">후보 기간을 정하면 날짜별 참석 가능 여부 선택 가능합니다.</p>
       <form id="add-form" class="modal-form">
         <input id="in-title" placeholder="일정 제목 (예: 미쿠탄생17돐기념합주)" required />
         <div class="range-row">
@@ -71,10 +71,27 @@
     <div class="poll-body">
       <div class="poll-toolbar">
         <label class="chk"><input type="checkbox" id="weekend-only" /> 주말만</label>
-        <span id="poll-hint" class="muted">내 열(점선)을 탭해 가능 표시 · 다시 탭하면 해제</span>
+        <span id="poll-hint" class="muted">빈칸을 탭해 가능 표시 · 다시 탭하면 해제</span>
       </div>
       <div id="matrix" class="matrix-wrap"></div>
-      <div class="confirm-bar">
+      <div class="confirmed-bar" id="confirmed-bar" hidden>
+        <div class="confirmed-info">
+          <span class="confirmed-badge"><span>확정</span></span>
+          <span id="confirmed-detail"></span>
+        </div>
+        <div class="confirmed-actions">
+          <button type="button" class="pink add-btn-sm" id="add-member-btn">＋ 인원 추가</button>
+          <button type="button" class="ghost" id="unconfirm-btn">확정 해제</button>
+        </div>
+      </div>
+      <section class="ps-section" id="playable-section" hidden>
+        <div class="ps-head">
+          <h3 class="ps-title">이 인원으로 가능한 곡</h3>
+          <button type="button" class="ghost" id="ps-toggle">전체 보기</button>
+        </div>
+        <div class="ps-wrap" id="playable-list"></div>
+      </section>
+      <div class="confirm-bar" id="confirm-bar">
         <div class="confirm-row">
           <select id="confirm-date" class="confirm-select"></select>
           <input type="time" id="confirm-start" placeholder="시작" />
@@ -89,7 +106,7 @@
   </div>
 
   <nav id="app-tabbar" class="tab-bar"></nav>
-  <script src="/common/common.js"></script>
-  <script src="js/schedule.js"></script>
+  <script src="/common/common.js?v=2"></script>
+  <script src="js/schedule.js?v=2"></script>
 </body>
 </html>

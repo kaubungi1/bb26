@@ -1,1 +1,598 @@
-.empty-msg { padding: 8px 0; }
+/* 악보 — 라이브러리 + 전체화면 PDF 뷰어 */
+
+/* ===== 업로드 (접이식 — 평소엔 목록이 주인공) ===== */
+.upload-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.upload-head h2 { margin: 0; }
+.fold-ic {
+  color: var(--ink-muted);
+  font-size: 14px;
+  transition: transform 0.2s ease;
+}
+#upload-card.is-open .fold-ic { transform: rotate(180deg); }
+#upload-body { margin-top: 12px; }
+
+.file-pick {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 13px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(22, 40, 47, 0.05);
+  color: var(--ink-muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.file-pick:hover { background: rgba(22, 40, 47, 0.08); }
+
+.file-pick.is-drag {
+  background: var(--teal-soft);
+  color: var(--teal-deep);
+  outline: 2px dashed var(--teal);
+  outline-offset: -4px;
+}
+
+/* 미리보기 줄 빼기 버튼 */
+.row-del {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(22, 40, 47, 0.06);
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.row-del:hover { background: var(--pink-soft); color: var(--pink); }
+
+.preview { margin-top: 12px; }
+.preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--teal-deep);
+}
+.preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border-radius: var(--radius-sm);
+  background: rgba(22, 40, 47, 0.03);
+}
+.preview-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.preview-list li:last-child { border-bottom: none; }
+.preview-list input { padding: 8px 10px; font-size: 13px; }
+.preview-list input[data-f="title"] { flex: 3 1 160px; min-width: 0; }
+.preview-list input[data-f="artist"] { flex: 2 1 110px; min-width: 0; }
+.preview-list input[data-f="bpm"] { flex: 0 0 74px; }
+.preview-file {
+  flex: 1 1 100%;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 미리보기 줄마다 붙는 태그 칩 — 본문 칩보다 작게 */
+.row-tags { flex: 1 1 100%; gap: 4px; margin-top: 2px; }
+.row-tags .chip { padding: 4px 9px; font-size: 11.5px; }
+
+.upload-go { width: 100%; margin-top: 10px; }
+.upload-status { margin: 10px 2px 0; font-size: 12.5px; font-weight: 600; color: var(--teal-deep); }
+
+/* ===== 목록 ===== */
+/* 검색창 스타일은 common.css 의 .search-box 를 쓴다 */
+
+
+.sheet-list { list-style: none; margin: 0; padding: 0; }
+.sheet-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.sheet-list li:last-child { border-bottom: none; }
+.sheet-list li[data-open] { cursor: pointer; border-radius: 12px; transition: background 0.14s ease; }
+.sheet-list li[data-open]:hover { background: rgba(0, 184, 173, 0.05); }
+.sheet-list li.is-picked { background: var(--teal-soft); border-radius: 10px; }
+.pick-box {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: rgba(22, 40, 47, 0.08);
+  color: var(--teal-deep);
+  font-size: 13px;
+  font-weight: 800;
+}
+.is-picked .pick-box { background: var(--teal); color: #fff; }
+.sheet-thumb {
+  flex: none;
+  width: 44px;
+  height: 58px;
+  object-fit: cover;
+  object-position: top;
+  background: #fff;
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
+  box-shadow: 0 4px 12px -5px rgba(0, 130, 140, 0.55);
+  cursor: pointer;
+  transition: transform 0.16s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+.sheet-thumb:active { transform: scale(0.95); }
+.sheet-thumb.is-broken { visibility: hidden; }
+.sheet-main { flex: 1; min-width: 0; }
+.sheet-name { display: block; font-weight: 700; font-size: 14.5px; }
+.sheet-sub { display: block; font-size: 12px; color: var(--ink-muted); }
+.tag-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+/* 열기 버튼은 없앴다 — 줄 자체가 열기다. 수정만 옅게 남긴다. */
+.row-edit {
+  flex: none;
+  padding: 6px 2px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  min-height: auto;
+  box-shadow: none;
+  opacity: 0.65;
+  cursor: pointer;
+}
+.row-edit:hover { color: var(--teal-deep); opacity: 1; background: transparent; box-shadow: none; }
+
+/* 인라인 수정 */
+.sheet-list li.is-editing { display: block; padding: 12px 0; }
+.edit-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+.edit-grid input { flex: 1 1 140px; min-width: 0; }
+.edit-grid input[data-f="bpm"] { flex: 0 0 84px; }
+.edit-actions { display: flex; gap: 7px; flex: 1 1 100%; }
+.edit-actions button { flex: 1; }
+
+/* ===== 일괄 처리 바 ===== */
+.bulk-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(78px + var(--safe-bottom));
+  z-index: 40;
+  width: calc(100% - 24px);
+  max-width: 696px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-md);
+}
+.bulk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.bulk-head strong { font-size: 13.5px; color: var(--teal-deep); }
+.bulk-row { display: flex; align-items: flex-start; gap: 8px; padding-top: 6px; }
+
+/* ===== 아이패드 페어 =====
+   아래 셋은 display 를 직접 지정하므로, 브라우저 기본값인 [hidden]{display:none}
+   보다 우선순위가 높아 hidden 속성만으로는 숨겨지지 않는다. 명시적으로 덮어쓴다. */
+.pair-modal[hidden],
+.pair-standby[hidden],
+.fs-cue[hidden] { display: none; }
+
+.pair-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(22, 40, 47, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.pair-panel {
+  width: 100%;
+  max-width: 340px;
+  padding: 22px 20px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+.pair-panel h3 { margin: 0 0 14px; font-size: 16px; color: var(--teal-deep); }
+.pair-qr {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto 10px;
+}
+.pair-qr svg { width: 200px; height: 200px; }
+.pair-code {
+  margin: 0 0 10px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--teal-deep);
+  font-variant-numeric: tabular-nums;
+}
+.pair-guide { margin: 0 0 10px; font-size: 12.5px; line-height: 1.6; }
+.pair-peers { margin: 0 0 14px; font-size: 12.5px; font-weight: 700; color: var(--teal-deep); }
+.pair-actions { display: flex; gap: 8px; }
+.pair-actions button { flex: 1; }
+
+/* 보조(2번) 기기 대기 화면 — 뷰어(z:100)가 열리면 그 아래로 가려진다 */
+.pair-standby {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #eafcfa, #f2f6ff);
+  text-align: center;
+}
+.standby-inner { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.standby-logo {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: var(--teal-deep);
+}
+.standby-state { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink-muted); }
+.standby-last { margin: 0; font-size: 12.5px; }
+.pair-standby button { margin-top: 14px; }
+
+/* 전체화면이 풀려 있는 동안만 위 가장자리에 걸리는 글래스 띠.
+   좌우로 꽉 차고 아래 경계만 비스듬히 잘라, 이 페이지의 사선 문법을 따른다. */
+.fs-cue {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 130;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  max-width: none;
+  min-height: auto;
+  margin: 0;
+  padding: calc(9px + env(safe-area-inset-top, 0px)) 16px 15px;
+  border: none;
+  border-radius: 0;
+  background: rgba(0, 128, 138, 0.82);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  color: #f2fdfd;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  cursor: pointer;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 calc(100% - 12px));
+  animation: fs-cue-in 0.26s cubic-bezier(0.2, 1.25, 0.4, 1);
+}
+.fs-cue svg { width: 17px; height: 17px; flex: none; }
+.fs-cue:active { background: rgba(0, 112, 122, 0.9); }
+@keyframes fs-cue-in {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+/* 독의 전체화면 버튼 — 상태에 따라 아이콘 하나만 보여준다 */
+#viewer-fs .fs-out { display: none; }
+#viewer-fs.is-on .fs-in { display: none; }
+#viewer-fs.is-on .fs-out { display: block; }
+
+/* 페어 연결이 끊긴 동안 떠 있는 뱃지 — 어느 화면 위에서든 보인다 */
+.pair-lost {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  transition: top 0.2s ease;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(22, 40, 47, 0.82);
+  color: #ffd7dc;
+  font-size: 12px;
+  font-weight: 700;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+/* 띠가 걸려 있으면 그 아래로 비켜선다 */
+body.has-fs-cue .pair-lost { top: calc(62px + env(safe-area-inset-top, 0px)); }
+
+/* ===== 전체화면 뷰어 =====
+   악보 종이가 주인공이다. 무대는 옅은 청회색으로 깔고, 크롬은 부를 때만
+   떠오르는 글래스 독 하나로 모았다 — 닫기도 넘김도 같은 자리에서 끝난다. */
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  background: #eaf1f4;
+}
+.viewer-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 가로를 꽉 채우면 세로가 넘치는데, 가운데 정렬에서 넘친 위쪽은 스크롤로도
+     닿지 않는다. 아예 잘라 위아래가 균등하게 벗어나도록 둔다. */
+  overflow: hidden;
+  background:
+    radial-gradient(80% 55% at 50% -10%, rgba(46, 230, 212, 0.16), transparent 65%),
+    radial-gradient(70% 50% at 100% 110%, rgba(34, 184, 230, 0.12), transparent 62%),
+    #eaf1f4;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* 종이는 회색 그림자 대신 청록 글로우로 띄운다 */
+/* 가운데 정렬은 무대가 맡는다. 여기에 margin:auto 를 두면 세로가 넘칠 때
+   auto 여백이 0으로 접히며 위로 붙어, 아래쪽만 잘려 나간다. */
+.page-img {
+  display: block;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(22, 40, 47, 0.1),
+    0 18px 44px -18px rgba(0, 122, 130, 0.42);
+  pointer-events: none;
+  animation: page-in 0.16s ease-out;
+}
+@keyframes page-in {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+.viewer-loading {
+  position: relative;
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--teal-deep);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+/* ---- 사선 진행 인디케이터 (화면 맨 아래, 항상 남는다) ---- */
+/* ---- 쪽수 — 기울어진 평행사변형 뱃지.
+   악보가 화면을 꽉 채우므로 상시 표시는 무엇이든 음표를 가린다.
+   넘긴 직후에만 잠깐 떠올랐다 스스로 사라진다. ---- */
+.page-mark {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  right: 12px;
+  z-index: 101;
+  padding: 5px 14px;
+  transform: skewX(-12deg);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--teal-deep);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+.page-mark.is-on { opacity: 1; transition-duration: 0.12s; }
+.page-mark > * { display: inline-block; transform: skewX(12deg); }
+.page-mark b { font-size: 15px; font-weight: 800; }
+.page-mark em { margin: 0 2px; font-style: normal; opacity: 0.4; font-weight: 700; }
+.page-mark span { font-size: 12.5px; font-weight: 700; opacity: 0.62; }
+
+/* ---- 떠 있는 글래스 독 ---- */
+.dock {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + var(--safe-bottom));
+  z-index: 102;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 7px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  box-shadow: 0 12px 34px -12px rgba(0, 110, 120, 0.4);
+  transform: translate(-50%, 0) scale(1);
+  transform-origin: 50% 100%;
+  opacity: 1;
+  transition: transform 0.24s cubic-bezier(0.2, 1.35, 0.4, 1), opacity 0.18s ease;
+}
+.viewer.is-bare .dock {
+  transform: translate(-50%, 14px) scale(0.9);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dock-btn {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(22, 40, 47, 0.05);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.dock-btn svg { width: 19px; height: 19px; }
+.dock-btn:active { transform: scale(0.92); }
+.dock-btn.dock-close {
+  background: var(--grad-teal);
+  color: #fff;
+  box-shadow: 0 4px 14px -4px rgba(0, 160, 170, 0.7);
+}
+
+.dock-info {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 0 4px;
+}
+.dock-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--ink);
+}
+/* 평소 쪽수는 여기서 본다 — 독을 부르면 제목 옆에 붙는다 */
+.dock-page {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 준비 상태 — 다 받으면 핑크로 한 번 반짝이고 사라진다 */
+.dock-ready {
+  flex: none;
+  padding: 3px 9px;
+  transform: skewX(-12deg);
+  border-radius: 4px;
+  background: var(--teal-soft);
+  color: var(--teal-deep);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.dock-ready.is-done {
+  background: var(--pink-soft);
+  color: var(--pink);
+  animation: ready-pop 0.4s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+@keyframes ready-pop {
+  0% { transform: skewX(-12deg) scale(0.7); }
+  60% { transform: skewX(-12deg) scale(1.12); }
+  100% { transform: skewX(-12deg) scale(1); }
+}
+
+.dock-turn { display: flex; gap: 4px; }
+
+/* ---- 탭 힌트 — 열 때 잠깐, 가장자리에만 은은하게 ---- */
+.tap-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 101;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.tap-hint.is-on { opacity: 1; }
+.hint-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hint-zone b {
+  padding: 5px 15px;
+  transform: skewX(-12deg);
+  border-radius: 5px;
+  background: rgba(22, 40, 47, 0.5);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.hint-prev {
+  flex: 35;
+  align-items: flex-start;
+  padding-top: 8vh;
+  background: linear-gradient(to bottom, rgba(0, 155, 146, 0.24), transparent);
+}
+.hint-menu {
+  flex: 30;
+}
+.hint-menu b { background: rgba(0, 155, 146, 0.62); }
+.hint-next {
+  flex: 35;
+  align-items: flex-end;
+  padding-bottom: 8vh;
+  background: linear-gradient(to top, rgba(0, 155, 146, 0.24), transparent);
+}
+
+.ghost.danger { color: #ef4444; }
+.avatar-chip.tiny {
+  width: 17px;
+  height: 17px;
+  font-size: 10px;
+  vertical-align: -3px;
+  margin-left: 2px;
+}
+
+/* 수정 줄의 파트/태그 칩 */
+.edit-chips {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.edit-label {
+  flex: none;
+  width: 32px;
+  padding-top: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.edit-chips .chip-set { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+.edit-chips .chip { padding: 5px 10px; font-size: 12px; }

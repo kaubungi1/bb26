@@ -58,7 +58,9 @@
 .cal-cell:nth-last-child(-n + 7) { border-bottom: none; }
 .cal-cell:hover { background: rgba(0, 184, 173, 0.05); }
 .cal-cell.empty { background: transparent; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); cursor: default; pointer-events: none; }
-.cal-cell.selected { background: var(--teal-soft); }
+.cal-cell.selected {
+  background: linear-gradient(135deg, rgba(46, 230, 212, 0.2), rgba(34, 184, 230, 0.12));
+}
 .cal-cell.today.selected { background: var(--teal-soft); }
 .cal-cell.in-range { background: rgba(236, 72, 153, 0.09); }
 .cal-cell.selected.in-range { background: var(--teal-soft); }
@@ -68,18 +70,22 @@
   color: var(--ink);
   line-height: 1.4;
 }
+/* 오늘 — 기울어진 그라데이션 태그로 한눈에 */
 .cal-cell.today .cal-day-num {
-  color: var(--ink-muted);
-  border: 1.5px solid var(--ink-muted);
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
+  color: #fff;
+  background: var(--grad-teal);
+  transform: skewX(var(--skew));
+  border-radius: 4px;
+  width: 21px;
+  height: 19px;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: var(--glow-teal);
 }
+.cal-cell.today .cal-day-num > span { display: block; transform: skewX(calc(var(--skew) * -1)); }
 .cal-cell.sunday .cal-day-num { color: var(--pink); }
-.cal-cell.sunday.today .cal-day-num { color: var(--ink-muted); }
+.cal-cell.sunday.today .cal-day-num { color: #fff; }
 .cal-cell.past .cal-day-num { color: var(--ink-muted); }
 .cal-cell.past .cal-event-icon,
 .cal-cell.past .cal-event-text { opacity: 0.55; }
@@ -111,18 +117,17 @@
 }
 .cal-legend > span { display: inline-flex; align-items: center; gap: 5px; }
 .cal-legend .ghost { margin-left: auto; min-height: 30px; padding: 3px 12px; }
-.legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.legend-dot {
+  width: 9px;
+  height: 9px;
+  transform: skewX(var(--skew));
+  border-radius: 2px;
+  display: inline-block;
+}
 .legend-dot.confirmed { background: var(--teal); }
 .legend-dot.polling { background: var(--pink); }
 
 /* --- 조율 중 목록 --- */
-.add-btn-sm {
-  flex: 0 0 auto;
-  min-height: 36px;
-  padding: 6px 14px;
-  font-size: 13px;
-  box-shadow: none;
-}
 .poll-list { display: flex; flex-direction: column; }
 .poll-item {
   padding: 13px 2px;
@@ -138,11 +143,13 @@
   flex: 0 0 auto;
   font-size: 10px;
   font-weight: 800;
-  color: var(--pink);
-  background: var(--pink-soft);
-  border-radius: 8px;
-  padding: 3px 8px;
+  color: #d95296;
+  background: rgba(236, 72, 153, 0.1);
+  transform: skewX(var(--skew));
+  border-radius: 4px;
+  padding: 3px 9px;
 }
+.poll-item-badge > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
 .poll-item-info { flex: 1; min-width: 0; }
 .poll-item-title { font-weight: 700; font-size: 15px; transition: color 0.15s; }
 .poll-item-meta { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
@@ -223,15 +230,48 @@
   gap: 10px;
   font-size: 13px;
 }
-.chk { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; color: var(--ink); cursor: pointer; }
-.chk input { width: 17px; height: 17px; min-height: 17px; flex: 0 0 auto; accent-color: var(--teal); }
+/* 사이트에서 유일하게 남아 있던 기본 체크박스를 밑줄 칩 문법으로 맞춘다 */
+.chk {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 1px 7px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: color 0.14s ease;
+}
+.chk:hover { color: var(--ink); }
+.chk input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.chk:has(input:checked),
+.chk.is-on { color: var(--teal-deep); }
+.chk:has(input:checked)::after,
+.chk.is-on::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 1px;
+  height: 3px;
+  transform: skewX(var(--skew));
+  border-radius: 2px;
+  background: var(--grad-teal);
+}
 #poll-hint { font-size: 12px; }
 
 /* --- 매트릭스 --- */
 .matrix-wrap {
   overflow-x: auto;
   border-radius: 14px;
-  border: 1px solid var(--line);
   background: #fff;
   -webkit-overflow-scrolling: touch;
 }
@@ -273,25 +313,29 @@
 .matrix .date-cell .dow.sunday { color: var(--pink); }
 .matrix .date-cell .dow.saturday { color: #2f6f9e; }
 .date-cnt {
+  display: inline-block;
   margin-left: 6px;
   font-size: 10px;
   font-weight: 800;
   color: var(--teal-deep);
   background: var(--teal-soft);
-  border-radius: 6px;
-  padding: 1px 6px;
+  transform: skewX(var(--skew));
+  border-radius: 3px;
+  padding: 1px 7px;
 }
+.date-cnt > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
 .matrix tr.hot .date-cell { color: var(--teal-deep); background: var(--teal-soft); }
 .matrix tr.hot .date-cnt { color: var(--pink); background: var(--pink-soft); }
 .matrix tr.past .date-cell { color: var(--ink-muted); }
 .matrix tr.past .avail-cell { opacity: 0.55; }
+/* 칸마다 테두리를 두르면 격자가 시끄럽다. 배경 농도로만 구분한다. */
 .avail-cell {
   cursor: default;
   min-width: 34px;
   height: 30px;
   border-radius: 7px;
-  background: var(--bg);
-  border: 1px solid var(--line);
+  background: rgba(22, 40, 47, 0.035);
+  border: none;
 }
 .avail-cell.mine {
   cursor: pointer;
@@ -314,6 +358,145 @@
 .matrix tr.hot .avail-cell:not(.on) { background: var(--teal-soft); border-color: transparent; }
 .matrix tr.hot .avail-cell.mine:not(.on) { border-style: dashed; border-color: rgba(0, 184, 173, 0.55); }
 
+.poll-item-badge.confirmed { color: var(--teal-deep); background: var(--teal-soft); }
+
+/* --- 확정된 일정 매트릭스 --- */
+.matrix tr.fixed .date-cell { color: var(--teal-deep); background: var(--teal-soft); }
+.matrix tr.fixed .date-cnt { color: var(--pink); background: var(--pink-soft); }
+.matrix tr.locked .date-cell,
+.matrix tr.locked .avail-cell { opacity: 0.4; }
+.date-fixed {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--teal-deep);
+  transform: skewX(var(--skew));
+  border-radius: 3px;
+  padding: 1px 7px;
+}
+.date-fixed > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
+
+/* --- 확정 안내 바 --- */
+.confirmed-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(46, 230, 212, 0.2), rgba(34, 184, 230, 0.12));
+  border-radius: 16px;
+}
+.confirmed-info { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; font-weight: 700; }
+.confirmed-badge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--grad-teal);
+  transform: skewX(var(--skew));
+  border-radius: 4px;
+  padding: 3px 10px;
+  box-shadow: var(--glow-teal);
+}
+.confirmed-badge > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
+.confirmed-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+.confirmed-bar button { flex: 0 0 auto; }
+/* 확정일 행: 남의 칸도 조작 가능하다는 걸 커서/호버로 알림 */
+.matrix tr.fixed .avail-cell[data-toggle] { cursor: pointer; }
+.matrix tr.fixed .avail-cell[data-toggle]:not(.on):hover { background: rgba(0, 184, 173, 0.12); }
+.matrix tr.fixed .avail-cell[data-toggle].on:hover { opacity: 0.75; }
+.matrix tr.fixed .avail-cell:not(.on) .avail-check { color: var(--ink-muted); font-weight: 700; }
+
+/* --- 참석 인원 기준 가능 곡 --- */
+.ps-section { display: flex; flex-direction: column; gap: 10px; }
+.ps-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ps-title { font-size: 15px; font-weight: 800; margin: 0; }
+.ps-wrap {
+  overflow-x: auto;
+  border-radius: 14px;
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+}
+.ps-table { border-collapse: collapse; width: 100%; min-width: max-content; }
+.ps-table th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ink-muted);
+  text-align: center;
+  padding: 9px 8px;
+  white-space: nowrap;
+}
+.ps-table th.ps-score-head, .ps-table th.ps-song-head { text-align: left; }
+.ps-table th.ps-song-head { padding-left: 4px; }
+/* 좁은 화면에선 역할을 축약해 6칸을 다 보여준다 */
+.ps-role-full { display: none; }
+.ps-table th.ps-role-head { padding: 9px 4px; }
+.ps-table td { padding: 9px 8px; font-size: 12px; text-align: center; white-space: nowrap; }
+.ps-row { border-top: 1px solid var(--line); }
+/* 충족 개수가 바뀌는 지점에 굵은 구분선 — 위에서부터 훑을 때 단락이 보인다 */
+.ps-row.ps-gap { border-top: 2px solid #dde7ec; }
+
+.ps-score {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+  width: 44px;
+  text-align: left !important;
+  padding-left: 10px !important;
+  font-variant-numeric: tabular-nums;
+}
+.ps-table th.ps-score-head { position: sticky; left: 0; z-index: 4; padding-left: 10px; }
+.ps-table th.ps-song-head { position: sticky; left: 44px; z-index: 4; }
+.ps-score strong { font-size: 17px; font-weight: 800; color: var(--ink-muted); }
+.ps-score .skew-gauge { display: block; width: 30px; height: 4px; margin-top: 3px; }
+.ps-score span { font-size: 11px; font-weight: 700; color: var(--ink-muted); opacity: 0.7; }
+.ps-row.full .ps-score strong { color: var(--pink); }
+.ps-row.good .ps-score strong { color: var(--teal-deep); }
+.ps-row.half .ps-score strong { color: var(--teal); }
+
+.ps-song {
+  position: sticky;
+  left: 44px;
+  z-index: 2;
+  background: #fff;
+  text-align: left !important;
+  padding-left: 4px !important;
+  padding-right: 10px !important;
+  max-width: 124px;
+}
+.ps-song-title {
+  font-weight: 700;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 124px;
+}
+.ps-song-sub { font-size: 11px; color: var(--ink-muted); margin-top: 1px; }
+
+.ps-cell { min-width: 26px; padding: 6px 3px !important; }
+/* 폰에서 6칸 + 곡 제목이 한 화면에 들어가도록 칩을 살짝 줄인다 */
+.ps-chips .avatar-chip { width: 20px; height: 20px; font-size: 10px; }
+.ps-chips { display: inline-flex; align-items: center; justify-content: center; }
+.ps-chips > * + * { margin-left: -5px; }
+/* 빈 세션은 빈 원 — 채움/빔 대비가 한눈에 */
+.ps-hole {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(22, 40, 47, 0.07);
+}
+/* 채워진 세션이 많은 곡일수록 행 전체가 또렷하게 */
+.ps-row.low td { opacity: 0.72; }
+
 /* --- 확정 바 --- */
 .confirm-bar {
   display: flex;
@@ -331,5 +514,11 @@
 .confirm-select { font-weight: 700; }
 
 @media (min-width: 720px) {
+  .ps-role-short { display: none; }
+  .ps-role-full { display: inline; }
+  .ps-song, .ps-song-title { max-width: 220px; }
+  .ps-cell { min-width: 52px; }
+  .ps-chips .avatar-chip { width: 22px; height: 22px; font-size: 11px; }
+
   .poll-body { padding-left: 24px; padding-right: 24px; }
 }
