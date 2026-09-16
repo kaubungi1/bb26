@@ -140,3 +140,41 @@
   .stage-inst { width: 45px; height: 45px; }
   .stage-names { font-size: 10px; }
 }
+
+/* ---------- 말풍선 (stage.js 의 stageTalk) ----------
+   무대에 선 사람 중 한 명에게만 뜬다. 자리 위로 띄우되 무대 높이는 안 늘린다 —
+   absolute 라 줄 높이에 안 잡힌다. 겹쳐도 글자가 먼저 읽히게 바탕을 준다. */
+.stage-spot { position: relative; }
+.stage-say {
+  position: absolute; left: 50%; bottom: calc(100% - 4px); z-index: 5;
+  transform: translateX(-50%);
+  display: flex; align-items: baseline; gap: 5px;
+  /* 폭을 안 정하면 브라우저가 '자리칸에서 왼쪽 50% 를 뺀 나머지' 로 폭을 잡는다.
+     자리칸이 76px 이라 38px 이 되고 글자가 한 자씩 세로로 접혔다. max-width 는
+     상한일 뿐이라 아무 도움이 안 된다. max-content 로 글자 길이대로 눕힌다. */
+  width: max-content; max-width: 190px; padding: 5px 9px;
+  opacity: 0; transition: opacity .32s, translate .32s; translate: 0 4px;
+  background: var(--ink-fill); color: var(--on-ink);
+  font-size: 11.5px; line-height: 1.35; white-space: normal; text-align: left;
+  pointer-events: none;
+}
+.stage-say b { flex: none; font-size: 10px; font-weight: 800; opacity: 0.66; }
+/* 꼬리. 아래를 향한 삼각형 하나다. */
+.stage-say::after {
+  content: ''; position: absolute; left: 50%; top: 100%;
+  border: 5px solid transparent; border-top-color: var(--ink-fill);
+  transform: translateX(-50%);
+}
+/* 양옆 자리는 사람이 무대 바깥쪽에 서므로 말풍선도 그쪽으로 붙여 무대 밖으로 안 나가게 한다. */
+.stage-spot.is-left .stage-say { left: 0; transform: none; }
+.stage-spot.is-left .stage-say::after { left: 16px; }
+.stage-spot.is-right .stage-say { left: auto; right: 0; transform: none; }
+.stage-spot.is-right .stage-say::after { left: auto; right: 16px; }
+.stage-say.is-on { opacity: 1; translate: 0 0; }
+/* 맨 윗줄(드럼)은 위로 띄우면 무대 밖으로 나가 목록 헤더를 덮는다. 아래로 내리고 꼬리를 뒤집는다. */
+.stage-spot[data-slot="dr"] .stage-say { bottom: auto; top: calc(100% - 2px); translate: 0 -4px; }
+.stage-spot[data-slot="dr"] .stage-say.is-on { translate: 0 0; }
+.stage-spot[data-slot="dr"] .stage-say::after { top: auto; bottom: 100%;
+  border-top-color: transparent; border-bottom-color: var(--ink-fill); }
+@media (prefers-reduced-motion: reduce) { .stage-say { transition: none; translate: none; } }
+@media (max-width: 620px) { .stage-say { max-width: 150px; font-size: 11px; } }

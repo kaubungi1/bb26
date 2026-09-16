@@ -5,21 +5,44 @@ import io
 from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
 from PIL import Image, ImageOps
 
+from psycopg.types.json import Json
+
 from db import get_db
 
 router = APIRouter()
 
-EDITABLE = ('mainRoles', 'availability', 'intro', 'color', 'avatar', 'title', 'status')
+EDITABLE = ('mainRoles', 'availability', 'intro', 'color', 'avatar', 'title', 'status', 'lines')
 TEXT_MAX = {'mainRoles': 60, 'availability': 80, 'intro': 200, 'color': 20, 'avatar': 8, 'title': 30, 'status': 60}
 NICK_MAX = 20
 IMAGE_SIDE = 256               # 무대에 서는 캐릭터. 이보다 크게 볼 일이 없다
 IMAGE_MAX_UPLOAD = 8 * 1024 * 1024
 IMAGE_MAX_STORED = 200 * 1024
 COLS = '"nickname", "mainRoles", "availability", "intro", "color", "avatar", "title", "status", ' \
-       '"createdAt", "updatedAt", ("image" IS NOT NULL) AS "hasImage"'
+       '"lines", "createdAt", "updatedAt", ("image" IS NOT NULL) AS "hasImage"'
+
+
+LINES_MAX = 3          # 대사 줄 수
+LINE_MAX = 40          # 한 줄 길이
+
+
+def _clean_lines(value):
+    """대사 세 줄. 빈 줄은 버리고, 길면 자른다. 하나도 안 남으면 None.
+       화면에 말풍선으로 그대로 나가는 값이라 개수와 길이를 여기서 못박는다."""
+    if not isinstance(value, list):
+        return None
+    out = []
+    for v in value[:LINES_MAX]:
+        if not isinstance(v, str):
+            continue
+        t = v.strip()[:LINE_MAX]
+        if t:
+            out.append(t)
+    return Json(out) if out else None
 
 
 def _clean(key, value):
+    if key == 'lines':
+        return _clean_lines(value)
     if value is None:
         return None
     return str(value).strip()[:TEXT_MAX[key]] or None

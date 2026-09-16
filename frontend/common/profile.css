@@ -51,6 +51,9 @@
 .pf-clear:hover { background: none; color: #c62872; }
 .pf-clear.is-off { visibility: hidden; pointer-events: none; }
 
+/* 대사 세 줄. 셋이 한 덩이로 보이게 붙여 둔다 — 따로 떨어뜨리면 각각이 다른 항목처럼 읽힌다. */
+.pf-lines { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+
 /* 둥글게 자르기 창. 원 바깥을 흐려 잘릴 범위를 그대로 보여 준다. */
 .crop-modal { max-width: 340px; }
 .crop-help { margin: 0; font-size: 12px; color: var(--ink-muted); }

@@ -66,13 +66,16 @@ function stageSpot(slot, role) {
   const names = people.map((n) => escapeHtml(n)).join(' · ');
   const title = role.label || role.role;
   const side = STAGE_SIDE[slot];
+  /* 말풍선을 누구 위에 띄울지 고르려면 자리마다 누가 섰는지가 필요하다.
+     stageTalk() 가 이 값을 읽는다. */
+  const who = people.length ? ` data-people="${escapeHtml(people.join(''))}"` : '';
   const cls = 'stage-spot'
     + (people.length ? '' : ' is-empty')
     + (side ? ` is-side is-${side}` : '');
   /* 악기와 파트 태그는 한 묶음이다. 가운데 자리에서는 이 묶음째 위로 끌어올려
      사람의 아랫부분을 가리고(악기가 앞), 양옆 자리에서는 사람 옆에 통째로 선다.
      묶지 않으면 두 배치에서 끌어올릴 대상이 달라진다. */
-  return `<div class="${cls}" style="grid-area:${slot}"`
+  return `<div class="${cls}" style="grid-area:${slot}"${who} data-slot="${slot}"`
     + ` data-n="${people.length}" data-role="${escapeHtml(role.role)}"`
     + ` data-peek="${escapeHtml(title)}${people.length ? ' · ' + people.join(', ') : ' · 비어 있음'}">`
     + `<span class="stage-players">${bodies}</span>`
@@ -101,4 +104,68 @@ function stageHtml(roles) {
       + `${(r.members || []).map((n) => avatarChip(n)).join('')}</span>`).join('')}</div>`
     : '';
   return `<div class="stage">${grid}</div>${extra}`;
+}
+
+/* ---------- 말풍선 ----------
+   무대에 선 사람 중 대사를 쓴 사람 한 명에게만 뜨고, 몇 초마다 다음 사람으로 넘어간다.
+   여섯 명에게 동시에 띄우면 서로 겹친다 — 390px 화면에서 무대가 이미 313px 다.
+
+   대사는 프로필의 lines(최대 세 줄)이고 넘어갈 때마다 그중 하나를 새로 고른다.
+   아무도 안 썼으면 아무 일도 일어나지 않는다. 무대 배치는 건드리지 않고 한 겹만 얹는다. */
+/* 뜨고 · 지우고 · 쉰다. 계속 떠 있으면 말풍선이 아니라 상시 표시가 된다. */
+const STAGE_SAY_MS = 4500;      /* 말하는 동안 */
+const STAGE_HUSH_MS = 5000;     /* 아무도 말하지 않는 동안. 한 바퀴가 10초 남짓이 된다 */
+let stageTalkTimer = null;
+
+function stageTalkStop() {
+  clearTimeout(stageTalkTimer);
+  stageTalkTimer = null;
+}
+
+/* 지금 말할 수 있는 사람. [자리, 닉네임, 대사들] 목록이다.
+
+   무대는 두 곳에서 그려진다 — 900px 이상이면 옆 칸(#playable-stage), 좁으면 표 안의
+   줄(.ps-stage-row). 둘 다 DOM 에 있으므로 넘겨받은 칸 안만 뒤지면 모바일에서는
+   말풍선이 붙을 자리를 못 찾는다. 문서 전체를 보되 화면에 실제로 보이는 것만 고른다.
+   안 보이는 무대에 띄워 봐야 아무도 못 본다. */
+function stageSpeakers() {
+  const out = [];
+  document.querySelectorAll('.stage-spot[data-people]').forEach((el) => {
+    if (!el.offsetParent) return;          /* display:none 안에 있는 무대 */
+    el.dataset.people.split('').forEach((n) => {
+      const lines = (Profiles.get(n) || {}).lines;
+      if (Array.isArray(lines) && lines.length) out.push([el, n, lines]);
+    });
+  });
+  return out;
+}
+
+function stageTalk(on) {
+  stageTalkStop();
+  if (!on) { document.querySelectorAll('.stage-say').forEach((el) => el.remove()); return; }
+  const clear = () => document.querySelectorAll('.stage-say').forEach((el) => el.remove());
+  const alive = () => !!document.querySelector('.stage-spot');
+  const hush = () => {
+    clear();
+    if (!alive()) return stageTalkStop();
+    stageTalkTimer = setTimeout(say, STAGE_HUSH_MS);
+  };
+  const say = () => {
+    clear();
+    if (!alive()) return stageTalkStop();
+    const all = stageSpeakers();
+    if (!all.length) { stageTalkTimer = setTimeout(say, STAGE_HUSH_MS); return; }
+    const [spot, nick, lines] = all[Math.floor(Math.random() * all.length)];
+    const line = lines[Math.floor(Math.random() * lines.length)];
+    spot.insertAdjacentHTML('beforeend',
+      `<span class="stage-say"><b>${escapeHtml(nick)}</b>${escapeHtml(line)}</span>`);
+    /* 다음 프레임에 클래스를 붙여야 전환이 걸린다. 붙이자마자 주면 처음 상태가 없다. */
+    const el = spot.lastElementChild;
+    requestAnimationFrame(() => el.classList.add('is-on'));
+    stageTalkTimer = setTimeout(() => {
+      el.classList.remove('is-on');
+      stageTalkTimer = setTimeout(hush, 320);   /* CSS 의 전환 시간과 같게 */
+    }, STAGE_SAY_MS);
+  };
+  stageTalkTimer = setTimeout(say, 600);   /* 화면이 자리를 잡은 뒤 첫 마디 */
 }

@@ -56,6 +56,11 @@ async function openProfileEditor(nickname, opts = {}) {
           <input id="pf-status" placeholder="상태 메시지 (예: 임종)" maxlength="60" value="${escapeHtml(cur.status || '')}" />
           <input id="pf-avail" placeholder="가능 시간 (예: 평일 저녁, 주말 오후)" maxlength="80" value="${escapeHtml(cur.availability || '')}" />
           <textarea id="pf-intro" placeholder="한 줄 소개" maxlength="200" rows="2">${escapeHtml(cur.intro || '')}</textarea>
+          <!-- 대사 세 줄. 합주실 무대에서 말풍선으로 한 명씩 돌아가며 뜬다.
+               안 써도 되는 값이라 라벨을 크게 두지 않고 입력칸의 안내문으로만 알린다. -->
+          <div class="pf-lines">${[0, 1, 2].map((i) => `<input class="pf-line" maxlength="40"
+            placeholder="${i === 0 ? '무대에서 할 말 (40자)' : ''}"
+            value="${escapeHtml((cur.lines || [])[i] || '')}" />`).join('')}</div>
           <button type="submit" class="pink">저장</button>
           <button type="button" class="ghost" data-cancel>취소</button>
           ${opts.withLogout ? '<button type="button" class="pf-logout" data-logout>로그아웃</button>' : ''}
@@ -155,6 +160,8 @@ async function openProfileEditor(nickname, opts = {}) {
         status: backdrop.querySelector('#pf-status').value.trim(),
         availability: backdrop.querySelector('#pf-avail').value.trim(),
         intro: backdrop.querySelector('#pf-intro').value.trim(),
+        /* 빈 줄은 서버가 버린다. 순서는 적은 대로 둔다. */
+        lines: [...backdrop.querySelectorAll('.pf-line')].map((el) => el.value.trim()),
       };
       busy = true;
       const submit = backdrop.querySelector('[type=submit]');

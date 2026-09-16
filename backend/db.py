@@ -200,6 +200,9 @@ MIGRATIONS = [
     # 값이 늘어도(글씨색·버튼·배경) 키만 붙으므로 마이그레이션이 다시 필요 없다.
     # 들어오는 값은 routers/guilds.py 가 화이트리스트로 거른다 — 자유 문자열은 안 받는다.
     'ALTER TABLE guilds ADD COLUMN IF NOT EXISTS "style" JSONB',
+    # 프로필 대사 세 줄. 합주실 무대에서 말풍선으로 한 명씩 돌아가며 뜬다.
+    # ["오늘은 손이 좀 굳었네", ...] 형태이고 routers/members.py 가 개수·길이를 자른다.
+    'ALTER TABLE members ADD COLUMN IF NOT EXISTS "lines" JSONB',
     # 악보: 곡과의 결합 제거 + 분류/검색용 컬럼
     'ALTER TABLE sheets ADD COLUMN IF NOT EXISTS "artist" TEXT',
     'ALTER TABLE sheets ADD COLUMN IF NOT EXISTS "role" TEXT',

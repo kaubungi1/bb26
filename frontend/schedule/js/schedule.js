@@ -577,6 +577,8 @@ function toggleStage(host) {
 function renderStage() {
   const s = playable && stageSongId ? playable.songs.find((x) => x.songId === stageSongId) : null;
   playableStageEl.innerHTML = s ? stageBlock(s) : '';
+  /* 무대는 옆 칸과 표 안 두 곳에 그려진다. stageTalk 이 보이는 쪽을 알아서 찾는다. */
+  stageTalk(!!stageSongId);
 }
 
 /* 옆 칸(900px 이상)의 무대에는 여태 처리기가 없었다. 접기 단추가 생겼으니 붙인다. */
