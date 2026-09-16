@@ -1,0 +1,44 @@
+/* 길드에 들어설 때의 등장 (guild-home/js/guild-home.js 의 playEnter)
+
+   판 · 스탯 · PARTY · 파티창 · NEXT · SONGS 가 순서대로 떠오른다. 앞의 것이 아직
+   또렷해지는 중에 다음 것이 출발해서 한 줄기로 이어진다 — 간격보다 길이가 길어야 한다.
+
+   배경까지 연출하려다 접었다. 화면은 데이터를 받은 뒤에 그려지는데 그 전에 진짜 배경이
+   한 번 칠해지고, 그다음에 덮개를 얹으니 '분홍 → 흰색 → 분홍' 이 됐다. 첫 그림이 나오기
+   전에 단색을 깔려면 서버가 테마를 박듯 <head> 에서 미리 처리해야 하는데,
+   효과 하나를 위해 들일 일이 아니다. 떠오르기·퍼지기·칠하기를 세 번 시도한 기록이다.
+
+   '길드 입장하기' 를 눌렀을 때만 재생된다(party.js 가 sessionStorage 에 남긴다).
+   새로고침·직접 주소·헤더의 길드 이름은 들어서는 동작이 아니다. */
+
+.is-intro .g-plate-top,
+.is-intro .g-stats,
+.is-intro .g-fold,
+.is-intro .party,
+.is-intro .g-col > * {
+  animation: g-rise 2s cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+.is-intro .g-plate-top { animation-delay: 0.36s; }
+.is-intro .g-stats { animation-delay: 0.5s; }
+.is-intro .g-fold { animation-delay: 0.62s; }
+.is-intro .party { animation-delay: 0.72s; }
+.is-intro .g-col:first-child > * { animation-delay: 0.88s; }
+.is-intro .g-col:last-child > * { animation-delay: 1s; }
+@keyframes g-rise {
+  from { opacity: 0; translate: 0 20px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+/* 문장은 길드의 얼굴이라 한 박자 더 준다. 떠오르는 대신 살짝 커진다. */
+.is-intro .g-crest {
+  animation: g-crest-pop 2.2s cubic-bezier(0.16, 0.84, 0.3, 1.06) 0.42s both;
+}
+@keyframes g-crest-pop {
+  from { opacity: 0; scale: 0.92; }
+  to { opacity: 1; scale: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-intro .g-plate-top, .is-intro .g-stats, .is-intro .g-fold,
+  .is-intro .party, .is-intro .g-col > *, .is-intro .g-crest { animation: none; }
+}

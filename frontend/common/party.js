@@ -73,7 +73,7 @@ function partyWindow(guild, opts = {}) {
     <div class="party-slots">${roles.map((r) =>
       partySlot(guild, r, guild.members.filter((m) => m.role === r), me)).join('')}</div>
     <!-- '들어가기' 는 위 칸의 '합류' 와 헷갈린다. 여기는 그 길드 페이지로 가는 이동일 뿐이다. -->
-    ${foot || opts.link ? `<div class="party-foot">${foot}${opts.link ? `<a class="party-go" href="${href}">길드 입장하기 →</a>` : ''}</div>` : ''}
+    ${foot || opts.link ? `<div class="party-foot">${foot}${opts.link ? `<a class="party-go" href="${href}" data-enter="${escapeHtml(guild.slug)}">길드 입장하기 →</a>` : ''}</div>` : ''}
   </article>`;
 }
 
@@ -129,4 +129,27 @@ async function partyClick(e, guilds) {
   if (!ok) return false;
   await api.post(`/guilds/${encodeURIComponent(slug)}/members`, { nickname: me, role });
   return true;
+}
+
+
+/* '길드 입장하기' 를 누른 것만 등장 연출의 방아쇠다. 새로고침이나 주소를 직접 친 것,
+   이미 길드 안에서 헤더의 이름을 눌러 홈으로 돌아오는 것은 '들어서는' 동작이 아니다.
+
+   쿠키가 아니라 sessionStorage 다 — 서버로 안 나가고 탭을 닫으면 사라진다.
+   길드 홈이 읽는 즉시 지우므로 '한 번 봤으니 영영 안 나옴' 이 되지 않는다.
+   목록으로 나갔다 다시 들어오면 또 재생된다. */
+const GUILD_ENTER_KEY = 'guild-enter';
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('[data-enter]');
+  if (!a) return;
+  try { sessionStorage.setItem(GUILD_ENTER_KEY, a.dataset.enter); } catch { /* 사생활 보호 창 */ }
+});
+/* 길드 홈이 부른다. 내 것이면 true 를 주고 표시를 지운다. */
+function guildEnterFlag(slug) {
+  try {
+    const v = sessionStorage.getItem(GUILD_ENTER_KEY);
+    if (v === null) return false;
+    sessionStorage.removeItem(GUILD_ENTER_KEY);
+    return v === slug;
+  } catch { return false; }
 }

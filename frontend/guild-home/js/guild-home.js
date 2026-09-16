@@ -263,6 +263,22 @@ function render() {
   </div>`;
   $('#screen').removeAttribute('aria-busy');
   fitParty($('#screen'));
+  playEnter();
+}
+
+/* 들어설 때 한 번만. render() 는 지원을 누를 때마다 다시 그리는데 그때마다 화면이
+   떠오르면 멀미가 난다. 그래서 처음 한 번만 걸고 끝나면 표시를 뗀다. */
+let entered = false;
+function playEnter() {
+  if (entered) return;
+  entered = true;
+  /* '길드 입장하기' 를 눌러 들어온 것만 재생한다. 새로고침·직접 주소·헤더의 길드 이름은
+     들어서는 동작이 아니다. 표시는 party.js 가 남기고 읽는 즉시 지워진다. */
+  if (!guildEnterFlag(Site.slug)) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  $('#screen').classList.add('is-intro');
+  setTimeout(() => $('#screen').classList.remove('is-intro'), 3200);
 }
 
 let drawMounted = false;
