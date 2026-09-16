@@ -25,7 +25,7 @@ function eventSymbol(e) {
   /* 길드 문장(육각)이 먼저다. 그러라고 만든 표식이고, 이름 첫 글자보다 길드를 잘 가리킨다.
      crest.js 를 안 싣는 화면도 있으므로 있을 때만 쓴다. 이모지 엠블럼은 서버가 더 이상
      내려주지 않으므로 보지 않는다. 문장이 없으면 이름 첫 글자로 떨어진다. */
-  const crest = typeof crestSvg === 'function' && crestSvg(g.style?.crest, 64);
+  const crest = typeof crestFor === 'function' && crestFor(g, 64);
   if (crest) {
     return `<span class="event-symbol is-crest" aria-hidden="true">${crest}</span>`;
   }

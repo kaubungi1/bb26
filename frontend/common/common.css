@@ -259,6 +259,10 @@ body {
 .menu-item:hover { background: var(--teal-soft); box-shadow: none; }
 .menu-item i { margin-left: auto; padding-left: 14px; font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--ink-muted); }
 .menu-item.is-on { color: var(--teal-deep); }
+/* 셀 것이 0인 항목. 지우지 않고 흐리게만 둔다 — 없어졌다 생겼다 하면 자리를 못 외운다. */
+.menu-item.is-zero { opacity: 0.45; }
+/* 항목 앞의 길드 문장. 왼쪽 30px 여백은 고른 표시 자리라 그 안에 넣지 않는다. */
+.menu-item > svg { flex: none; width: 14px; height: 14px; margin-right: 7px; }
 /* 왼쪽 여백에 고른 표시. 체크 항목은 체크, 단일 선택은 점 */
 .menu-item.is-on::before {
   content: '';

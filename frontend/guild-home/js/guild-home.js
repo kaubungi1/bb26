@@ -66,7 +66,10 @@ function past() {
 let liveStyle = null;
 const styleNow = () => liveStyle || guild?.style || {};
 function crest() {
-  const c = crestFromQuery() || crestSafe(styleNow().crest);
+  /* 사진 > 문양 > 이름 첫 글자. 주소의 ?crest= 는 눈으로 고르는 용도라 사진보다 앞이다. */
+  const q = crestFromQuery();
+  if (!q && guild.hasImage) return `<span class="g-crest-svg">${crestFor(guild, 76)}</span>`;
+  const c = q || crestSafe(styleNow().crest);
   if (c) return `<span class="g-crest-svg">${crestSvg(c, 76)}</span>`;
   return `<span class="g-crest-mark is-letter">${esc([...guild.name][0] || '?')}</span>`;
 }

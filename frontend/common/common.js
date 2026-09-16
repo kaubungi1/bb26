@@ -424,7 +424,7 @@ const TABS = [
 function guildBadge(guild, extra = '') {
   if (!guild) return '';
   const color = guild.color || 'var(--teal-deep)';
-  const mark = (typeof crestSvg === 'function' && crestSvg(guild.style?.crest, 13)) || '';
+  const mark = (typeof crestFor === 'function' && crestFor(guild, 13)) || '';
   return `<span class="guild-badge ${extra}" style="--g:${escapeHtml(color)}" title="${escapeHtml(guild.name)}">` +
     `${mark}<span>${escapeHtml(guild.name)}</span></span>`;
 }
@@ -453,7 +453,7 @@ function mountChrome(activeKey) {
       const g = Site.info;
       const name = g ? g.name : Site.slug;
       /* 길드 이름 앞의 문장. 이모지 엠블럼을 대신한다. */
-      const svg = (g && typeof crestSvg === 'function' && crestSvg(g.style?.crest, 26)) || '';
+      const svg = (g && typeof crestFor === 'function' && crestFor(g, 26)) || '';
       const crestMark = svg ? `<span class="brand-emblem">${svg}</span>` : '';
       /* 길드 안이라는 걸 이름만으로는 알기 어렵다. GUILD 라벨을 붙이고
          헤더 아래 선을 길드 색으로 물들인다(common.css 의 .app-bar.is-guild). */

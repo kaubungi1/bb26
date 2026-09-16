@@ -200,6 +200,10 @@ MIGRATIONS = [
     # 값이 늘어도(글씨색·버튼·배경) 키만 붙으므로 마이그레이션이 다시 필요 없다.
     # 들어오는 값은 routers/guilds.py 가 화이트리스트로 거른다 — 자유 문자열은 안 받는다.
     'ALTER TABLE guilds ADD COLUMN IF NOT EXISTS "style" JSONB',
+    # 길드 문장을 사진으로도 쓸 수 있게. 256px 정사각 WebP 한 장이고 육각으로 잘라 넣는다.
+    # 사진이 있으면 문양보다 먼저다(프로필의 사진 > 이모지 > 첫 글자와 같은 규칙).
+    'ALTER TABLE guilds ADD COLUMN IF NOT EXISTS "image" BYTEA',
+    'ALTER TABLE guilds ADD COLUMN IF NOT EXISTS "imageUpdatedAt" TIMESTAMPTZ',
     # 프로필 대사 세 줄. 합주실 무대에서 말풍선으로 한 명씩 돌아가며 뜬다.
     # ["오늘은 손이 좀 굳었네", ...] 형태이고 routers/members.py 가 개수·길이를 자른다.
     'ALTER TABLE members ADD COLUMN IF NOT EXISTS "lines" JSONB',

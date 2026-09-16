@@ -147,3 +147,22 @@ function crestFromQuery() {
   const [shape, bg, fg] = v.split(':');
   return crestSafe({ shape, bg: '#' + (bg || ''), fg: '#' + (fg || '') });
 }
+
+
+/* 길드 하나의 표식. 사진을 올렸으면 사진이 먼저다 —
+   프로필의 사진 > 이모지 > 첫 글자와 같은 규칙이고, 서른여섯 문양만으로는
+   길드가 늘수록 같은 그림이 겹친다.
+   사진도 육각으로 잘라 넣는다. 자를 때 이미 육각으로 오려 왔지만(crop.js),
+   여기서 한 번 더 클립해야 옛 사진이나 다른 경로로 올라온 그림도 틀을 지킨다. */
+function crestFor(guild, size = 76) {
+  if (!guild) return '';
+  if (guild.hasImage) {
+    const id = 'crest-clip-' + (++crestSeq);
+    const url = `/api/guilds/${encodeURIComponent(guild.slug)}/image`;
+    return `<svg class="crest-svg" viewBox="0 0 100 100" width="${size}" height="${size}" aria-hidden="true">`
+      + `<defs><clipPath id="${id}"><polygon points="${CREST_HEX}" /></clipPath></defs>`
+      + `<image href="${url}" x="0" y="0" width="100" height="100"`
+      + ` preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})" /></svg>`;
+  }
+  return crestSvg(guild.style?.crest, size);
+}

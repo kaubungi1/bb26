@@ -41,7 +41,10 @@ def norm_tag(value):
 def guild_brief(row):
     if not row:
         return None
-    return {k: row[k] for k in GUILD_BRIEF}
+    g = {k: row[k] for k in GUILD_BRIEF}
+    # 문장 사진이 있으면 화면이 문양 대신 그 그림을 그린다. 바이트는 싣지 않는다.
+    g['hasImage'] = row['image'] is not None
+    return g
 
 
 def resolve_guild_id(conn, body):

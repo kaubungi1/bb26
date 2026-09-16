@@ -1,10 +1,12 @@
 """길드. 이름·색·엠블럼·슬로건은 팀장이 정하고, 명단은 누구나 고친다."""
+import hashlib
 import re
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
 from psycopg.types.json import Json
 
 from db import get_db
+from images import MAX_UPLOAD, square_webp
 from guildtheme import THEMES, cache_clear
 
 router = APIRouter()
@@ -76,8 +78,14 @@ def _members_for(conn, guilds):
         g['members'] = by_guild.get(g['id'], [])
 
 
+# 문장 사진은 최대 200KB 라 목록에 실으면 열세 길드에 2.6MB 가 된다. 있는지만 알린다.
+# 화면은 /api/guilds/{slug}/image 주소로 따로 받는다 — 멤버 사진과 같은 방식이다.
+COLS = ('"id","slug","name","leader","slogan","recruitNote","color","emblem",'
+        '"createdBy","createdAt","updatedAt","style",("image" IS NOT NULL) AS "hasImage"')
+
+
 def _get(conn, slug):
-    row = conn.execute('SELECT * FROM guilds WHERE "slug"=%s', (slug,)).fetchone()
+    row = conn.execute(f'SELECT {COLS} FROM guilds WHERE "slug"=%s', (slug,)).fetchone()
     if not row:
         conn.close()
         raise HTTPException(404, '길드를 찾을 수 없습니다.')
@@ -89,7 +97,7 @@ def _get(conn, slug):
 @router.get('')
 def list_guilds():
     conn = get_db()
-    guilds = [dict(r) for r in conn.execute('SELECT * FROM guilds ORDER BY "createdAt"').fetchall()]
+    guilds = [dict(r) for r in conn.execute(f'SELECT {COLS} FROM guilds ORDER BY "createdAt"').fetchall()]
     _members_for(conn, guilds)
     conn.close()
     return guilds
@@ -208,3 +216,74 @@ def remove_member(slug: str, member_id: int):
     g = _get(conn, slug)
     conn.close()
     return g
+
+
+# ---------- 길드 문장 사진 ----------
+# 문양 서른여섯 개 안에서만 고르게 두면 길드마다 같은 그림이 겹친다.
+# 사진을 올리면 그게 문양을 이긴다 — 프로필의 사진 > 이모지 > 첫 글자와 같은 규칙이다.
+# 줄이는 규칙은 images.py 한 곳에 있고 멤버 프로필 사진과 똑같다.
+@router.post('/{slug}/image')
+async def upload_crest(slug: str, nickname: str = '', file: UploadFile = File(...)):
+    data = await file.read(MAX_UPLOAD + 1)
+    if not data:
+        raise HTTPException(400, '파일이 비어 있습니다.')
+    if len(data) > MAX_UPLOAD:
+        raise HTTPException(400, '8MB 아래로 올려주세요.')
+    webp = square_webp(data)
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT "id" FROM guilds WHERE "slug"=%s', (slug,)).fetchone()
+        if not row:
+            raise HTTPException(404, '길드를 찾을 수 없습니다.')
+        _require_member(conn, row['id'], nickname)
+        conn.execute('UPDATE guilds SET "image"=%s, "imageUpdatedAt"=now(), "updatedAt"=now() '
+                     'WHERE "id"=%s', (webp, row['id']))
+        conn.commit()
+        return {'hasImage': True}
+    finally:
+        if not conn.closed:
+            conn.close()
+
+
+@router.get('/{slug}/image')
+def crest_image(slug: str, request: Request):
+    conn = get_db()
+    row = conn.execute('SELECT "image" FROM guilds WHERE "slug"=%s', (slug,)).fetchone()
+    conn.close()
+    if not row or not row['image']:
+        raise HTTPException(404, '문장 그림이 없습니다.')
+    data = bytes(row['image'])
+    etag = '"' + hashlib.sha1(data).hexdigest()[:20] + '"'
+    cache = 'public, max-age=3600'
+    if request.headers.get('if-none-match') == etag:
+        return Response(status_code=304, headers={'ETag': etag, 'Cache-Control': cache})
+    return Response(content=data, media_type='image/webp',
+                    headers={'ETag': etag, 'Cache-Control': cache, 'Content-Length': str(len(data))})
+
+
+@router.delete('/{slug}/image')
+def delete_crest(slug: str, nickname: str = ''):
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT "id" FROM guilds WHERE "slug"=%s', (slug,)).fetchone()
+        if not row:
+            raise HTTPException(404, '길드를 찾을 수 없습니다.')
+        _require_member(conn, row['id'], nickname)
+        conn.execute('UPDATE guilds SET "image"=NULL, "imageUpdatedAt"=NULL, "updatedAt"=now() '
+                     'WHERE "id"=%s', (row['id'],))
+        conn.commit()
+        return {'hasImage': False}
+    finally:
+        if not conn.closed:
+            conn.close()
+
+
+def _require_member(conn, gid, nickname):
+    """꾸미기와 같은 확인이다. 로그인이 없어 자기 신고이므로 보안이 아니라 실수 방지다."""
+    who = str(nickname or '').strip()
+    if not who:
+        raise HTTPException(400, '닉네임이 필요합니다.')
+    row = conn.execute('SELECT 1 FROM guildMembers WHERE "guildId"=%s AND "nickname"=%s LIMIT 1',
+                       (gid, who)).fetchone()
+    if not row:
+        raise HTTPException(403, '길드원만 문장을 바꿀 수 있습니다.')

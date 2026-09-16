@@ -8,15 +8,14 @@ from PIL import Image, ImageOps
 from psycopg.types.json import Json
 
 from db import get_db
+from images import MAX_UPLOAD, square_webp
 
 router = APIRouter()
 
 EDITABLE = ('mainRoles', 'availability', 'intro', 'color', 'avatar', 'title', 'status', 'lines')
 TEXT_MAX = {'mainRoles': 60, 'availability': 80, 'intro': 200, 'color': 20, 'avatar': 8, 'title': 30, 'status': 60}
 NICK_MAX = 20
-IMAGE_SIDE = 256               # 무대에 서는 캐릭터. 이보다 크게 볼 일이 없다
-IMAGE_MAX_UPLOAD = 8 * 1024 * 1024
-IMAGE_MAX_STORED = 200 * 1024
+# 사진을 줄이는 규칙은 images.py 한 곳에 있다. 길드 문장도 같은 규칙을 쓴다.
 COLS = '"nickname", "mainRoles", "availability", "intro", "color", "avatar", "title", "status", ' \
        '"lines", "createdAt", "updatedAt", ("image" IS NOT NULL) AS "hasImage"'
 
@@ -183,37 +182,17 @@ def delete_member(nickname: str):
 
 
 # ---------- 캐릭터 이미지 ----------
-def _to_square_webp(data):
-    """전체 구도를 유지해 투명한 256px 캔버스에 맞춘다."""
-    try:
-        im = Image.open(io.BytesIO(data))
-        im = ImageOps.exif_transpose(im)
-        im = im.convert('RGBA') if im.mode in ('RGBA', 'LA', 'P') else im.convert('RGB')
-    except Exception:
-        raise HTTPException(400, '이미지 파일이 아닙니다.')
-    im = ImageOps.contain(im, (IMAGE_SIDE, IMAGE_SIDE), method=Image.LANCZOS)
-    canvas = Image.new('RGBA', (IMAGE_SIDE, IMAGE_SIDE), (0, 0, 0, 0))
-    canvas.paste(im, ((IMAGE_SIDE - im.width) // 2, (IMAGE_SIDE - im.height) // 2))
-    im = canvas
-    for q in (85, 70, 55, 40):
-        buf = io.BytesIO()
-        im.save(buf, 'WEBP', quality=q, method=4)
-        if buf.tell() <= IMAGE_MAX_STORED:
-            return buf.getvalue()
-    return buf.getvalue()
-
-
 @router.post('/{nickname}/image')
 async def upload_image(nickname: str, file: UploadFile = File(...)):
     nickname = nickname.strip()
     if not nickname or len(nickname) > NICK_MAX:
         raise HTTPException(400, f'닉네임은 1~{NICK_MAX}자입니다.')
-    data = await file.read(IMAGE_MAX_UPLOAD + 1)
+    data = await file.read(MAX_UPLOAD + 1)
     if not data:
         raise HTTPException(400, '파일이 비어 있습니다.')
-    if len(data) > IMAGE_MAX_UPLOAD:
+    if len(data) > MAX_UPLOAD:
         raise HTTPException(400, '8MB 아래로 올려주세요.')
-    webp = _to_square_webp(data)
+    webp = square_webp(data)
     conn = get_db()
     conn.execute(
         'INSERT INTO members ("nickname", "image", "imageUpdatedAt") VALUES (%s,%s,now()) '

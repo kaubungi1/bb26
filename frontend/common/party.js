@@ -65,7 +65,7 @@ function partyWindow(guild, opts = {}) {
     <div class="party-band">
       <span class="party-emblem">${
         /* 문장 > 방패. crest.js 가 없는 페이지도 있으므로 있을 때만 쓴다. */
-        (typeof crestSvg === 'function' && crestSvg(guild.style?.crest, 26))
+        (typeof crestFor === 'function' && crestFor(guild, 26))
         || icon('shield', 20)}</span>
       ${name}
       <span class="party-count">${filled}<i>/${roles.length}</i><em>${head}명</em></span>

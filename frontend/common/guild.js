@@ -50,6 +50,17 @@ async function openGuildEditor(guild = null) {
               <small class="gs-ink-note"></small>
             </div>
             <span class="field-label">문장</span>
+            <!-- 서른여섯 문양 안에서만 고르면 길드가 늘수록 같은 그림이 겹친다.
+                 사진을 올리면 그게 문양을 이긴다. 자르기는 프로필과 같은 창을 쓰되
+                 틀만 육각이다(crop.js 의 shape='hex'). -->
+            <div class="gs-photo">
+              <label class="gs-photo-pick">
+                <input type="file" accept="image/*" id="gs-photo" />
+                <span>사진 올리기</span>
+              </label>
+              <button type="button" class="ghost mini" id="gs-photo-del"${guild?.hasImage ? '' : ' hidden'}>사진 빼기</button>
+              <small class="gs-photo-note">${guild?.hasImage ? '사진을 쓰는 중입니다. 빼면 아래 문양으로 돌아갑니다.' : ''}</small>
+            </div>
             <div class="gs-crest">
               <div class="gs-preview" id="gs-preview"></div>
               <div class="gs-colors">
@@ -147,13 +158,52 @@ async function openGuildEditor(guild = null) {
       };
       const paintCrest = () => {
         const c = style.crest;
-        $$('#gs-preview').innerHTML = c ? crestSvg(c, 64)
+        $$('#gs-preview').innerHTML = hasPhoto ? crestFor({ slug: g.slug, hasImage: true }, 64)
+          : c ? crestSvg(c, 64)
           : '<span class="gs-none-mark">없음</span>';
+        /* 사진이 있으면 문양 고르기는 잠근다. 무엇이 나올지 헷갈리지 않게 한다. */
+        $$('#gs-shapes').classList.toggle('is-locked', hasPhoto);
         $$('#gs-shapes').innerHTML = Object.keys(CREST_SHAPES).map((k) =>
           `<button type="button" class="gs-shape${c && c.shape === k ? ' is-on' : ''}"
             data-gs-shape="${k}" title="${escapeHtml(CREST_NAMES[k] || k)}"
             >${crestSvg({ shape: k, bg: bgIn.value, fg: fgIn.value }, 40)}</button>`).join('');
       };
+      /* 사진 올리기·빼기. 저장 버튼을 기다리지 않고 그 자리에서 서버에 반영한다 —
+         사진은 바이트라 style 처럼 폼에 담아 보낼 수 없다. */
+      let hasPhoto = !!guild?.hasImage;
+      const photoNote = $$('.gs-photo-note');
+      const photoDel = $$('#gs-photo-del');
+      const setPhoto = (on) => {
+        hasPhoto = on;
+        photoDel.hidden = !on;
+        photoNote.textContent = on ? '사진을 쓰는 중입니다. 빼면 아래 문양으로 돌아갑니다.' : '';
+        paintCrest();
+        document.dispatchEvent(new Event('guildinfo'));
+      };
+      $$('#gs-photo').onchange = async (e) => {
+        const f = e.target.files && e.target.files[0];
+        e.target.value = '';
+        if (!f) return;
+        const cut = await openCropper(f, 'hex');
+        if (!cut) return;
+        photoNote.textContent = '올리는 중';
+        const fd = new FormData();
+        fd.append('file', cut, 'crest.png');
+        try {
+          await api.post(`/guilds/${encodeURIComponent(g.slug)}/image?nickname=${encodeURIComponent(nickname)}`, fd);
+          if (guild) guild.hasImage = true;
+          setPhoto(true);
+        } catch (err) { photoNote.textContent = err.message; }
+      };
+      photoDel.onclick = async () => {
+        photoNote.textContent = '빼는 중';
+        try {
+          await api.del(`/guilds/${encodeURIComponent(g.slug)}/image?nickname=${encodeURIComponent(nickname)}`);
+          if (guild) guild.hasImage = false;
+          setPhoto(false);
+        } catch (err) { photoNote.textContent = err.message; }
+      };
+
       const inkIn = $$('#gs-ink-c');
       const paintInk = () => {
         const cur = style.ink || '';

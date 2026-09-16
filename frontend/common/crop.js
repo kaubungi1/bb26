@@ -7,7 +7,9 @@ const CROP_OUT = 256;    /* 서버가 저장하는 크기(IMAGE_SIDE)와 같게 
 const CROP_STAGE = 260;  /* 화면에서 고르는 무대. 원 지름도 이만큼이다 */
 const CROP_MAX_ZOOM = 4;
 
-function openCropper(file) {
+/* shape: 'circle'(기본) 또는 'hex'. 프로필 사진은 원, 길드 문장은 육각이다.
+   자르는 방식은 같고 오려 내는 틀만 다르다. 무엇이 잘릴지 화면에서 그대로 보여 준다. */
+function openCropper(file, shape = 'circle') {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -16,19 +18,22 @@ function openCropper(file) {
       alert('이미지를 읽지 못했습니다.');
       resolve(null);
     };
-    img.onload = () => cropStage(img, url, resolve);
+    img.onload = () => cropStage(img, url, resolve, shape);
     img.src = url;
   });
 }
 
-function cropStage(img, url, resolve) {
+/* 육각 틀. crest.js 의 CREST_HEX 와 같은 비율이다(100 기준 좌표를 비율로 옮긴 값). */
+const CROP_HEX = [[0.5, 0.02], [0.94, 0.26], [0.94, 0.74], [0.5, 0.98], [0.06, 0.74], [0.06, 0.26]];
+
+function cropStage(img, url, resolve, shape = 'circle') {
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
   backdrop.innerHTML = `
     <div class="modal crop-modal" role="dialog" aria-modal="true" aria-labelledby="crop-title">
-      <h3 class="modal-title" id="crop-title">둥글게 자르기</h3>
+      <h3 class="modal-title" id="crop-title">${shape === 'hex' ? '육각으로 자르기' : '둥글게 자르기'}</h3>
       <p class="crop-help">끌어서 옮기고, 아래 막대나 휠로 크기를 맞춥니다.</p>
-      <div class="crop-stage">
+      <div class="crop-stage${shape === 'hex' ? ' is-hex' : ''}">
         <canvas class="crop-canvas" width="${CROP_STAGE}" height="${CROP_STAGE}"></canvas>
         <div class="crop-hole" aria-hidden="true"></div>
       </div>
@@ -126,7 +131,15 @@ function cropStage(img, url, resolve) {
     const octx = out.getContext('2d');
     const r = CROP_OUT / CROP_STAGE;
     octx.beginPath();
-    octx.arc(CROP_OUT / 2, CROP_OUT / 2, CROP_OUT / 2, 0, Math.PI * 2);
+    if (shape === 'hex') {
+      CROP_HEX.forEach(([x, y], i) => {
+        const px = x * CROP_OUT, py = y * CROP_OUT;
+        if (i) octx.lineTo(px, py); else octx.moveTo(px, py);
+      });
+      octx.closePath();
+    } else {
+      octx.arc(CROP_OUT / 2, CROP_OUT / 2, CROP_OUT / 2, 0, Math.PI * 2);
+    }
     octx.clip();
     const { w, h } = drawn();
     octx.drawImage(img, tx * r, ty * r, w * r, h * r);

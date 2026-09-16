@@ -69,6 +69,13 @@
   box-shadow: 0 0 0 9999px rgba(20, 32, 42, 0.62);
   pointer-events: none;
 }
+/* 육각으로 자를 때. box-shadow 로는 육각 구멍을 못 뚫으므로, 바깥을 채운 한 겹을
+   깔고 그 안에 육각을 거꾸로 그려 구멍을 낸다(한 path 로 뚫는 흔한 방법이다). */
+.crop-stage.is-hex .crop-hole {
+  border-radius: 0; box-shadow: none; background: rgba(20, 32, 42, 0.62);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+    50% 2%, 6% 26%, 6% 74%, 50% 98%, 94% 74%, 94% 26%, 50% 2%);
+}
 .crop-zoom { width: 260px; margin: 12px auto 0; display: block; min-height: 0; padding: 0; border: 0; background: none; }
 .crop-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
 .pf-short { width: 70px; flex: none; }
@@ -149,6 +156,19 @@
 .gs-ink input[type=color] { width: 40px; height: 28px; min-height: 28px; padding: 2px; border: 0; }
 .gs-ink-note { flex: 1 1 100%; font-size: 11px; color: #64768b; }
 .gs-ink-note.is-warn { color: #c62872; font-weight: 700; }
+
+/* 문장 사진. 원 자체가 파일 선택 버튼인 프로필과 달리, 여기는 문양 격자가 주인공이라
+   줄 하나로 둔다. 입력칸은 hidden 이 아니라 눈에만 안 보이게 둔다 — hidden 이면 탭으로 닿지 않는다. */
+.gs-photo { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 6px; }
+.gs-photo-pick { position: relative; display: inline-flex; align-items: center; min-height: 28px;
+  padding: 0 10px; background: var(--empty); color: var(--ink-2);
+  font-size: 12px; font-weight: 800; cursor: pointer; }
+.gs-photo-pick:hover { background: #e8eef3; }
+.gs-photo-pick input { position: absolute; width: 1px; height: 1px; opacity: 0; padding: 0; margin: 0; border: 0; }
+.gs-photo-pick:focus-within { outline: 2px solid #1b2a45; outline-offset: 2px; }
+.gs-photo-note { flex: 1 1 100%; font-size: 11px; color: #64768b; }
+/* 사진을 쓰는 동안 문양 격자는 잠근다. 무엇이 나올지 헷갈리지 않게 한다. */
+.gs-shapes.is-locked { opacity: 0.4; pointer-events: none; }
 
 .gs-crest { display: flex; align-items: center; gap: 14px; }
 .gs-preview { flex: none; display: grid; place-items: center; width: 64px; height: 64px;
