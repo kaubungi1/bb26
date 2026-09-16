@@ -552,6 +552,29 @@ function nickColor(name) {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
+/* ---------- 진짜 보이는 높이 ----------
+   모바일에서 키보드가 올라오면 화면의 아래 절반이 가려지는데, CSS 의 dvh 는 그걸
+   계산에 넣지 않는다. 그래서 모달이 화면 전체 높이인 채로 가운데 서고 저장 버튼이
+   키보드 밑에 깔린다 — 어디를 밀어도 닿을 수 없다.
+   visualViewport 는 키보드를 뺀 높이를 알려 준다. 그 값을 --vvh 에 넣어 두면
+   모달이 키보드 위로 줄어들고, 넘치는 만큼 안에서 스크롤된다.
+   이 API 가 없는 브라우저에서는 아무것도 안 하고 dvh 로 떨어진다. */
+(() => {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const put = () => document.documentElement.style.setProperty('--vvh', vv.height + 'px');
+  put();
+  vv.addEventListener('resize', put);
+})();
+
+/* 커서가 옮겨간 칸이 화면 밖이면 끌어온다. 키보드가 막 올라온 직후에 자주 그렇다. */
+document.addEventListener('focusin', (e) => {
+  const el = e.target;
+  if (!el.matches || !el.matches('input, textarea, select')) return;
+  if (!el.closest('.modal-backdrop')) return;
+  setTimeout(() => el.scrollIntoView({ block: 'nearest' }), 120);
+});
+
 /* ---------- 마지막으로 본 값 ----------
    헤더의 길드 문장과 내 프로필 사진은 API 응답이 와야 그려진다. 그래서 페이지를 옮길
    때마다 한 번 사라졌다가 나타났다. 마지막으로 본 값을 남겨 두고 그것으로 먼저 그린 뒤,

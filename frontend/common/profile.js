@@ -75,11 +75,23 @@ async function openProfileEditor(nickname, opts = {}) {
       if (previewUrl) preview.innerHTML = `<img src="${previewUrl}" alt="" />`;
       else preview.textContent = /^[a-zA-Z]/.test(nickname) ? nickname.slice(0, 2).toUpperCase() : nickname.slice(0, 1);
     };
+    /* 팔레트는 한 번만 그린다. 고른 표시는 markColors() 가 클래스만 바꾼다.
+       전에는 색을 고를 때마다 innerHTML 을 다시 써서 <input type=color> 가 새것으로
+       갈렸고, 운영체제의 색 고르기 창이 그 입력칸에 매여 있어서 첫 클릭에 닫혀 버렸다.
+       색을 계속 조절할 수가 없었다. 입력칸을 살려 두면 끄는 동안 미리보기가 따라온다. */
     const paintColors = () => {
       backdrop.querySelector('#pf-colors').innerHTML =
-        `<button type="button" class="pf-color none${color ? '' : ' is-on'}" data-color="" title="기본">✕</button>` +
-        PROFILE_COLORS.map((c) => `<button type="button" class="pf-color${c === color ? ' is-on' : ''}" data-color="${c}" style="--c:${c}"></button>`).join('') +
-        `<label class="pf-color custom${color && !PROFILE_COLORS.includes(color) ? ' is-on' : ''}" title="직접 고르기"><input type="color" id="pf-color-custom" value="${color || '#00b8ad'}" /></label>`;
+        '<button type="button" class="pf-color none" data-color="" title="기본">✕</button>' +
+        PROFILE_COLORS.map((c) => `<button type="button" class="pf-color" data-color="${c}" style="--c:${c}"></button>`).join('') +
+        `<label class="pf-color custom" title="직접 고르기"><input type="color" id="pf-color-custom" value="${color || '#00b8ad'}" /></label>`;
+      markColors();
+    };
+    const markColors = () => {
+      const box = backdrop.querySelector('#pf-colors');
+      box.querySelectorAll('[data-color]').forEach((b) =>
+        b.classList.toggle('is-on', (b.dataset.color || '') === (color || '')));
+      box.querySelector('.pf-color.custom')
+        .classList.toggle('is-on', !!color && !PROFILE_COLORS.includes(color));
     };
     const paintRoles = () => {
       const customRoles = role.split(',').map(v => v.trim()).filter(v => v && !ROLE_ORDER.includes(v));
@@ -131,12 +143,12 @@ async function openProfileEditor(nickname, opts = {}) {
       const b = e.target.closest('[data-color]');
       if (!b) return;
       color = b.dataset.color;
-      paintColors(); paintPreview();
+      markColors(); paintPreview();
     });
     backdrop.querySelector('#pf-colors').addEventListener('input', (e) => {
       if (e.target.id !== 'pf-color-custom') return;
       color = e.target.value;
-      paintColors(); paintPreview();
+      markColors(); paintPreview();   /* 다시 그리면 열려 있는 색 고르기 창이 닫힌다 */
     });
     backdrop.querySelector('#pf-roles').addEventListener('click', (e) => {
       const b = e.target.closest('[data-role]');

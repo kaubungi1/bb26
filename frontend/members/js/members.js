@@ -61,14 +61,18 @@ function memberCard(m) {
 }
 
 function renderMembers() {
+  const me = Nick.get();
   const roles = [...new Set([...ROLE_ORDER, ...members.flatMap(memberRoles)])];
   roleFilterEl.innerHTML = ['', ...roles].map((r) => `<button type="button" class="chip${selectedRole === r ? ' is-on' : ''}" data-role="${escapeHtml(r)}" aria-pressed="${selectedRole === r}">${escapeHtml(r || '전체')}</button>`).join('');
   const query = memberSearchEl.value.trim().toLocaleLowerCase();
   const rows = members.filter((m) => (!selectedRole || memberRoles(m).includes(selectedRole)) &&
     [m.nickname, m.title, m.status, m.intro, m.availability, ...(m.guilds || []).map((g) => g.name)]
       .some((s) => (s || '').toLocaleLowerCase().includes(query)))
-    /* 가나다순. 곡 수로 세우면 목록 자체가 활동량 순위표가 된다. */
-    .sort((a, b) => a.nickname.localeCompare(b.nickname, 'ko'));
+    /* 가나다순. 곡 수로 세우면 목록 자체가 활동량 순위표가 된다.
+       다만 나는 늘 맨 앞이다 — 서른 명 중에서 내 칸을 찾아 스크롤하는 일이 가장 잦다.
+       닉네임을 아직 안 정했으면 me 가 빈 값이라 그냥 가나다순이 된다. */
+    .sort((a, b) => (b.nickname === me) - (a.nickname === me)
+      || a.nickname.localeCompare(b.nickname, 'ko'));
   if (memberCountEl) memberCountEl.textContent = members.length ? rows.length : '';
   memberListEl.innerHTML = rows.map(memberCard).join('')
     || `<p class="empty-msg muted">${query || selectedRole ? '조건에 맞는 멤버가 없습니다.' : '아직 등록된 멤버가 없습니다. 내 캐릭터를 만들어 보세요.'}</p>`;

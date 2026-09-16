@@ -108,7 +108,11 @@
 /* overflow-x 를 적어 둬야 한다. overflow-y 만 주면 CSS 규칙상 나머지 축이 visible 에서
    auto 로 계산되어, 안쪽 무엇 하나가 넓어지는 순간 모달이 통째로 좌우로 밀린다.
    모달은 세로로만 스크롤한다 — 가로로 밀리면 안에 뭐가 더 있는지 알 수가 없다. */
-.profile-modal, .guild-modal { max-height: calc(100dvh - 48px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+/* --vvh 는 common.js 가 visualViewport 에서 읽어 넣는 '진짜 보이는 높이' 다.
+   dvh 는 키보드를 계산에 넣지 않아서, 키보드가 올라오면 창이 화면 전체 높이인 채로
+   가운데 서고 저장 버튼이 키보드 밑에 깔린다. visualViewport 가 없는 브라우저는
+   dvh 로 떨어지고, 그때는 배경 스크롤(.modal-backdrop)이 받아 준다. */
+.profile-modal, .guild-modal { max-height: calc(var(--vvh, 100dvh) - 48px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .profile-form .field-row { flex-wrap: wrap; }
 .profile-form .field-label { flex: 0 0 48px; }
 .guild-modal { max-width: 430px; }

@@ -832,6 +832,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
 .file-field:hover .file-fake { border-color: var(--teal); color: var(--teal-deep); }
 
 /* 닉네임 모달 */
+/* 배경 자체가 스크롤된다. 창이 화면보다 길어지는 경우가 있기 때문이다 —
+   모바일에서 키보드가 올라오면 보이는 높이가 절반으로 줄어드는데, 그때 창 안쪽만
+   스크롤되게 두면 키보드에 깔린 저장 버튼에 닿을 길이 없다.
+   가운데 정렬은 창이 짧을 때만 걸리게 auto 여백으로 준다 — align-items:center 로 두면
+   창이 길어졌을 때 위쪽이 화면 밖으로 잘려서 스크롤해도 못 올라간다. */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -840,10 +845,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 24px;
 }
+.modal-backdrop > * { margin-block: auto; }
 /* 모달의 모든 선언은 이 파일 아래쪽 '모달' 절에 있다. 여기에 다시 두지 않는다.
    전에는 common.css 와 game.css 가 반씩 정의해서, game.css 가 flex-wrap 만 다시 쓰고
    common.css 의 flex-direction:column 이 그대로 살아남았다. 어느 파일을 읽어도
