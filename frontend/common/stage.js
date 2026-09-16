@@ -22,7 +22,10 @@
    된다. 다른 곳은 건드릴 필요가 없다. common.js 의 BRAND_MARK 과 같은 방식이다. */
 
 const STAGE_SLOT = { 보컬: 'vo', 일렉1: 'gt1', 일렉2: 'gt2', 베이스: 'ba', 키보드: 'key', 드럼: 'dr' };
-const STAGE_LABEL = { dr: 'Dr', ba: 'Ba', gt1: 'Gt1', gt2: 'Gt2', key: 'Key', vo: 'Vo' };
+/* 자리표는 파트 약어를 그대로 쓴다. 여기에 또 적어 두면 common.js 와 어긋난다.
+   자리 이름(dr·vo)에서 파트 이름을 거쳐 ROLE_SHORT 를 본다. */
+const STAGE_ROLE = { dr: '드럼', ba: '베이스', gt1: '일렉1', gt2: '일렉2', key: '키보드', vo: '보컬' };
+const stageLabel = (slot) => ROLE_SHORT[STAGE_ROLE[slot]] || slot.toUpperCase();
 const STAGE_ORDER = ['dr', 'ba', 'gt1', 'gt2', 'key', 'vo'];
 /* 양옆 네 자리는 사람이 악기 위가 아니라 무대 바깥쪽 가장자리에 선다.
    그 줄이 103px 에서 52px 로 줄어든다 — 사람과 악기가 나란히 서면 줄 높이가
@@ -81,7 +84,7 @@ function stageSpot(slot, role) {
     + `<span class="stage-players">${bodies}</span>`
     + `<span class="stage-gear">`
     + `<span class="stage-inst"><svg viewBox="0 0 64 64" aria-hidden="true">${INSTRUMENTS[slot]}</svg></span>`
-    + `<span class="stage-tag">${STAGE_LABEL[slot]}</span>`
+    + `<span class="stage-tag">${stageLabel(slot)}</span>`
     + `</span>`
     + `<span class="stage-names">${names}</span>`
     + `</div>`;

@@ -164,6 +164,9 @@
 .home .transport{display:flex;align-items:center;gap:4px;padding:9px 0 10px;font-size:12px;font-weight:700;color:var(--ink-muted)}
 .home .transport button{min-height:32px;padding:0 10px;border:0;border-radius:0;background:none;color:var(--ink-muted);font-size:13px;font-weight:800;box-shadow:none}
 .home .transport button:hover{color:var(--teal-deep);filter:none}
+/* 맨 앞·맨 뒤. 이미 끝이면 흐린다 — 눌러도 아무 일이 없는 버튼이 눌러야 할 것처럼 보이면 안 된다. */
+.home .transport button:disabled{opacity:.3;cursor:default}
+.home .transport button:disabled:hover{color:var(--ink-muted)}
 .home .transport #position{min-width:70px;text-align:center;font-variant-numeric:tabular-nums;color:var(--ink);font-weight:800;font-size:13px}
 .home .transport #auto[aria-pressed=true]{color:var(--teal-deep)}
 .home .transport a{color:var(--ink-muted);font-weight:800;padding:0 10px;min-height:32px;display:inline-flex;align-items:center}
