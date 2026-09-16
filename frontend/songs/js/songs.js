@@ -327,7 +327,7 @@ function songItem(song) {
         ${thumb(song)}
         <div class="song-item-info">
           <div class="song-title-row">
-            <span class="song-title">${escapeHtml(song.title)}</span>
+            <span class="song-title"><span>${escapeHtml(song.title)}</span></span>
             ${!Site.slug ? guildBadge(song.guild) : ''}
             <span class="song-tag${song.tags ? '' : ' none'}"><span>${escapeHtml(song.tags || '태그 없음')}</span></span>
           </div>
@@ -429,6 +429,39 @@ addEventListener('resize', () => {
   fitTimer = setTimeout(fitNames, 120);
 });
 
+/* ---------- 잘린 제목 흘리기 ----------
+   목록의 제목은 `text-overflow: ellipsis` 로 잘린다. 잘린 칸만 골라, 잘린 만큼만
+   왼쪽으로 밀었다가 되돌린다. 한 바퀴는 멈춤 3초 → 흐름 → 멈춤 1.5초 → 되돌림 0.4초다.
+
+   잘리지 않은 제목은 건드리지 않는다. 움직일 이유가 없는 것이 움직이면 산만하기만 하다.
+   주기는 6초로 고정이고 리듬은 CSS 의 @keyframes song-roll 에 있다. 여기서는 잘린 폭만 잰다.
+   화면에 보이는 줄만 움직인다. 207곡이 한꺼번에 흐르면 스크롤할 때마다 어지럽다.
+   움직임을 줄여 달라고 한 사람에게는 아예 안 건다. */
+let rollWatcher = null;
+
+function rollTitles() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  rollWatcher?.disconnect();
+  rollWatcher = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      const el = en.target;
+      if (!en.isIntersecting) { el.classList.remove('is-roll'); return; }
+      const inner = el.firstElementChild;
+      if (!inner) return;
+      /* 바깥은 창이고 안의 글자가 지나간다. 바깥을 움직이면 글자는 잘린 채 상자만
+         옆줄로 삐져나가고 … 도 그대로 남는다 — 한 번 그렇게 만들었다. */
+      const over = inner.scrollWidth - el.clientWidth;
+      if (over < 6) return;                     /* 한두 픽셀 차이는 잘린 게 아니다 */
+      el.style.setProperty('--roll', `-${over}px`);
+      /* 출발을 조금씩 어긋나게. 열 줄이 동시에 움직이면 화면이 물결친다.
+         0.4초까지만 어긋낸다 — 더 주면 눈에 띄게 늦게 출발한다. */
+      el.style.setProperty('--roll-delay', `${Math.round(Math.random() * 400)}ms`);
+      el.classList.add('is-roll');
+    });
+  }, { rootMargin: '40px' });
+  listEl.querySelectorAll('.song-title').forEach((el) => rollWatcher.observe(el));
+}
+
 function render() {
   renderTools();
   renderBump();
@@ -458,6 +491,7 @@ function render() {
 
   listEl.innerHTML = visible.map(songItem).join('');
   fitNames();
+  rollTitles();
   if (!songRouteHandled) {
     const id = Number(new URLSearchParams(location.search).get('song'));
     const target = document.getElementById(`song-${id}`);
