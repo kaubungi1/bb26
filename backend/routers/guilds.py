@@ -2,17 +2,59 @@
 import re
 
 from fastapi import APIRouter, HTTPException
+from psycopg.types.json import Json
 
 from db import get_db
+from guildtheme import THEMES, cache_clear
 
 router = APIRouter()
 
 SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9-]{1,30}$')
-EDITABLE = ('name', 'leader', 'slogan', 'recruitNote', 'color', 'emblem')
+EDITABLE = ('name', 'leader', 'slogan', 'recruitNote', 'color', 'emblem', 'style')
 TEXT_MAX = {'name': 30, 'leader': 20, 'slogan': 60, 'recruitNote': 200, 'color': 20, 'emblem': 8}
+
+# ---------- 꾸미기 값 검증 ----------
+# 이 값들은 화면에서 CSS 변수와 SVG 로 그대로 들어간다. 자유 문자열을 통과시키면
+# "red; } body{display:none} /*" 같은 값이 사이트를 부순다. 목록에 있는 것만 받는다.
+# 테마 목록은 guildtheme.py 에 있다(main.py 도 같은 값을 본다). 문양은 여기서 관리한다.
+# 문양은 Tabler Icons(MIT) 세트에서 왔고, 이름은 그 세트의 것이 아니라 우리 키다.
+# frontend/common/crest.js 와 한쪽만 고치면 화면에서는 고를 수 있는데 서버가 버린다.
+CREST_SHAPES = {
+    'pick', 'keys', 'keyboard', 'mic', 'mega', 'amp', 'headphone', 'speaker',
+    'note', 'wave', 'takeoff', 'plane', 'propeller', 'rocket', 'cloud', 'snow',
+    'rain', 'snowman', 'bolt', 'moon', 'sun', 'daepa', 'ramen', 'coffee',
+    'donut', 'leaf', 'plant', 'car', 'bus', 'bike', 'star', 'heart',
+    'crown', 'cat', 'ghost', 'bone',
+}
+HEX_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
+
+
+def _clean_style(value):
+    """받아들이는 키만 남기고 나머지는 버린다. 모르는 키는 저장하지 않는다."""
+    if not isinstance(value, dict):
+        return None
+    out = {}
+    theme = value.get('theme')
+    if theme in THEMES:
+        out['theme'] = theme
+    # 판 위 글자색. 길드가 직접 고른 값이고, 없으면 화면이 강조색에서 계산한다.
+    ink = str(value.get('ink') or '')
+    if HEX_RE.match(ink):
+        out['ink'] = ink
+    crest = value.get('crest')
+    if isinstance(crest, dict) and crest.get('shape') in CREST_SHAPES:
+        bg, fg = str(crest.get('bg') or ''), str(crest.get('fg') or '')
+        out['crest'] = {
+            'shape': crest['shape'],
+            'bg': bg if HEX_RE.match(bg) else '#00b8ad',
+            'fg': fg if HEX_RE.match(fg) else '#ffffff',
+        }
+    return out or None
 
 
 def _clean(key, value):
+    if key == 'style':
+        return Json(_clean_style(value))
     if value is None:
         return None
     return str(value).strip()[:TEXT_MAX[key]] or None
@@ -96,14 +138,29 @@ def update_guild(slug: str, body: dict):
             values.append(_clean(key, body[key]))
     if not fields:
         raise HTTPException(400, '수정할 내용이 없습니다.')
+    conn = get_db()
+    # 꾸미기는 길드원만 바꾼다. 로그인이 없어 닉네임은 자기 신고이므로 이 확인은
+    # 보안이 아니라 실수 방지다 — 남의 길드를 지나가다 갈아엎는 일을 막는 정도다.
+    # 사이트 전체가 같은 성격이다(닉네임 모달의 오타 확인도 마찬가지).
+    if 'style' in body:
+        who = str(body.get('nickname') or '').strip()
+        row = conn.execute(
+            'SELECT 1 FROM guildMembers m JOIN guilds g ON g."id"=m."guildId" '
+            'WHERE g."slug"=%s AND m."nickname"=%s LIMIT 1', (slug, who)).fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(403, '길드원만 꾸미기를 바꿀 수 있습니다.')
     fields.append('"updatedAt"=now()')
     values.append(slug)
-    conn = get_db()
     cur = conn.execute(f'UPDATE guilds SET {", ".join(fields)} WHERE "slug"=%s', values)
     conn.commit()
     if cur.rowcount == 0:
         conn.close()
         raise HTTPException(404, '길드를 찾을 수 없습니다.')
+    # 서버가 HTML 에 박아 보내는 테마가 메모리에 남아 있다. 안 비우면 바꾼 뒤에도
+    # 옛 테마로 한 번 그려졌다가 바뀐다 — 없애려던 번쩍임이 반대로 생긴다.
+    if 'style' in body:
+        cache_clear()
     g = _get(conn, slug)
     conn.close()
     return g

@@ -1,0 +1,237 @@
+/* 길드 홈. 파일 위치가 guild-home/ 인 이유는 index.html 주석에 있다 — 되돌리지 말 것. 파티창은 common/party.css 가, 토큰은 tokens.css 와 themes.css 가 맡는다.
+   여기는 이 화면의 배치만 정한다.
+
+   상자를 쓰지 않는다. 절을 나누는 것은 잉크 선 하나와 여백이다 — 곡·악보와 같은 문법이다.
+   색은 전부 토큰으로만 쓴다. 하드코딩하면 길드 테마가 닿지 못한다. */
+
+/* 길드 판은 컨테이너 여백을 넘어 화면 폭을 쓴다. 자켓이 제 폭을 꽉 채우는 것과 같다 —
+   안쪽으로 물리면 색 면이 작아져서 '이 길드의 공간' 이 아니라 '카드 한 장' 이 된다. */
+.guild .g-banner { margin-inline: -32px; }
+@media (max-width: 800px) { .guild .g-banner { margin-inline: -18px; } }
+@media (max-width: 480px) { .guild .g-banner { margin-inline: -12px; } }
+
+.guild .overline { display: inline-block; font-size: 9px; letter-spacing: 0.2em; font-weight: 800; color: var(--accent-deep); }
+.guild .meta-sep { margin: 0 6px; color: var(--line); user-select: none; }
+.guild a { text-decoration: none; color: inherit; }
+.guild .muted { color: var(--ink-muted); font-size: 13px; }
+
+/* 절 머리 — 왼쪽에 이름, 오른쪽에 나가는 길 */
+.guild .g-sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid var(--ink); }
+.guild .g-sec-head h2 { font-size: 20px; margin: 3px 0 0; letter-spacing: -0.02em; }
+.guild .g-sec-head h2 small { font-size: 12px; font-weight: 800; color: var(--accent-deep); margin-left: 8px; vertical-align: 4px; }
+.guild .g-sec-head a { font-size: 12px; font-weight: 800; color: var(--ink-muted); white-space: nowrap; }
+.guild .g-sec-head a:hover { color: var(--accent-deep); }
+
+/* ---------- 길드 판 ----------
+   곡 자켓을 길드 크기로 키운 것. 자켓이 [섬네일 / 잉크 띠 / 여섯 칸] 이듯
+   여기는 [색 판 / 스탯 줄 / 여섯 칸] 이다. 셋이 맞붙어 한 덩어리로 읽힌다.
+
+   테두리도 모서리 장식도 없다. 깊이는 겹침과 글자 크기 차이로 낸다.
+   글자가 그림 위에 올라가지 않으므로 길드 색이 무엇이든 대비가 같다. */
+.guild .g-plate { margin-bottom: 0; }
+.guild .g-plate-top { display: flex; align-items: center; gap: 20px;
+  padding: 26px 28px; background: var(--accent); color: var(--on-accent); }
+
+/* 문장. 조합 문장(육각형)이면 그 모양이 곧 틀이라 판을 깔지 않는다.
+   이모지나 첫 글자일 때만 사선 판에 박는다 — 글자 하나는 기댈 면이 필요하다. */
+.guild .g-crest { flex: none; display: grid; place-items: center; width: 76px; height: 76px; }
+.guild .g-crest:has(.g-crest-mark) { background: var(--on-accent); transform: skew(var(--skew)); }
+.guild .g-crest-mark { display: block; transform: skew(calc(var(--skew) * -1));
+  font-size: 40px; line-height: 1; }
+.guild .g-crest-mark.is-letter { font-size: 42px; font-weight: 900; color: var(--accent);
+  letter-spacing: -0.06em; }
+/* 폭은 부모(.g-crest)를 그대로 따른다 — 좁은 화면에서 76/60/46 으로 줄어들 때 같이 줄어야 한다.
+   높이는 auto 다. viewBox 가 정사각이라 폭만 주면 높이가 따라온다.
+   height: 100% 로 쓰면 부모 높이가 확정되지 않았을 때 auto 로 떨어져 크기가 어긋난다. */
+.guild .g-crest-svg { display: block; width: 100%; line-height: 0; }
+.guild .g-crest-svg svg { display: block; width: 100%; height: auto; }
+
+.guild .g-title { flex: 1; min-width: 0; }
+.guild .g-title .overline { color: inherit; opacity: 0.66; }
+/* 화면에서 가장 큰 글자. 라벨(9px)과의 차이 자체가 위계를 만든다. */
+.guild .g-plate h1 { font-size: 52px; line-height: 0.98; margin: 3px 0 0; letter-spacing: -0.045em;
+  font-weight: 900; overflow-wrap: anywhere; }
+.guild .g-slogan i { font-style: normal; margin: 0 8px; opacity: 0.5; }
+.guild .g-slogan { margin: 10px 0 0; font-size: 14px; font-weight: 600; opacity: 0.82;
+  overflow-wrap: anywhere; }
+
+.guild .g-plate-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+/* 모집 상태. 길드의 지금 상태가 가장 길드다운 정보다. */
+.guild .g-open, .guild .g-mine-mark { display: inline-block; padding: 5px 12px;
+  transform: skew(var(--skew)); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; white-space: nowrap; }
+.guild .g-open > span, .guild .g-mine-mark > span { display: inline-block; transform: skew(calc(var(--skew) * -1)); }
+.guild .g-open { background: var(--on-accent); color: var(--accent); }
+.guild .g-open.is-full { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; opacity: 0.7; }
+/* 반투명 검정을 깔면 어두운 길드색 위에서 안 보인다. 테두리 한 줄로 알린다 —
+   판 위의 글자색(--on-accent)을 그대로 쓰므로 어떤 색 위에서도 대비가 같다. */
+.guild .g-mine-mark { background: transparent; color: inherit; box-shadow: inset 0 0 0 1.5px currentColor; }
+
+/* 스탯 줄. 숫자는 크게, 라벨은 아주 작게 자간을 벌려. 그 대비가 리듬이 된다. */
+.guild .g-stats { display: flex; align-items: baseline; gap: 28px;
+  padding: 14px 28px; background: var(--ink-fill); color: var(--on-ink); }
+.guild .g-stat { display: flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; }
+.guild .g-stat b { font-size: 26px; font-weight: 900; letter-spacing: -0.04em; line-height: 1; }
+.guild .g-stat small { font-size: 9px; font-weight: 800; letter-spacing: 0.18em; opacity: 0.64; }
+/* 전에는 10px 에 투명도 0.6 이라 있는 줄도 몰랐다. 길드를 꾸미는 유일한 입구이므로
+   눌러야 할 것처럼 보여야 한다 — 면을 주고 글자를 키운다. */
+/* 면을 주지 않는다. 아이콘이 붙은 뒤로는 면이 없어도 눌러야 할 것처럼 보이고,
+   면이 있으면 좌우 여백까지 먹어서 두 버튼이 멀리 떨어진 것처럼 읽힌다. */
+.guild .g-edit { margin-left: auto; min-height: 0; padding: 0; border: 0; border-radius: 0;
+  background: none; box-shadow: none; color: var(--on-ink); opacity: 0.72;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.1em; white-space: nowrap; }
+.guild .g-edit:hover { background: none; opacity: 1; filter: none; }
+/* 그리기와 편집은 한 덩이로 오른쪽 끝에 선다. 둘 다 margin-left:auto 면 남는 공간을
+   둘이 나눠 먹어서 하나는 가운데, 하나는 끝에 떨어져 선다 — 실제로 그렇게 됐다.
+   앞의 것만 밀려나고 뒤의 것은 그 옆에 붙인다. */
+.guild .g-stats .g-edit + .g-edit { margin-left: 14px; }
+/* 아이콘과 글자를 한 줄에. 탭과 같은 문법이다. */
+.guild .g-edit { display: inline-flex; align-items: center; gap: 5px; }
+.guild .g-edit svg { width: 14px; height: 14px; flex: none; }
+
+/* ---------- 두 열 ---------- */
+/* 왼쪽이 '지금 뭐 하나', 오른쪽이 '뭘 했고 뭘 하나'.
+   1fr 은 minmax(auto,1fr) 이라 안쪽이 min-content 아래로 안 줄어든다. 0 을 바닥에 박는다. */
+.guild .g-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 40px; align-items: start; }
+@media (min-width: 1000px) { .guild .g-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.guild .g-col { min-width: 0; }
+.guild .g-col > section:last-child { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+
+/* ---------- 빈 상태 ---------- */
+/* 지금 13개 길드가 전부 비어 있다. 이게 기본 화면이므로 한 줄로 흘리지 않는다. */
+.guild .g-empty { padding: 4px 0 2px; }
+.guild .g-empty-title { margin: 6px 0 0; font-size: 15px; font-weight: 800; color: var(--ink-2); }
+.guild .g-empty-sub { margin: 5px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--ink-faint); overflow-wrap: anywhere; }
+.guild .g-cta { display: inline-block; margin-top: 12px; padding: 9px 16px;
+  background: var(--accent); color: var(--on-accent); font-size: 12.5px; font-weight: 800;
+  border-radius: var(--radius-sm); }
+.guild .g-cta:hover { filter: brightness(1.06); }
+
+/* ---------- 다음 합주 ---------- */
+/* 여기 오는 사람의 첫 질문이다. 참석은 이 화면에서 끝난다. */
+.guild .next-practice { margin-bottom: 26px; padding-bottom: 18px; border-bottom: 2px solid var(--ink); }
+.guild .np-head h2 { font-size: 24px; margin: 3px 0 2px; letter-spacing: -0.02em; }
+.guild .np-when { margin: 0; font-size: 13px; font-weight: 700; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.guild .np-who { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 14px; }
+.guild .np-face { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; }
+.guild .np-face .avatar-chip { width: 20px; height: 20px; font-size: 10px; }
+.guild .np-act { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+.guild .np-act a { font-size: 12px; font-weight: 800; color: var(--ink-muted); }
+.guild .np-act a:hover { color: var(--accent-deep); }
+/* 갈지 말지. 면이 차면 간다는 뜻이다 — 칩·파트 칸과 같은 규칙. */
+.guild .np-go { min-height: 38px; padding: 0 20px; border: 0; border-radius: var(--radius-sm);
+  background: var(--empty); color: var(--ink-muted); font-size: 13px; font-weight: 800; box-shadow: none; }
+.guild .np-go:hover { background: var(--mine); color: var(--ink); filter: none; }
+.guild .np-go.is-on { background: var(--accent); color: var(--on-accent); }
+/* 날짜 투표. 되는 날을 여러 개 고른다. */
+.guild .np-days { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 14px; }
+.guild .np-day { min-height: 34px; padding: 0 12px; border: 0; border-radius: var(--radius-sm);
+  background: var(--empty); color: var(--ink-muted); font-size: 12px; font-weight: 800;
+  box-shadow: none; font-variant-numeric: tabular-nums; }
+.guild .np-day:hover { background: var(--mine); color: var(--ink); filter: none; }
+.guild .np-day.is-on { background: var(--accent); color: var(--on-accent); }
+.guild .np-day i { font-style: normal; margin-left: 6px; opacity: 0.6; }
+.guild .np-day.is-on i { opacity: 0.78; }
+.guild .next-practice.is-none .g-cta { color: var(--on-accent); }
+
+/* ---------- 파티창 ---------- */
+/* 판 · 스탯 줄 · 파티창이 맞붙어 한 덩어리다. 사이에 여백이 없다. */
+.guild .g-banner { margin-bottom: 30px; }
+/* 이름·인원·슬로건은 위 판이 이미 말했다. 파티창에서 또 쓰면 한 화면에 두 번이다.
+   팀장은 남긴다 — 판에는 없고 여기 ★ 와 짝이 된다. */
+.guild .g-party .party-band { display: none; }
+.guild .g-party .party-slogan { display: none; }
+.guild .g-party .party-foot { padding: 9px 28px 0; }
+@media (max-width: 900px) { .guild .g-party .party-foot { padding-inline: 20px; } }
+@media (max-width: 620px) { .guild .g-party .party-foot { padding-inline: 14px; } }
+.guild .g-fold { display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: 34px; padding: 0 28px; border: 0; border-radius: 0; box-shadow: none; text-align: left;
+  background: var(--ink-fill); color: var(--on-ink); }
+.guild .g-fold .overline { color: inherit; opacity: 0.72; }
+.guild .g-fold small { font-size: 11px; font-weight: 800; opacity: 0.6; }
+.guild .g-fold i { margin-left: auto; font-style: normal; font-size: 10px; font-weight: 800;
+  letter-spacing: 0.1em; opacity: 0.6; }
+.guild .g-fold:hover { filter: none; }
+.guild .g-fold:hover i, .guild .g-fold:hover small { opacity: 1; }
+.guild .g-recruit { margin: 0; padding: 14px 28px; background: var(--empty);
+  font-size: 13px; color: var(--ink-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- 길드 곡 ---------- */
+/* 빈 자리가 많은 곡이 위로 온다. 여기서 할 일은 '내가 낄 자리 찾기' 다. */
+.guild .g-songs { margin-bottom: 26px; }
+.guild .g-song-list { list-style: none; margin: 0; padding: 0; }
+.guild .g-song { display: flex; align-items: center; gap: 12px; padding: 10px 0 11px;
+  border-bottom: 1px solid var(--line-2); }
+.guild .g-song:last-child { border-bottom: 1px solid var(--line-2); }
+.guild .g-song-thumb { flex: none; display: grid; place-items: center; width: 56px; height: 32px;
+  overflow: hidden; background: linear-gradient(140deg, var(--tone), var(--tone-l)); }
+.guild .g-song-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.guild .g-song-mark { font-size: 17px; font-weight: 900; line-height: 1; color: #ffffffbf; }
+.guild .g-song-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.guild .g-song-title { font-size: 14.5px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guild .g-song-title:hover { color: var(--accent-deep); }
+.guild .g-song-artist { font-size: 11.5px; font-weight: 700; color: var(--ink-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 파트 여섯 칸. 자켓의 .slots 와 같은 규칙이라 곡마다 Ba 가 같은 자리에 온다. */
+.guild .g-song-slots { flex: none; display: grid; grid-template-columns: repeat(6, 44px); gap: 2px; }
+.guild .g-slot { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; height: 34px; min-height: 0; padding: 0; border: 0; border-radius: 0;
+  background: var(--empty); color: var(--ink-faint); font-size: 9px; font-weight: 800;
+  box-shadow: none; line-height: 1; transition: background 0.12s; }
+.guild .g-slot em { font-style: normal; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.guild .g-slot u { text-decoration: none; font-size: 11px; min-height: 13px;
+  max-width: 100%; display: flex; align-items: center; justify-content: center; }
+/* 한 명일 때의 이름. 칸보다 길면 자른다 — 전체 이름은 쪽지(data-peek)에 그대로 있다. */
+.guild .g-slot u.one { display: block; max-width: 100%; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.guild .g-slot u.chips { gap: 1px; }
+.guild .g-slot u.chips .avatar-chip { width: 14px; height: 14px; font-size: 8px; flex: none; }
+.guild .g-slot u.chips b { font-size: 9px; font-weight: 800; opacity: 0.7; }
+.guild .g-slot:hover { background: var(--mine); color: var(--ink); filter: none; }
+.guild .g-slot.on { background: var(--field); color: var(--ink-muted); box-shadow: inset 0 0 0 1px var(--line-2); }
+.guild .g-slot.mine { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+.guild .g-songs > .muted a { color: var(--accent-deep); font-weight: 800; }
+
+/* ---------- 지난 합주 ---------- */
+.guild .g-past { margin-bottom: 26px; }
+.guild .g-past-list { list-style: none; margin: 0; padding: 0; }
+.guild .g-past-list li { border-bottom: 1px solid var(--line-2); }
+.guild .g-past-list a { display: flex; align-items: baseline; gap: 10px; padding: 11px 0; font-size: 13px; }
+.guild .g-past-list b { font-weight: 800; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guild .g-past-list span { flex: 1; min-width: 0; font-size: 11.5px; font-weight: 700; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums; }
+.guild .g-past-list i { flex: none; font-style: normal; font-size: 11.5px; font-weight: 800; color: var(--accent-deep); }
+.guild .g-past-list a:hover b { color: var(--accent-deep); }
+
+/* ---------- 좁은 화면 ---------- */
+/* 두 열이 한 열로 접히는 1000px 부터 곡 줄이 좁아진다. 여섯 칸을 제목 아래로 내린다 —
+   옆에 두면 34px×6 = 204px 가 제목을 다 밀어낸다. */
+@media (max-width: 1180px) {
+  .guild .g-song { flex-wrap: wrap; gap: 9px; }
+  .guild .g-song-slots { flex-basis: 100%; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+/* 판이 화면 폭을 넘지 않게 단계적으로 줄인다. 52px 이름은 넓은 화면의 값이다. */
+@media (max-width: 900px) {
+  .guild .g-plate-top { gap: 16px; padding: 20px 20px; }
+  .guild .g-plate h1 { font-size: 40px; }
+  .guild .g-crest, .guild .g-crest-mark { width: 60px; height: 60px; }
+  .guild .g-crest-mark, .guild .g-crest-mark.is-letter { font-size: 32px; }
+  .guild .g-stats, .guild .g-fold, .guild .g-recruit { padding-left: 20px; padding-right: 20px; }
+  .guild .g-stats { gap: 20px; }
+}
+@media (max-width: 620px) {
+  /* 문장과 모집 상태가 이름을 밀어내지 않게 줄로 내린다. */
+  .guild .g-plate-top { flex-wrap: wrap; gap: 12px; padding: 16px 14px; }
+  .guild .g-plate h1 { font-size: 30px; }
+  .guild .g-title { flex-basis: 100%; order: 3; }
+  .guild .g-plate-side { flex-direction: row; align-items: center; margin-left: auto; }
+  .guild .g-crest, .guild .g-crest-mark { width: 46px; height: 46px; }
+  .guild .g-crest-mark, .guild .g-crest-mark.is-letter { font-size: 24px; }
+  .guild .g-stats { gap: 14px; padding: 11px 14px; flex-wrap: wrap; }
+  .guild .g-stat b { font-size: 20px; }
+  .guild .g-fold, .guild .g-recruit { padding-left: 14px; padding-right: 14px; }
+  .guild .np-head h2 { font-size: 20px; }
+  .guild .g-sec-head h2 { font-size: 18px; }
+  .guild .g-empty-title { font-size: 14px; }
+}

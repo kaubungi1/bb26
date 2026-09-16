@@ -20,8 +20,6 @@
 .song-tag.none { background: rgba(22, 40, 47, 0.06); color: var(--ink-muted); font-weight: 700; }
 .song-tag:hover { filter: brightness(0.97); }
 
-
-
 .song-item-actions {
   display: flex;
   align-items: center;
@@ -221,18 +219,7 @@
 }
 .session-label:hover { color: var(--teal-deep); background: transparent; box-shadow: none; }
 
-/* 지원 한마디 */
-.sheet-member-comment { font-size: 12px; color: var(--ink-muted); overflow-wrap: anywhere; }
-.sheet-comment {
-  flex: 1 1 100%;
-  padding: 9px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--card);
-  font-size: 13px;
-}
-.sheet-comment:focus { outline: none; border-color: var(--teal); }
-button.sheet-member-tag { border: none; background: transparent; cursor: pointer; }
+
 
 
 /* ══════════════════════════════════════════════════════════════
@@ -310,7 +297,7 @@ button.sheet-member-tag { border: none; background: transparent; cursor: pointer
 .songs .session-cell { display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
   gap: 1px; min-height: 40px; padding: 5px 8px; border: 0; border-radius: 0; min-width: 0; overflow: hidden;
   background: var(--empty); clip-path: none; cursor: pointer; transition: background 0.12s; }
-.songs .session-cell:hover { background: #dde7ef; }
+.songs .session-cell:hover { background: var(--hover-2); }
 .songs .session-cell .role { font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em;
   color: var(--ink-faint); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 /* 넓으면 바꾼 이름, 좁으면 약칭. 좁은 칸에서 '키보드(브…' 는 읽히지도 않으면서 자리만 먹는다.
@@ -328,11 +315,11 @@ button.sheet-member-tag { border: none; background: transparent; cursor: pointer
 
 /* 채워진 칸은 조용히. 빈 칸이 눈에 띄어야 한다 — 1,017칸 중 480칸이 비어 있다. */
 .songs .session-cell.filled { background: var(--paper); box-shadow: inset 0 0 0 1px var(--line-2); }
-.songs .session-cell.filled:hover { background: #f2f7fa; }
+.songs .session-cell.filled:hover { background: var(--hover); }
 .songs .session-cell.filled .role { color: var(--ink-faint); }
 /* 내가 낀 자리만 색을 가진다 */
-.songs .session-cell.mine { background: #b3e8ed; box-shadow: none; }
-.songs .session-cell.mine:hover { background: #a2e2e8; }
+.songs .session-cell.mine { background: var(--mine); box-shadow: none; }
+.songs .session-cell.mine:hover { background: var(--mine-hover); }
 .songs .session-cell.mine .role { color: var(--teal-deep); }
 .songs .session-cell.mine .names { color: var(--ink); }
 
@@ -398,7 +385,7 @@ button.sheet-member-tag { border: none; background: transparent; cursor: pointer
 .songs .session-toggle {
   position: absolute; right: 4px; bottom: 3px;
   min-height: 0; padding: 1px 5px; border: 0; border-radius: 0;
-  background: var(--ink); color: #fff; font-size: 9.5px; font-weight: 800; box-shadow: none;
+  background: var(--ink-fill); color: var(--on-ink); font-size: 9.5px; font-weight: 800; box-shadow: none;
 }
 .songs .session-toggle:hover { background: var(--teal-deep); filter: none; }
 .songs .session-cell.off .session-toggle { background: var(--teal); }

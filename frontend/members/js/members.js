@@ -4,12 +4,60 @@ const memberListEl = document.getElementById('member-list');
 const memberSearchEl = document.getElementById('member-search');
 const memberErrorEl = document.getElementById('member-error');
 const roleFilterEl = document.getElementById('role-filter');
+const memberCountEl = document.getElementById('member-count');
 
 /* 파트는 세 군데에서 온다. 본인이 적은 것, 길드에서 맡은 것, 실제로 지원한 것.
-   본인이 적은 것은 지금 아무도 없다. 실제 지원 기록이 제일 믿을 만하다. */
+   찾을 때는 셋 중 어디에 걸려도 잡아야 한다 — "베이스 칠 사람" 을 찾는 쪽에서는
+   본인이 안 적었어도 실제로 친 적이 있으면 후보다. */
 function memberRoles(m) {
   return [...new Set([...(m.mainRoles || '').split(','), ...(m.guilds || []).map((g) => g.role),
     ...(m.playedRoles || [])].map((r) => r.trim()).filter(Boolean))];
+}
+
+/* 카드에 그리는 파트는 본인이 적은 것만이다.
+   지원 기록까지 섞으면 한 번 해 본 파트가 주 파트와 똑같이 생겨서, 적을 이유가 없어진다. */
+function ownRoles(m) {
+  return (m.mainRoles || '').split(',').map((r) => r.trim()).filter(Boolean);
+}
+
+function bcRow(label, body) {
+  if (!body) return '';
+  return `<div class="bc-row"><span class="bc-key">${label}</span><span class="bc-val">${body}</span></div>`;
+}
+
+/* 명함 한 장. 위는 짙은 면(로고·칭호·이름·상태), 아래는 흰 면(소개·정보). */
+function memberCard(m) {
+  const mine = ownRoles(m);
+  const parts = ROLE_ORDER.map((r) =>
+    `<b class="${mine.includes(r) ? 'on' : 'off'}">${escapeHtml(ROLE_SHORT[r] || r)}</b>`).join('');
+  const guilds = [...new Map((m.guilds || []).map((g) => [g.slug, g])).values()];
+  const gs = guilds.slice(0, 3).map((g) =>
+    `<a href="/guild/${encodeURIComponent(g.slug)}/">${escapeHtml(g.name)}</a>`).join(' · ')
+    + (guilds.length > 3 ? `  외 ${guilds.length - 3}` : '');
+  /* 곡 수는 쓰지 않는다. 숫자가 줄마다 서면 활동량 순위표가 된다.
+     최근에 무슨 곡을 했는지만 남긴다 — 그건 서열이 아니라 근황이다. */
+  const recent = (m.recentSongs || [])
+    .map((s) => `<a href="/songs/?song=${s.id}">${escapeHtml(s.title)}</a>`).join(', ');
+  return `<article class="bcard">
+    <div class="bc-head">
+      <div class="bc-top">
+        <img class="bc-logo" src="/assets/logo.png" alt="불법이륙" />
+        ${avatarChip(m.nickname)}
+      </div>
+      ${m.title ? `<span class="bc-over">${escapeHtml(m.title)}</span>` : ''}
+      <span class="bc-name">${escapeHtml(m.nickname)}${m.status ? ` <i>(${escapeHtml(m.status)})</i>` : ''}</span>
+      ${m.nickname === Nick.get() ? '<button type="button" class="bc-edit" data-edit-me>편집</button>' : ''}
+    </div>
+    <div class="bc-body">
+      <p class="bc-intro">${escapeHtml(m.intro || '')}</p>
+      <div class="bc-rows">
+        ${bcRow('PARTS', `<span class="bc-parts">${parts}</span>`)}
+        ${bcRow('TIME', escapeHtml(m.availability || ''))}
+        ${bcRow('GUILD', gs)}
+        ${bcRow('RECENT', recent)}
+      </div>
+    </div>
+  </article>`;
 }
 
 function renderMembers() {
@@ -19,22 +67,11 @@ function renderMembers() {
   const rows = members.filter((m) => (!selectedRole || memberRoles(m).includes(selectedRole)) &&
     [m.nickname, m.title, m.status, m.intro, m.availability, ...(m.guilds || []).map((g) => g.name)]
       .some((s) => (s || '').toLocaleLowerCase().includes(query)))
-    .sort((a, b) => (b.songCount || 0) - (a.songCount || 0) || a.nickname.localeCompare(b.nickname, 'ko'));
-  memberListEl.innerHTML = rows.map((m) => {
-    const guilds = [...new Map((m.guilds || []).map((g) => [g.slug, g])).values()];
-    return `<article class="member-entry">
-      <div class="member-entry-head">${avatarChip(m.nickname, 'xl')}
-        <div class="member-name"><strong>${escapeHtml(m.nickname)}</strong>${m.title ? `<span>${escapeHtml(m.title)}</span>` : ''}</div>
-        ${m.nickname === Nick.get() ? '<button type="button" class="ghost mini" data-edit-me>편집</button>' : ''}
-      </div>
-      <div class="member-role-line">${escapeHtml(memberRoles(m).join(' · ') || '파트 미등록')}</div>
-      ${m.songCount ? `<p class="member-activity"><b>${m.songCount}곡</b>에 참여${m.recentSongs.length ? ` · 최근 ${m.recentSongs.map((s) => `<a href="/songs/?song=${s.id}">${escapeHtml(s.title)}</a>`).join(', ')}` : ''}</p>` : ''}
-      ${m.status ? `<p class="member-status">“${escapeHtml(m.status)}”</p>` : ''}
-      ${m.intro ? `<p class="member-intro">${escapeHtml(m.intro)}</p>` : ''}
-      ${m.availability ? `<p class="member-availability">${icon('clock', 13)} ${escapeHtml(m.availability)}</p>` : ''}
-      ${guilds.length ? `<div class="member-guilds">${guilds.map((g) => `<a href="/guild/${encodeURIComponent(g.slug)}/">${guildBadge(g)}</a>`).join('')}</div>` : ''}
-    </article>`;
-  }).join('') || `<p class="empty-msg muted">${query || selectedRole ? '조건에 맞는 멤버가 없습니다.' : '아직 등록된 멤버가 없습니다. 내 캐릭터를 만들어 보세요.'}</p>`;
+    /* 가나다순. 곡 수로 세우면 목록 자체가 활동량 순위표가 된다. */
+    .sort((a, b) => a.nickname.localeCompare(b.nickname, 'ko'));
+  if (memberCountEl) memberCountEl.textContent = members.length ? rows.length : '';
+  memberListEl.innerHTML = rows.map(memberCard).join('')
+    || `<p class="empty-msg muted">${query || selectedRole ? '조건에 맞는 멤버가 없습니다.' : '아직 등록된 멤버가 없습니다. 내 캐릭터를 만들어 보세요.'}</p>`;
 }
 
 async function refreshMembers() {

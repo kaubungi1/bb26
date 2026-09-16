@@ -55,11 +55,17 @@ function youtubeId(url) {
    /guild/<slug>/… 아래에 있으면 그 길드의 얼굴로 같은 페이지를 보여준다.
    데이터는 하나이고, 목록 API 에 guild=<slug> 만 붙는다. */
 const Site = (() => {
-  const m = location.pathname.match(/^\/guild\/([a-z0-9-]+)(\/|$)/);
-  const slug = m ? m[1] : null;
+  /* slug 는 한글일 수 있다. 실제로 길드 13개가 전부 한글이다 — 이름을 그대로 쓰고
+     공백만 하이픈으로 바꾼 형태다. 전에는 여기서 [a-z0-9-]+ 만 받아서 그 13개가
+     모두 null 이 됐고, 목록에서 '길드 입장하기' 를 눌러도 찾을 수 없다고 떴다.
+     슬래시가 아닌 것은 전부 받고 되돌린다. 주소창의 값은 퍼센트 인코딩돼 있다. */
+  const m = location.pathname.match(/^\/guild\/([^/]+)(\/|$)/);
+  let slug = null;
+  if (m) { try { slug = decodeURIComponent(m[1]); } catch { slug = m[1]; } }
   return {
     slug,
-    base: slug ? `/guild/${slug}` : '',
+    /* 링크를 만드는 값이라 인코딩한 것을 갖는다. 날것을 이어 붙이면 한글 주소가 깨진다. */
+    base: slug ? `/guild/${encodeURIComponent(slug)}` : '',
     info: null,                       /* 길드 정보. mountChrome 이 채운다 */
     /* 목록 API 에 길드 조건을 붙인다. 길드 밖에서는 그대로. */
     q(url) {
@@ -70,6 +76,115 @@ const Site = (() => {
     body(obj) { return slug ? { ...obj, guildSlug: slug } : obj; },
   };
 })();
+
+/* ---------- 테마 ----------
+   길드가 고르는 프리셋. 값은 common/themes.css 에 있고 여기서는 이름만 건다.
+   지금은 주소로만 건다 — 길드가 고른 테마를 저장할 칸(guilds.theme)이 아직 없다.
+   목록에 있는 이름만 받는다. 자유 문자열을 그대로 꽂으면 CSS 주입이 된다. */
+const THEMES = ['takeoff', 'miku', 'melody', 'city', 'temple', 'wood', 'nature', 'medieval', 'sea', 'deepsea'];
+function applyTheme(name) {
+  if (THEMES.includes(name)) document.documentElement.dataset.theme = name;
+  else delete document.documentElement.dataset.theme;
+}
+/* 주소에 ?theme= 이 있을 때만 건드린다.
+   그냥 applyTheme(null) 을 부르면 속성을 지우는데, 서버가 첫 그림이 번쩍이지 않도록
+   <html data-theme="…"> 을 박아 보내므로 그걸 곧바로 지워 버린다. */
+{
+  const q = new URLSearchParams(location.search).get('theme');
+  if (q) applyTheme(q);
+}
+
+/* ---------- 길드 색 ----------
+   길드가 색 하나를 고르면 화면 전체가 그 색을 입는다.
+
+   전에는 --accent 하나만 덮었다. 그런데 사이트는 --teal-deep 을 95곳에서 쓰고
+   --teal-soft 를 14곳에서 쓴다. 그 둘이 기본 청록으로 남아서, 길드가 빨강을 골라도
+   제목·링크·강조 글자는 청록이었다. 이제 셋을 다 만든다.
+
+   고정 비율로 어둡게 하는 방법은 못 쓴다. #8b2f2f 는 60% 로도 대비 13.5 지만
+   #ffff00 은 3.04 라 미달이다. 그래서 색마다 4.5 를 넘을 때까지 실제로 계산한다.
+   tokens.css 가 적어둔 기준(본문 글자는 바탕 대비 4.5 이상)을 길드 색에도 지킨다. */
+const Tone = {
+  rgb(h) {
+    h = String(h).trim().replace('#', '');
+    if (h.length === 3) h = [...h].map((c) => c + c).join('');
+    if (!/^[0-9a-f]{6}$/i.test(h)) return null;
+    return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  },
+  hex(c) { return '#' + c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join(''); },
+  lum(c) {
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+  },
+  ratio(a, b) {
+    const la = this.lum(a), lb = this.lum(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  },
+  mix(c, other, pct) { return c.map((v, i) => v * pct + other[i] * (1 - pct)); },
+  /* 이 바탕 위에서 목표 대비를 넘을 때까지 바탕 반대쪽으로 당긴다.
+     밝은 바탕이면 검정 쪽, 어두운 바탕이면 흰 쪽이다. 5%씩 20번이면 끝에 닿는다.
+     전에는 흰 바탕만 가정하고 늘 검정 쪽으로 당겼다 — 어두운 테마에서는
+     글자를 바탕에 더 묻는 짓이라 정반대였다. */
+  fit(c, bg, target = 4.5) {
+    const end = this.lum(bg) > 0.4 ? [0, 0, 0] : [255, 255, 255];
+    for (let p = 1; p >= 0; p -= 0.05) {
+      const t = this.mix(c, end, p);
+      if (this.ratio(t, bg) >= target) return t;
+    }
+    return end;
+  },
+  /* 이 색을 바탕으로 깔았을 때 그 위에 얹을 글자색.
+     흰 글자가 되면 흰 글자를, 안 되면 같은 색을 어둡게 당겨 쓴다.
+     고정 비율로 어둡게 하면 #ef2f88 같은 색에서 4.48 로 아슬하게 미달한다. */
+  onTop(c, target = 4.5) {
+    const W = [255, 255, 255];
+    if (this.ratio(c, W) >= target) return W;
+    for (let p = 0.6; p >= 0; p -= 0.05) {
+      const t = this.mix(c, [0, 0, 0], p);
+      if (this.ratio(c, t) >= target) return t;
+    }
+    return [0, 0, 0];
+  },
+};
+/* 길드가 정한 색 하나에서 파생 토큰을 만든다.
+
+   섞을 상대는 흰색이 아니라 '지금 테마의 종이색' 이다. 전에는 전부 흰색에 섞었는데,
+   도시 같은 어두운 테마에서 --mine 이 거의 흰 민트가 되고 그 위에 밝은 --ink 글자가
+   얹혀 아무것도 안 읽혔다. 파티창의 내 자리가 실제로 그렇게 됐다.
+   밝은 테마는 종이색이 흰색이라 결과가 전과 같다 — 화면이 안 바뀐다. */
+function applyGuildColor(color) {
+  const c = Tone.rgb(color);
+  if (!c) return;
+  const root = document.documentElement.style;
+  const paper = Tone.rgb(getComputedStyle(document.documentElement).getPropertyValue('--paper'))
+    || [255, 255, 255];
+  root.setProperty('--accent', Tone.hex(c));
+  root.setProperty('--accent-deep', Tone.hex(Tone.fit(c, paper)));
+  root.setProperty('--accent-soft', Tone.hex(Tone.mix(c, paper, 0.14)));
+  root.setProperty('--on-accent', Tone.hex(Tone.onTop(c)));
+  /* 내가 낀 자리. 글자가 얹히므로 종이색 쪽으로 충분히 옅게 둔다. */
+  root.setProperty('--mine', Tone.hex(Tone.mix(c, paper, 0.34)));
+  root.setProperty('--mine-hover', Tone.hex(Tone.mix(c, paper, 0.46)));
+}
+
+/* 판 위(길드 이름·모집 버튼·GUILD 라벨)에 앉는 글자색.
+   기본은 applyGuildColor 가 4.5 를 넘도록 계산한 값이고, 길드가 직접 고르면 그 값이 이긴다.
+   hex 가 없으면 지금 강조색에서 다시 계산한다 — '자동' 으로 되돌리는 길이다. */
+function applyGuildInk(hex) {
+  const root = document.documentElement.style;
+  if (hex && /^#[0-9a-f]{6}$/i.test(hex)) { root.setProperty('--on-accent', hex); return; }
+  const acc = Tone.rgb(getComputedStyle(document.documentElement).getPropertyValue('--accent'));
+  if (acc) root.setProperty('--on-accent', Tone.hex(Tone.onTop(acc)));
+  else root.removeProperty('--on-accent');
+}
+
+/* 걸어 둔 길드색을 떼고 테마가 정한 값으로 돌려놓는다.
+   편집 창에서 색을 골라 보다가 취소했을 때 쓴다. */
+function clearGuildColor() {
+  const root = document.documentElement.style;
+  ['--accent', '--accent-deep', '--accent-soft', '--on-accent', '--mine', '--mine-hover']
+    .forEach((k) => root.removeProperty(k));
+}
 
 const api = {
   async get(url) {
@@ -214,6 +329,40 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+/* 되묻는 창. 브라우저 confirm() 은 사이트와 다른 얼굴로 뜨고, 문장 말고는 아무것도 못 담는다.
+   body 는 HTML 이므로 부르는 쪽이 escapeHtml 을 거쳐 넘긴다.
+   곡·악보는 아직 native confirm() 을 쓴다 — 그 페이지를 개선할 때 이리로 옮긴다. */
+function confirmModal({ title, body, confirm = '확인', cancel = '취소', danger = false }) {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML = `
+      <div class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+        <h3 class="modal-title" id="confirm-title">${escapeHtml(title)}</h3>
+        <div class="modal-form">
+          <p class="confirm-body">${body}</p>
+          <button type="button" class="${danger ? 'danger' : 'pink'}" data-ok>${escapeHtml(confirm)}</button>
+          <button type="button" class="ghost" data-no>${escapeHtml(cancel)}</button>
+        </div>
+      </div>`;
+    const previousFocus = document.activeElement;
+    const close = (v) => {
+      document.removeEventListener('keydown', onKey);
+      backdrop.remove();
+      previousFocus?.focus();
+      resolve(v);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') close(false); };
+    document.addEventListener('keydown', onKey);
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop || e.target.closest('[data-no]')) close(false);
+      else if (e.target.closest('[data-ok]')) close(true);
+    });
+    document.body.appendChild(backdrop);
+    backdrop.querySelector('[data-ok]').focus();
+  });
+}
+
 const ICONS = {
   music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
@@ -228,6 +377,8 @@ const ICONS = {
   home: '<path d="M3 11 12 3l9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   shield: '<path d="M12 22s8-3 8-10V5l-8-3-8 3v7c0 7 8 10 8 10z"/>',
+  sliders: '<path d="M4 6h8M17 6h3M4 12h3M12 12h8M4 18h10M19 18h1"/><circle cx="14.5" cy="6" r="2"/><circle cx="9.5" cy="12" r="2"/><circle cx="16.5" cy="18" r="2"/>',
+  pencil: '<path d="M4 20h4l10.5-10.5a2.83 2.83 0 1 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   up: '<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>',
 };
@@ -265,21 +416,25 @@ const TABS = [
   { key: 'sheets', label: '악보', icon: 'fileText', href: '/sheets/', scoped: false },
 ];
 
-/* 길드 배지 — 곡·일정 옆에 붙는 작은 소속 표시. 색은 길드가 정한 색. */
+/* 길드 배지 — 곡·일정 옆에 붙는 작은 소속 표시. 색은 길드가 정한 색.
+   앞에 붙는 그림은 길드 문장이다. crest.js 를 안 싣는 페이지도 있으므로 있을 때만 그린다. */
 function guildBadge(guild, extra = '') {
   if (!guild) return '';
   const color = guild.color || 'var(--teal-deep)';
+  const mark = (typeof crestSvg === 'function' && crestSvg(guild.style?.crest, 13)) || '';
   return `<span class="guild-badge ${extra}" style="--g:${escapeHtml(color)}" title="${escapeHtml(guild.name)}">` +
-    `<span>${guild.emblem ? escapeHtml(guild.emblem) + ' ' : ''}${escapeHtml(guild.name)}</span></span>`;
+    `${mark}<span>${escapeHtml(guild.name)}</span></span>`;
 }
 
 /* 임시 로고 마크. 이륙각으로 올라가는 기체.
    실제 로고가 나오면 이 상수의 SVG 만 통째로 교체하면 된다. 다른 곳은 건드릴 필요 없다. */
-const BRAND_MARK = '<span class="brand-mark" aria-hidden="true">'
-  + '<svg viewBox="0 0 24 24"><path d="M2.5 18.5h13"/><path d="M6 14.2 19.2 5.4a2 2 0 0 1 2.4 3.1L12.3 16"/><path d="m9.4 10.6-3.9-1.1 2-1.5 2.6.6"/></svg>'
-  + '</span>';
+/* 공식 로고. 1782×780 투명 PNG 이고, 글자(不法離陸)가 그림에 들어 있어
+   옆에 사이트 이름을 따로 쓰지 않는다. 이름은 alt 가 들고 간다.
+   로고를 갈 때는 frontend/assets/logo.png 만 바꾸면 된다. */
+const BRAND_MARK = `<img class="brand-mark" src="/assets/logo.png" alt="${SITE_NAME}" />`;
 
 function mountChrome(activeKey) {
+  Profiles.seed();                    /* 헤더를 그리기 전에 내 프로필을 채운다 */
   const header = document.getElementById('app-header');
   if (header) {
     /* 헤더에는 나 하나뿐이라 이름만 쓴다. 아바타 동그라미는 여러 사람이 나오는
@@ -291,17 +446,36 @@ function mountChrome(activeKey) {
         : '<button type="button" class="name-text" id="name-btn">닉네임 입력</button>';
     };
     const brand = () => {
-      if (!Site.slug) return `<a class="brand" href="/">${BRAND_MARK}${SITE_NAME}</a>`;
+      if (!Site.slug) return `<a class="brand" href="/">${BRAND_MARK}</a>`;
       const g = Site.info;
       const name = g ? g.name : Site.slug;
-      const emblem = g && g.emblem ? `<span class="brand-emblem">${escapeHtml(g.emblem)}</span>` : '';
+      /* 길드 이름 앞의 문장. 이모지 엠블럼을 대신한다. */
+      const svg = (g && typeof crestSvg === 'function' && crestSvg(g.style?.crest, 26)) || '';
+      const crestMark = svg ? `<span class="brand-emblem">${svg}</span>` : '';
+      /* 길드 안이라는 걸 이름만으로는 알기 어렵다. GUILD 라벨을 붙이고
+         헤더 아래 선을 길드 색으로 물들인다(common.css 의 .app-bar.is-guild). */
       return `<span class="brand-set">` +
-        `<a class="brand-home" href="/">${SITE_NAME}</a>` +
-        `<a class="brand is-guild" href="${Site.base}/">${emblem || BRAND_MARK}${escapeHtml(name)}</a></span>`;
+        `<a class="brand-home" href="/">${BRAND_MARK}</a>` +
+        `<a class="brand is-guild" href="${Site.base}/">${crestMark}` +
+        `<span class="brand-guild"><span class="overline"><span>GUILD</span></span>` +
+        `<b>${escapeHtml(name)}</b></span></a></span>`;
     };
+    /* 내비는 두 덩이다. 앞 셋은 길드 안에 머물고 뒤 셋은 길드 밖으로 나간다.
+       전에는 여섯이 똑같이 생겨서, 악보를 누르면 길드에서 나가는데 아무 표시가 없었다.
+       나가는 쪽에 ↗ 를 달고 사이를 벌린다. 길드 밖에서는 둘이 같은 곳이라 표시가 없다.
+       길드 안의 첫 항목은 '홈' 이 아니라 길드 이름이다 — 어디로 가는지가 글자에 나온다. */
     const paintHeader = () => {
-      const items = [['home','홈',Site.base+'/'],['songs','곡',Site.base+'/songs/'],['schedule','모임 · 일정',Site.base+'/schedule/'],['sheets','악보','/sheets/'],['guilds','길드','/guilds/'],['members','멤버','/members/']];
-      header.innerHTML = brand() + '<nav class="game-nav" aria-label="주요 메뉴">' + items.map(([key,label,href]) => `<a href="${href}"${key===activeKey?' aria-current="page"':''}><span>${label}</span></a>`).join('') + '</nav>' + nameBtn();
+      const inGuild = !!Site.slug;
+      const homeLabel = inGuild ? ((Site.info && Site.info.name) || Site.slug) : '홈';
+      const inside = [['home',homeLabel,Site.base+'/'],['songs','곡',Site.base+'/songs/'],['schedule','모임 · 일정',Site.base+'/schedule/']];
+      const outside = [['sheets','악보','/sheets/'],['guilds','길드','/guilds/'],['members','멤버','/members/']];
+      const link = ([key,label,href],out) => `<a href="${href}"${key===activeKey?' aria-current="page"':''}${out&&inGuild?' class="is-out"':''}><span>${escapeHtml(label)}</span></a>`;
+      header.innerHTML = brand() +
+        `<nav class="game-nav${inGuild?' in-guild':''}" aria-label="주요 메뉴">` +
+        inside.map((it) => link(it, false)).join('') +
+        (inGuild ? '<span class="nav-gap" aria-hidden="true"></span>' : '') +
+        outside.map((it) => link(it, true)).join('') +
+        '</nav>' + nameBtn();
     };
     paintHeader();
     header.addEventListener('click', async (e) => {
@@ -316,11 +490,26 @@ function mountChrome(activeKey) {
 
     /* 길드 안이면 이름과 색을 받아 헤더를 그 길드로 물들인다 */
     if (Site.slug) {
+      header.classList.add('is-guild');
+      /* 이름·색·문장만 있으면 헤더는 완성된다. 그 셋을 먼저 그리고 응답을 기다린다. */
+      const seen = Seen.get('guild:' + Site.slug);
+      if (seen) {
+        Site.info = seen;
+        if (seen.color) applyGuildColor(seen.color);
+        applyGuildInk(seen.style?.ink);
+        paintHeader();
+      }
       api.get(`/guilds/${encodeURIComponent(Site.slug)}`).then((g) => {
         Site.info = g;
-        if (g.color) document.documentElement.style.setProperty('--accent', g.color);
+        /* 길드가 고른 테마. 주소의 ?theme= 이 있으면 그쪽이 이긴다 — 미리보기용이다.
+           색보다 먼저 걸어야 한다. applyGuildColor 가 지금 테마의 --paper 를 읽어서
+           섞기 때문에, 순서가 뒤집히면 어두운 테마인데 흰 종이 기준으로 계산한다. */
+        if (!new URLSearchParams(location.search).get('theme')) applyTheme(g.style?.theme || null);
+        if (g.color) applyGuildColor(g.color);
+        applyGuildInk(g.style?.ink);
         document.title = document.title.replace(SITE_NAME, g.name);
         paintHeader();
+        Seen.set('guild:' + Site.slug, { name: g.name, color: g.color, style: g.style });
         document.dispatchEvent(new Event('guildinfo'));
       }).catch(() => {});
     }
@@ -360,24 +549,53 @@ function nickColor(name) {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
+/* ---------- 마지막으로 본 값 ----------
+   헤더의 길드 문장과 내 프로필 사진은 API 응답이 와야 그려진다. 그래서 페이지를 옮길
+   때마다 한 번 사라졌다가 나타났다. 마지막으로 본 값을 남겨 두고 그것으로 먼저 그린 뒤,
+   응답이 오면 덮어쓴다. 요청 수는 그대로고, 문장 SVG 와 사진 파일은 이미 브라우저
+   캐시에 있어서 곧바로 뜬다.
+
+   localStorage 를 막아 둔 브라우저에서는 조용히 실패하고 전과 똑같이 동작한다 —
+   한 박자 늦게 뜰 뿐이다. 그래서 읽기·쓰기를 전부 감싼다. */
+const Seen = {
+  get(key) {
+    try { return JSON.parse(localStorage.getItem('seen:' + key) || 'null'); } catch { return null; }
+  },
+  set(key, value) {
+    try { localStorage.setItem('seen:' + key, JSON.stringify(value)); } catch { /* 사생활 보호 창 */ }
+  },
+};
+
 /* ---------- 멤버 프로필 캐시 ----------
    아바타 칩이 이미지·이모지·색을 따르려면 프로필을 알아야 한다. 페이지당 한 번 받고,
    받은 뒤 'profiles' 이벤트를 쏘면 각 화면이 다시 그린다. */
 const Profiles = {
   map: Object.create(null),
   loaded: false,
+  /* 내 것만 미리 채운다. 헤더의 아바타가 /members 왕복을 기다리지 않게 한다. */
+  seed() {
+    const n = Nick.get();
+    const m = n && Seen.get('me:' + n);
+    if (m) this.map[n] = m;
+  },
   async load() {
     try {
       const rows = await api.get('/members');
       this.map = Object.create(null);
       rows.forEach((m) => { this.map[m.nickname] = m; });
       this.loaded = true;
+      const me = Nick.get();
+      if (me && this.map[me]) Seen.set('me:' + me, this.map[me]);
       document.dispatchEvent(new Event('profiles'));
     } catch (e) { /* 프로필이 없어도 첫 글자 칩으로 그려진다 */ }
   },
   get(name) { return this.map[name] || null; },
   /* 프로필을 고친 뒤 캐시에 바로 반영 */
-  put(m) { this.map[m.nickname] = m; document.dispatchEvent(new Event('profiles')); },
+  put(m) {
+    this.map[m.nickname] = m;
+    if (m.nickname === Nick.get()) Seen.set('me:' + m.nickname, m);
+    document.dispatchEvent(new Event('profiles'));
+  },
 };
 
 function imageUrl(m) {

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <!-- 폴더 이름이 guild 가 아니라 guild-home 인 이유:
+       backend/main.py 의 @app.get('/guild/{slug}/{path:path}') 가 /guild/ 로 시작하는 주소를
+       전부 삼킨다. /guild/css/guild.css 를 걸면 라우터가 slug="css" 로 읽어 404 를 낸다.
+       이름이 겹칠 수 없게 두는 것이 예외 처리보다 안전하다 — 슬러그가 'css' 인 길드가
+       생겨도 깨지지 않는다. 되돌리지 말 것. -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>불법이륙</title>
+  <link rel="stylesheet" href="/common/tokens.css?v=4" />
+  <link rel="stylesheet" href="/common/themes.css?v=4" />
+  <link rel="stylesheet" href="/common/common.css?v=4" />
+  <link rel="stylesheet" href="/common/peek.css?v=4" />
+  <link rel="stylesheet" href="/common/profile.css?v=4" />
+  <link rel="stylesheet" href="/common/party.css?v=4" />
+  <link rel="stylesheet" href="/common/draw.css?v=4" />
+  <link rel="stylesheet" href="/guild-home/css/guild-home.css?v=4" />
+</head>
+<body>
+  <header id="app-header" class="app-bar"></header>
+  <main class="container guild">
+    <p id="guild-error" class="form-error" role="alert" hidden></p>
+    <div id="screen" aria-busy="true"></div>
+  </main>
+  <nav id="app-tabbar" class="tab-bar"></nav>
+  <script src="/common/common.js?v=4"></script>
+  <script src="/common/crop.js?v=4"></script>
+  <script src="/common/profile.js?v=4"></script>
+  <script src="/common/peek.js?v=4"></script>
+  <script src="/common/guild.js?v=4"></script>
+  <script src="/common/party.js?v=4"></script>
+  <script src="/common/crest.js?v=4"></script>
+  <script src="/common/draw.js?v=4"></script>
+  <script src="/guild-home/js/guild-home.js?v=4"></script>
+</body>
+</html>

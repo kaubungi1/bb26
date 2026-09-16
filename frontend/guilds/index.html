@@ -5,24 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>길드 - 불법이륙</title>
   <link rel="stylesheet" href="/common/tokens.css?v=4" />
+  <link rel="stylesheet" href="/common/themes.css?v=4" />
   <link rel="stylesheet" href="/common/common.css?v=4" />
+  <link rel="stylesheet" href="/common/peek.css?v=4" />
   <link rel="stylesheet" href="/common/profile.css?v=4" />
+  <link rel="stylesheet" href="/common/party.css?v=4" />
   <link rel="stylesheet" href="/guilds/css/guilds.css?v=4" />
-  <link rel="stylesheet" href="/common/game.css?v=4" />
 </head>
 <body>
   <header id="app-header" class="app-bar"></header>
-  <main class="container">
-    <section class="card">
-      <div class="section-head"><h2>길드</h2><button id="create-guild" class="add-btn-sm" type="button">길드 만들기</button></div>
-      <input id="guild-search" type="search" placeholder="길드 · 멤버 검색" aria-label="길드 검색" />
+  <main class="container guilds">
+    <section class="list-page">
+      <div class="list-head">
+        <div>
+          <span class="overline"><span>GUILDS</span></span>
+          <h1>길드<small id="guild-count"></small></h1>
+        </div>
+        <button type="button" class="add-link" id="create-guild">＋ 길드 만들기</button>
+      </div>
+
+      <div class="tool-line">
+        <label class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="guild-search" class="search-box" placeholder="길드 · 슬로건 · 멤버" aria-label="길드 · 슬로건 · 멤버 검색" autocomplete="off" />
+        </label>
+      </div>
+
       <p id="guild-error" class="form-error" role="alert" hidden></p>
-      <div id="guild-list" class="guild-list"></div>
+      <div id="guild-list" class="party-list"></div>
     </section>
   </main>
   <nav id="app-tabbar" class="tab-bar"></nav>
   <script src="/common/common.js?v=4"></script><script src="/common/crop.js?v=4"></script><script src="/common/profile.js?v=4"></script>
+  <script src="/common/peek.js?v=4"></script>
   <script src="/common/guild.js?v=4"></script>
+  <script src="/common/crest.js?v=4"></script>
+  <script src="/common/party.js?v=4"></script>
   <script src="/guilds/js/guilds.js?v=4"></script>
 </body>
 </html>

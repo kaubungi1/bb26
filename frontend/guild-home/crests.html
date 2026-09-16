@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>길드 문장 — 고르는 화면</title>
+  <!-- 문양을 눈으로 고르는 화면. 서버가 /guild-home/ 아래를 그대로 내려주므로
+       http://127.0.0.1:8000/guild-home/crests.html 로 열린다.
+       문장을 누르면 그 조합의 주소가 복사된다 — 길드 페이지에 ?crest= 로 붙여 보면 된다. -->
+  <link rel="stylesheet" href="/common/tokens.css?v=4" />
+  <link rel="stylesheet" href="/common/themes.css?v=4" />
+  <link rel="stylesheet" href="/common/common.css?v=4" />
+  <style>
+    .wrap { max-width: 1280px; margin: auto; padding: 28px 32px 60px; }
+    h1 { font-size: 30px; margin: 4px 0 2px; letter-spacing: -0.03em; }
+    .sub { margin: 0 0 20px; font-size: 13px; color: var(--ink-muted); }
+    .bar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+           padding: 14px 0; border-block: 2px solid var(--ink); margin-bottom: 24px; }
+    .bar label { display: flex; align-items: center; gap: 7px; font-size: 11px;
+                 font-weight: 800; letter-spacing: 0.14em; color: var(--ink-faint); }
+    .bar input[type=color] { width: 44px; height: 30px; min-height: 30px; padding: 2px; border: 0; }
+    .bar .swaps { display: flex; gap: 3px; }
+    .bar .swaps button { min-height: 28px; padding: 0 10px; border: 0; border-radius: 0;
+                         background: var(--empty); color: var(--ink-muted);
+                         font-size: 11px; font-weight: 800; box-shadow: none; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 18px 12px; }
+    .cell { display: flex; flex-direction: column; align-items: stretch; gap: 7px;
+            padding: 10px 6px; border: 0; background: none; box-shadow: none; cursor: pointer; }
+    /* 육각이 칸 폭을 꽉 채운다. 칸이 더 크면 그 빈틈에서 어긋나 보인다. */
+    .cell svg { display: block; width: 100%; height: auto; }
+    .cell small, .cell code { text-align: center; }
+    .cell:hover { background: var(--empty); filter: none; }
+    .cell small { font-size: 11px; font-weight: 800; color: var(--ink-muted); }
+    .cell code { font-size: 9.5px; color: var(--ink-faint); letter-spacing: 0.02em; }
+    .note { margin-top: 26px; font-size: 12px; line-height: 1.7; color: var(--ink-muted); }
+    .note b { color: var(--ink); }
+    #toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+             padding: 10px 18px; background: var(--ink); color: #fff;
+             font-size: 12px; font-weight: 800; opacity: 0; transition: opacity .2s; pointer-events: none; }
+    #toast.on { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <span class="overline"><span>GUILD CREST</span></span>
+    <h1>길드 문장</h1>
+    <p class="sub">육각 틀 + 문양 + 색 둘. 아래 색을 바꾸면 전부 따라 바뀝니다. 문장을 누르면 주소가 복사됩니다.</p>
+
+    <div class="bar">
+      <label>바탕<input type="color" id="bg" value="#00b8ad" /></label>
+      <label>문양<input type="color" id="fg" value="#ffffff" /></label>
+      <span class="swaps" id="swaps"></span>
+      <button type="button" id="flip" class="ghost">색 뒤집기</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <p class="note">
+      길드 페이지에 붙여 보려면 주소 뒤에 <b>?crest=문양:바탕:문양색</b> 을 붙입니다.<br />
+      예 — <b>/guild/아카이브/?crest=plane:00b8ad:ffffff</b><br />
+      테마와 같이 보려면 <b>&amp;theme=medieval</b> 처럼 이어 붙이면 됩니다.
+    </p>
+  </div>
+  <div id="toast">복사했습니다</div>
+
+  <script src="/common/crest.js?v=4"></script>
+  <script>
+    const PRESETS = [
+      ['#00b8ad', '#ffffff'], ['#1b2a45', '#ffffff'], ['#ef2f88', '#ffffff'],
+      ['#c9a227', '#2b2206'], ['#8b2f2f', '#fdf3e6'], ['#477c4b', '#ffffff'],
+      ['#4a6fa5', '#ffffff'], ['#ffffff', '#1b2a45'],
+    ];
+    const bg = document.getElementById('bg');
+    const fg = document.getElementById('fg');
+
+    document.getElementById('swaps').innerHTML =
+      PRESETS.map(([b, f], i) => `<button type="button" data-preset="${i}"
+        style="background:${b};color:${f}">Aa</button>`).join('');
+
+    function paint() {
+      document.getElementById('grid').innerHTML = Object.keys(CREST_SHAPES).map((k) => `
+        <button type="button" class="cell" data-shape="${k}">
+          ${crestSvg({ shape: k, bg: bg.value, fg: fg.value }, 72)}
+          <small>${CREST_NAMES[k] || k}</small>
+          <code>${k}</code>
+        </button>`).join('');
+    }
+    paint();
+
+    bg.addEventListener('input', paint);
+    fg.addEventListener('input', paint);
+    document.getElementById('flip').addEventListener('click', () => {
+      const a = bg.value; bg.value = fg.value; fg.value = a; paint();
+    });
+    document.getElementById('swaps').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-preset]');
+      if (!b) return;
+      [bg.value, fg.value] = PRESETS[+b.dataset.preset];
+      paint();
+    });
+
+    const toast = document.getElementById('toast');
+    document.getElementById('grid').addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-shape]');
+      if (!b) return;
+      const q = `?crest=${b.dataset.shape}:${bg.value.slice(1)}:${fg.value.slice(1)}`;
+      try { await navigator.clipboard.writeText(q); } catch {}
+      toast.textContent = q;
+      toast.classList.add('on');
+      setTimeout(() => toast.classList.remove('on'), 1600);
+    });
+  </script>
+</body>
+</html>

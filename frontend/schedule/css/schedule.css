@@ -1,132 +1,5 @@
 /* 일정 */
 
-/* --- 달력 --- */
-.cal-nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.cal-nav-btn {
-  width: 34px;
-  min-height: 34px;
-  padding: 0;
-  font-size: 20px;
-  border-radius: 10px;
-}
-.cal-title {
-  font-weight: 800;
-  font-size: 15px;
-  min-width: 96px;
-  text-align: center;
-  color: var(--ink);
-}
-.calendar {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: #fff;
-}
-.cal-week {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--ink-muted);
-  text-align: center;
-  padding: 8px 0 6px;
-  background: var(--bg);
-  border-right: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-.cal-week:nth-child(7n) { border-right: none; }
-.cal-week.sunday { color: var(--pink); }
-.cal-week.saturday { color: #2f6f9e; }
-.cal-cell {
-  min-height: 64px;
-  padding: 6px 6px 4px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  background: #fff;
-  border-right: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  transition: background 0.15s;
-  overflow: hidden;
-}
-.cal-cell:nth-child(7n) { border-right: none; }
-.cal-cell:nth-last-child(-n + 7) { border-bottom: none; }
-.cal-cell:hover { background: rgba(0, 184, 173, 0.05); }
-.cal-cell.empty { background: transparent; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); cursor: default; pointer-events: none; }
-.cal-cell.selected {
-  background: linear-gradient(135deg, rgba(46, 230, 212, 0.2), rgba(34, 184, 230, 0.12));
-}
-.cal-cell.today.selected { background: var(--teal-soft); }
-.cal-cell.in-range { background: rgba(236, 72, 153, 0.09); }
-.cal-cell.selected.in-range { background: var(--teal-soft); }
-.cal-day-num {
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--ink);
-  line-height: 1.4;
-}
-/* 오늘 — 기울어진 그라데이션 태그로 한눈에 */
-.cal-cell.today .cal-day-num {
-  color: #fff;
-  background: var(--grad-teal);
-  transform: skewX(var(--skew));
-  border-radius: 4px;
-  width: 21px;
-  height: 19px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--glow-teal);
-}
-.cal-cell.today .cal-day-num > span { display: block; transform: skewX(calc(var(--skew) * -1)); }
-.cal-cell.sunday .cal-day-num { color: var(--pink); }
-.cal-cell.sunday.today .cal-day-num { color: #fff; }
-.cal-cell.past .cal-day-num { color: var(--ink-muted); }
-.cal-cell.past .cal-event-icon,
-.cal-cell.past .cal-event-text { opacity: 0.55; }
-.cal-events { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
-.cal-event { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.cal-event-icon { line-height: 1; color: var(--pink); }
-.cal-event.confirmed .cal-event-icon { color: var(--teal-deep); }
-.cal-event-text {
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--pink);
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.cal-event.confirmed .cal-event-text { color: var(--teal-deep); }
-.cal-event-more { font-size: 9px; font-weight: 700; color: var(--ink-muted); }
-.cal-legend {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 12px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ink-muted);
-}
-.cal-legend > span { display: inline-flex; align-items: center; gap: 5px; }
-.cal-legend .ghost { margin-left: auto; min-height: 30px; padding: 3px 12px; }
-.legend-dot {
-  width: 9px;
-  height: 9px;
-  transform: skewX(var(--skew));
-  border-radius: 2px;
-  display: inline-block;
-}
-.legend-dot.confirmed { background: var(--teal); }
-.legend-dot.polling { background: var(--pink); }
-
 /* --- 조율 중 목록 --- */
 .poll-list { display: flex; flex-direction: column; }
 .poll-item {
@@ -139,20 +12,23 @@
 }
 .poll-item:last-child { border-bottom: none; }
 .poll-item:hover .poll-item-title { color: var(--teal-deep); }
-.poll-item-badge {
-  flex: 0 0 auto;
+/* 상태는 제목 위 한 줄이다. 홈의 .home .meeting small 과 같은 값을 쓴다 —
+   같은 일정이 화면마다 다른 자리에 있으면 같은 물건으로 안 읽힌다. */
+.poll-item-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 10px;
   font-weight: 800;
-  color: #d95296;
-  background: rgba(236, 72, 153, 0.1);
-  transform: skewX(var(--skew));
-  border-radius: 4px;
-  padding: 3px 9px;
+  letter-spacing: 0.1em;
+  color: var(--teal-deep);
 }
-.poll-item-badge > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
+.poll-item-status.is-past { color: var(--ink-faint); }
 .poll-item-info { flex: 1; min-width: 0; }
-.poll-item-title { font-weight: 700; font-size: 15px; transition: color 0.15s; }
-.poll-item-meta { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
+.poll-item-title { font-weight: 800; font-size: 17px; margin: 4px 0 3px;
+  overflow-wrap: anywhere; transition: color 0.15s; }
+.poll-item-meta { font-size: 12px; color: var(--ink-muted); margin: 0;
+  font-variant-numeric: tabular-nums; }
 .poll-item-count {
   flex: 0 0 auto;
   text-align: right;
@@ -164,24 +40,6 @@
 .poll-item-count .max { color: var(--pink); }
 .empty-msg { padding: 8px 0; }
 
-/* --- 선택 날짜 상세 --- */
-#day-card h2 { font-size: 15px; }
-.day-item {
-  padding: 12px 2px;
-  border-bottom: 1px solid var(--line);
-}
-.day-item:last-child { border-bottom: none; }
-.day-item-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-.day-item-title { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 6px; }
-.day-item-sub { font-size: 12px; color: var(--ink-muted); margin-top: 3px; line-height: 1.5; }
-.day-item .ghost { flex-shrink: 0; min-height: 30px; padding: 3px 10px; font-size: 12px; }
-.day-empty { padding: 8px 0; }
-
 /* --- 일정 추가 모달 --- */
 .range-row {
   display: flex;
@@ -191,38 +49,28 @@
 .range-row input { flex: 1; min-width: 0; }
 .range-tilde { color: var(--ink-muted); font-weight: 800; }
 
-/* --- 조율 매트릭스 풀스크린 --- */
-.fullscreen {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: var(--bg);
-  display: flex;
-  flex-direction: column;
-}
-.poll-view-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-bottom: 1px solid rgba(230, 238, 242, 0.9);
-}
-.poll-view-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.poll-view-title strong { font-size: 15px; font-weight: 800; overflow-wrap: anywhere; }
-.poll-view-title .muted { font-size: 12px; }
-.poll-view-head .ghost { flex-shrink: 0; min-height: 34px; padding: 4px 12px; }
-#poll-delete { color: var(--pink); }
-.poll-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 14px 16px calc(20px + var(--safe-bottom));
+/* --- 상세: 목록 안에서 펼친다 --- */
+/* 전체화면으로 덮지 않는다. 위아래에 다른 일정이 남아 있어야 지금 몇 번째를
+   보고 있는지 알 수 있고, 안드로이드 뒤로가기로 페이지를 떠나는 일도 없다. */
+/* 면과 여백은 common/eventcard.css 가 정한다. 여기서는 열린 표시만 맡는다. */
+.poll-entry .poll-item { border-bottom: none; }
+.poll-entry.is-open .poll-item-title { color: var(--teal-deep); }
+.poll-slot:empty { display: none; }
+.poll-detail {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+.poll-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.poll-detail-head .muted { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.poll-detail-head .ghost { flex: 0 0 auto; min-height: 30px; padding: 3px 10px; }
+#poll-delete { color: var(--pink); }
+
 .poll-toolbar {
   display: flex;
   align-items: center;
@@ -263,15 +111,15 @@
   bottom: 1px;
   height: 3px;
   transform: skewX(var(--skew));
-  border-radius: 2px;
-  background: var(--grad-teal);
+  border-radius: 0;
+  background: var(--teal);
 }
 #poll-hint { font-size: 12px; }
 
 /* --- 매트릭스 --- */
 .matrix-wrap {
   overflow-x: auto;
-  border-radius: 14px;
+  border-radius: 0;
   background: #fff;
   -webkit-overflow-scrolling: touch;
 }
@@ -289,7 +137,23 @@
   text-align: center;
   white-space: nowrap;
 }
-.matrix th.date-head { text-align: left; padding-left: 10px; }
+/* 몸통의 .date-cell 과 같이 고정한다. 머리만 static 이면 멤버를 오른쪽으로 밀 때
+   '후보 날짜' 만 왼쪽으로 빠져나간다 — 실측으로 27px 에서 -870px 까지 밀려났다.
+   background 와 z-index 가 같이 있어야 지나가는 멤버 이름이 글자 뒤로 비치지 않는다. */
+.matrix th.date-head {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #fff;
+  text-align: left;
+  padding-left: 10px;
+}
+/* border-spacing 이 3px 이라 고정 칸 바로 오른쪽에 칸이 아닌 3px 띠가 남는다.
+   칸은 고정 칸 밑으로 지나가지만 이 띠는 배경이 없어서, 지나가는 체크 표시가
+   날짜 옆에 깜빡이며 비쳤다(실측: 그 자리에서 .avail-check 가 잡혔다).
+   멈춰 있을 때 그 띠에 보이던 색(.matrix-wrap 의 흰 면)을 그대로 덮는다. */
+.matrix th.date-head,
+.matrix .date-cell { box-shadow: 3px 0 0 #fff; }
 .matrix th.member-col {
   max-width: 88px;
   overflow: hidden;
@@ -307,7 +171,7 @@
   font-weight: 700;
   font-size: 12px;
   white-space: nowrap;
-  border-radius: 8px 0 0 8px;
+  border-radius: 0;
 }
 .matrix .date-cell .dow { color: var(--ink-muted); font-weight: 600; margin-left: 3px; }
 .matrix .date-cell .dow.sunday { color: var(--pink); }
@@ -320,7 +184,7 @@
   color: var(--teal-deep);
   background: var(--teal-soft);
   transform: skewX(var(--skew));
-  border-radius: 3px;
+  border-radius: 0;
   padding: 1px 7px;
 }
 .date-cnt > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
@@ -333,7 +197,7 @@
   cursor: default;
   min-width: 34px;
   height: 30px;
-  border-radius: 7px;
+  border-radius: 0;
   background: rgba(22, 40, 47, 0.035);
   border: none;
 }
@@ -358,7 +222,6 @@
 .matrix tr.hot .avail-cell:not(.on) { background: var(--teal-soft); border-color: transparent; }
 .matrix tr.hot .avail-cell.mine:not(.on) { border-style: dashed; border-color: rgba(0, 184, 173, 0.55); }
 
-.poll-item-badge.confirmed { color: var(--teal-deep); background: var(--teal-soft); }
 
 /* --- 확정된 일정 매트릭스 --- */
 .matrix tr.fixed .date-cell { color: var(--teal-deep); background: var(--teal-soft); }
@@ -373,7 +236,7 @@
   color: #fff;
   background: var(--teal-deep);
   transform: skewX(var(--skew));
-  border-radius: 3px;
+  border-radius: 0;
   padding: 1px 7px;
 }
 .date-fixed > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
@@ -386,19 +249,18 @@
   gap: 12px;
   padding: 12px 14px;
   background: linear-gradient(135deg, rgba(46, 230, 212, 0.2), rgba(34, 184, 230, 0.12));
-  border-radius: 16px;
+  border-radius: 0;
 }
 .confirmed-info { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; font-weight: 700; }
 .confirmed-badge {
   flex: 0 0 auto;
   font-size: 10px;
   font-weight: 800;
-  color: #fff;
-  background: var(--grad-teal);
+  color: var(--on-ink);
+  background: var(--ink-fill);
   transform: skewX(var(--skew));
-  border-radius: 4px;
+  border-radius: 0;
   padding: 3px 10px;
-  box-shadow: var(--glow-teal);
 }
 .confirmed-badge > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
 .confirmed-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
@@ -415,11 +277,22 @@
 .ps-title { font-size: 15px; font-weight: 800; margin: 0; }
 .ps-wrap {
   overflow-x: auto;
-  border-radius: 14px;
+  border-radius: 0;
   background: #fff;
   -webkit-overflow-scrolling: touch;
 }
-.ps-table { border-collapse: collapse; width: 100%; min-width: max-content; }
+/* 열 폭은 우리가 정한다.
+   전에는 `min-width: max-content` 라 내용이 폭을 정했고, 길드 꼬리표 하나 · 한 자리에 선 셋 ·
+   확정 후 늘어나는 ＋ 열 중 아무거나로 표가 401px 이 되어 폰에서 Key·Dr 이 밖으로 나갔다
+   (390px 에서 Dr·＋, 360px 에서 Key·Dr·＋, 320px 에서 Gt2 부터 잘림 — 실측).
+   이 표의 본체는 파트 여섯 칸이다. 그게 안 보이면 "이 날 뭐가 되는지" 를 읽을 수 없다(§9.2).
+   그래서 여섯 칸을 먼저 세우고 남는 폭을 곡 이름이 먹는다. 곡 이름은 어차피 줄임표가 있다.
+
+   min-width 는 곡 이름이 읽을 수 없을 만큼 눌리는 지점의 바닥이다
+   (충족 44 + 파트 6×30 + 곡 64 = 288). 여기까지는 화면에 맞추고, 더 좁으면 그때 스크롤한다. */
+.ps-table { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 288px; }
+/* 좁은 화면에서 이 바닥을 다시 푸는 규칙은 아래 @media (max-width: 355px) 에 있다.
+   기본값을 전부 적은 뒤에 와야 이긴다 — 특정도가 같아서 순서가 곧 우선순위다. */
 .ps-table th {
   position: sticky;
   top: 0;
@@ -436,40 +309,49 @@
 .ps-table th.ps-song-head { padding-left: 4px; }
 /* 좁은 화면에선 역할을 축약해 6칸을 다 보여준다 */
 .ps-role-full { display: none; }
-.ps-table th.ps-role-head { padding: 9px 4px; }
+/* table-layout:fixed 는 첫 줄(thead)에 적힌 폭만 본다. 폭을 여기 모아 둔 이유다.
+   30px 은 가장 긴 축약어(Gt2·Key)가 좌우 2px 여백으로 들어가는 최소값이다. */
+.ps-table th.ps-role-head { width: 30px; padding: 9px 2px; }
+.ps-table th.ps-act-head { width: 32px; padding: 9px 2px; }
 .ps-table td { padding: 9px 8px; font-size: 12px; text-align: center; white-space: nowrap; }
 .ps-row { border-top: 1px solid var(--line); }
 /* 충족 개수가 바뀌는 지점에 굵은 구분선 — 위에서부터 훑을 때 단락이 보인다 */
 .ps-row.ps-gap { border-top: 2px solid #dde7ec; }
 
-.ps-score {
+/* `.ps-table td` 가 가운데 정렬을 걸어 둬서, 같은 무게로는 못 이긴다.
+   !important 대신 선택자를 한 단계 올려 이긴다. */
+.ps-table td.ps-score {
   position: sticky;
   left: 0;
   z-index: 2;
   background: #fff;
   width: 44px;
-  text-align: left !important;
-  padding-left: 10px !important;
+  text-align: left;
+  padding-left: 10px;
   font-variant-numeric: tabular-nums;
 }
-.ps-table th.ps-score-head { position: sticky; left: 0; z-index: 4; padding-left: 10px; }
+/* 44px 은 아래 td.ps-score 의 width 이자 곡 열이 붙는 자리(left:44px)다. 셋은 같이 움직인다. */
+.ps-table th.ps-score-head { position: sticky; left: 0; z-index: 4; width: 44px; padding-left: 10px; }
 .ps-table th.ps-song-head { position: sticky; left: 44px; z-index: 4; }
 .ps-score strong { font-size: 17px; font-weight: 800; color: var(--ink-muted); }
-.ps-score .skew-gauge { display: block; width: 30px; height: 4px; margin-top: 3px; }
+.ps-score .skew-gauge { display: none; }
 .ps-score span { font-size: 11px; font-weight: 700; color: var(--ink-muted); opacity: 0.7; }
 .ps-row.full .ps-score strong { color: var(--pink); }
 .ps-row.good .ps-score strong { color: var(--teal-deep); }
 .ps-row.half .ps-score strong { color: var(--teal); }
 
-.ps-song {
+/* max-width 를 걷었다. 폭은 이제 열이 정한다(table-layout:fixed) — 여기 숫자를 남겨 두면
+   어느 쪽이 진짜인지 알 수 없게 된다. 대신 넘치는 글자를 여기서 잘라야 한다.
+   fixed 는 내용을 알아서 자르지 않으므로, 안 자르면 옆 파트 칸 위로 글자가 올라탄다. */
+.ps-table td.ps-song {
   position: sticky;
   left: 44px;
   z-index: 2;
   background: #fff;
-  text-align: left !important;
-  padding-left: 4px !important;
-  padding-right: 10px !important;
-  max-width: 124px;
+  overflow: hidden;
+  text-align: left;
+  padding-left: 4px;
+  padding-right: 10px;
 }
 .ps-song-title {
   font-weight: 700;
@@ -477,15 +359,29 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 124px;
 }
-.ps-song-sub { font-size: 11px; color: var(--ink-muted); margin-top: 1px; }
+/* 아티스트·길드 꼬리표. 전에는 줄임표가 없어서 이 줄 하나가 곡 열을 124px 로 밀어
+   올렸고, 그만큼 Key·Dr 이 밖으로 나갔다. */
+.ps-song-sub {
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.ps-cell { min-width: 26px; padding: 6px 3px !important; }
+/* 폭은 위 th 가 정한다(30px). 여기 min-width 를 다시 두지 않는다. */
+.ps-table td.ps-cell { overflow: hidden; padding: 6px 2px; }
 /* 폰에서 6칸 + 곡 제목이 한 화면에 들어가도록 칩을 살짝 줄인다 */
 .ps-chips .avatar-chip { width: 20px; height: 20px; font-size: 10px; }
 .ps-chips { display: inline-flex; align-items: center; justify-content: center; }
 .ps-chips > * + * { margin-left: -5px; }
+/* 한 자리에 둘 이상이면 칸(26px)을 넘는다. 무대의 .stage-spot[data-n] 과 같은 방법으로
+   겹침만 깊게 준다 — 칸을 넓히면 그만큼 다른 파트가 화면 밖으로 나간다.
+   실측상 한 파트에 서는 사람은 최대 셋이다. */
+.ps-chips[data-n="2"] > * + * { margin-left: -14px; }
+.ps-chips[data-n="3"] > * + * { margin-left: -17px; }
 /* 빈 세션은 빈 원 — 채움/빔 대비가 한눈에 */
 .ps-hole {
   display: inline-block;
@@ -505,7 +401,7 @@
   padding: 12px 14px;
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 0;
   box-shadow: var(--shadow-sm);
 }
 .confirm-row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -513,12 +409,37 @@
 .confirm-row button { flex: 0 0 auto; }
 .confirm-select { font-weight: 700; }
 
+/* 288px 바닥이 화면보다 넓어지는 구간. 바닥을 그대로 두면 이번엔 Dr 이 잘린다 —
+   고치려던 것과 같은 증상이다. 충족 칸과 파트 칸에서 조금씩 빼서 여섯 칸을 지킨다.
+   기본값을 전부 적은 뒤에 와야 한다(특정도가 같아 순서가 우선순위다). */
+@media (max-width: 355px) {
+  .ps-table { min-width: 0; }
+  /* 34 는 '4/6' 이 서는 최소값. 곡 열이 붙는 자리(left)도 같이 따라가야 한다. */
+  .ps-table th.ps-score-head { width: 34px; }
+  .ps-table td.ps-score { width: 34px; padding-left: 6px; }
+  .ps-table th.ps-song-head,
+  .ps-table td.ps-song { left: 34px; }
+  /* 27px 은 가장 긴 축약어(Gt2·Key)가 겨우 서는 값이다. 더 빼면 글자가 칸 밖으로 나간다. */
+  .ps-table th.ps-role-head { width: 27px; }
+  .ps-table th.ps-act-head { width: 28px; }
+  /* 칸 속은 23px 이라 20px 짜리 칩 둘은 겹쳐도 안 들어간다. 겹침을 더 깊게 하는 대신
+     칩을 줄인다 — 겹침만 깊게 하면 뒷사람이 1~2px 만 남아 없는 것과 같아진다. */
+  .ps-chips .avatar-chip { width: 17px; height: 17px; font-size: 9px; }
+  .ps-chips[data-n="2"] > * + * { margin-left: -11px; }
+  .ps-chips[data-n="3"] > * + * { margin-left: -14px; }
+}
+
 @media (min-width: 720px) {
   .ps-role-short { display: none; }
   .ps-role-full { display: inline; }
-  .ps-song, .ps-song-title { max-width: 220px; }
-  .ps-cell { min-width: 52px; }
+  /* 축약어 대신 '베이스'·'키보드' 가 통째로 서므로 열이 그만큼 넓어야 한다.
+     좁은 화면과 달리 여기서는 남는 폭이 많아 곡 이름이 눌리지 않는다. */
+  .ps-table th.ps-role-head { width: 62px; padding: 9px 4px; }
+  .ps-table th.ps-act-head { width: 48px; }
+  .ps-table td.ps-cell { padding: 6px 4px; }
   .ps-chips .avatar-chip { width: 22px; height: 22px; font-size: 11px; }
+  .ps-chips[data-n="2"] > * + * { margin-left: -5px; }
+  .ps-chips[data-n="3"] > * + * { margin-left: -5px; }
 
   .poll-body { padding-left: 24px; padding-right: 24px; }
 }
@@ -526,7 +447,6 @@
 /* ===== 불법이륙 2.0: 날짜별 가능 곡 · 셋리스트 · 지난 합주 ===== */
 /* 길드 합주는 달력에서 그 길드 색으로 */
 .cal-event.guild .cal-event-icon, .cal-event.guild .cal-event-text { color: var(--g); }
-.poll-item-badge.past { background: rgba(22, 40, 47, 0.08); color: var(--ink-muted); }
 .poll-item-title .guild-badge { margin-left: 4px; }
 
 /* 후보 날짜 칩 — 누르면 아래 표가 그 날짜 기준으로 바뀐다 */
@@ -536,14 +456,14 @@
 .matrix td.date-cell[data-pick-date]:hover { color: var(--teal-deep); }
 
 /* 표 오른쪽 끝의 넣기 버튼 */
-.ps-cell.act { padding: 4px 8px !important; }
+.ps-table td.ps-cell.act { padding: 4px 2px; }
 .ps-add {
   width: 28px;
   height: 28px;
   min-height: 0;
   padding: 0;
   border: 1px dashed var(--border);
-  border-radius: 8px;
+  border-radius: 0;
   background: transparent;
   color: var(--ink-muted);
   font-size: 15px;
@@ -553,7 +473,7 @@
   cursor: pointer;
 }
 .ps-add:hover { border-color: var(--teal); color: var(--teal-deep); background: transparent; box-shadow: none; }
-.ps-add.is-on { border-style: solid; border-color: transparent; background: var(--grad-teal); color: #fff; box-shadow: var(--glow-teal); }
+.ps-add.is-on { border-style: solid; border-color: transparent; background: var(--accent); color: var(--on-accent); }
 .ps-row.picked .ps-song-title { color: var(--teal-deep); }
 
 /* 셋리스트 */
@@ -574,9 +494,9 @@
   align-items: center;
   justify-content: center;
   transform: skewX(var(--skew));
-  border-radius: 6px;
-  background: var(--grad-teal);
-  color: #fff;
+  border-radius: 0;
+  background: var(--ink-fill);
+  color: var(--on-ink);
   font-size: 12px;
   font-weight: 800;
 }
@@ -595,7 +515,7 @@
   min-height: 0;
   padding: 0;
   border: 1px dashed var(--border);
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   color: var(--ink-muted);
   font-size: 13px;
@@ -605,3 +525,243 @@
 }
 .sl-add:hover { border-color: var(--teal); color: var(--teal-deep); background: transparent; box-shadow: none; }
 .sl-item .ghost { flex-shrink: 0; min-height: 30px; padding: 3px 10px; font-size: 12px; }
+
+/* --- 되는 곡 · 합주실 --- */
+/* 넓은 화면은 왼쪽이 표, 오른쪽이 무대다. 좁은 화면은 고른 줄 바로 아래에 무대가
+   펼쳐진다. 세로로 쌓지 않으므로 길이가 더해지지 않고 둘 중 큰 쪽이 된다. */
+.ps-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.ps-stage { display: none; }
+/* 머리글이 곧 접기 단추다. common.css 의 전역 `button` 이 min-height:46px · 틸 그라디언트 ·
+   그림자 · 15px 글자를 걸고 있어서, 되돌리지 않으면 머리글이 민트색 큰 버튼이 된다.
+   .ps-add · .sl-add · .g-fold 가 같은 이유로 같은 일을 한다. */
+.ps-stage-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+  margin-bottom: 8px;
+  padding: 0 0 7px;
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+.ps-stage-head:hover { background: none; filter: none; }
+.ps-stage-head:active { transform: none; }
+/* 접었을 때는 이 줄이 마지막이라 아래 여백을 뺀다 */
+.ps-stage-head[aria-expanded='false'] { margin-bottom: 0; }
+.ps-stage-head b { min-width: 0; overflow-wrap: anywhere; }
+.ps-stage-fill { margin-left: auto; color: var(--teal-deep); font-variant-numeric: tabular-nums; }
+.ps-stage-fill i { font-style: normal; color: var(--ink-faint); }
+.ps-stage-caret {
+  flex: none;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+.ps-stage-head:hover .ps-stage-caret { color: var(--ink-muted); }
+
+/* 고른 줄 */
+.ps-row[data-song] { cursor: pointer; }
+.ps-row.is-stage td { background: var(--teal-soft); }
+.ps-row.is-stage td.ps-score,
+.ps-row.is-stage td.ps-song { background: var(--teal-soft); }
+
+/* 표 안에 끼워 넣은 무대 줄. 가운데 정렬·한 줄 고정을 여기서만 푼다. */
+.ps-table .ps-stage-row > td {
+  padding: 0 0 12px;
+  text-align: left;
+  white-space: normal;
+}
+
+@media (min-width: 900px) {
+  .ps-split { grid-template-columns: minmax(0, 1fr) 320px; }
+  .ps-stage { display: block; }
+  .ps-stage-row { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   문법 맞추기 — 홈·곡과 같은 규칙으로.
+
+   상자·알약·통통한 그림자·그라디언트를 걷는다. 나누는 방법은 채워진 면,
+   선 하나, 여백 셋뿐이다.
+
+   common.css 의 .card 와 .card h2 는 길드·멤버·악보도 함께 쓴다. 전역으로
+   고치면 그 페이지들이 같이 바뀌므로, 곡 페이지가 하는 대로 페이지 클래스
+   안에서만 덮는다.
+   ══════════════════════════════════════════════════════════════ */
+
+.schedule .card {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 0;
+  margin: 0 0 28px;
+}
+/* 제목 앞의 기울어진 그라디언트 막대. tokens.css 가 "페이지를 개선할 때
+   한 페이지씩 걷어낸다" 고 적어 둔 --grad-teal 이 여기 쓰이고 있었다. */
+.schedule .card h2::before { content: none; }
+
+/* --- 머리: 곡 페이지의 .list-head 와 같은 문법 --- */
+.schedule .list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.schedule .list-head h1 { font-size: 28px; line-height: 1.15; margin: 7px 0 0; letter-spacing: -0.02em; }
+.schedule .list-head h1 small {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--teal-deep);
+  margin-left: 9px;
+  vertical-align: 5px;
+}
+.schedule .overline { display: inline-block; font-size: 9px; letter-spacing: 0.2em; font-weight: 800; }
+
+/* 가끔 하는 일이라 조용히 둔다. 홈의 곡 등록·곡 페이지의 곡 등록과 같다. */
+.schedule .add-link {
+  min-height: 0;
+  padding: 8px 2px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--ink-muted);
+  font-size: 14px;
+  font-weight: 800;
+  transition: color 0.12s;
+}
+.schedule .add-link:hover { color: var(--ink); background: none; filter: none; }
+
+/* --- 지난 합주: 홈의 .section-heading 과 같은 굵은 밑줄 --- */
+.schedule #past-card .section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--ink);
+}
+.schedule #past-card h2 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+
+
+
+
+/* --- 넓은 화면: 두 열 --- */
+/* 카드 한 장이 1200px 을 다 쓰면 제목과 인원 사이가 800px 빈다.
+   곡 페이지가 1000px 부터 두 열인 것과 같은 규칙이다.
+   다만 펼친 항목은 두 칸을 다 쓴다 — 매트릭스와 무대가 반 폭이면 못 본다. */
+@media (min-width: 1000px) {
+  .poll-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px 20px;
+    align-items: start;
+  }
+  .poll-entry { margin: 0; }
+  .poll-entry.is-open { grid-column: 1 / -1; }
+}
+
+/* --- 후보 요일 고르기 (일정 만들기 모달) --- */
+/* 기간만 주면 10/3~10/31 이 29일이 된다. 요일을 고르면 9일이 된다. */
+.dow-pick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 100%;
+}
+.dow-pick-label {
+  flex: none;
+  margin-right: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+}
+.dow-pick button {
+  flex: none;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: var(--empty);
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: none;
+}
+.dow-pick button:hover { background: #e2ecf3; color: var(--ink); }
+.dow-pick button[aria-pressed='true'] { background: var(--ink-fill); color: var(--on-ink); }
+.dow-pick-hint {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--teal-deep);
+  font-variant-numeric: tabular-nums;
+}
+.dow-pick-hint.over { color: var(--pink); }
+
+/* --- 후보 날짜 빼기 --- */
+/* 지우지 않고 끈다. 찍어 둔 기록이 남아 있어서 되돌릴 수 있다. */
+.date-off {
+  margin-left: 6px;
+  min-height: 0;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--ink-faint);
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s;
+}
+.date-cell:hover .date-off,
+.date-cell:focus-within .date-off { opacity: 1; }
+.date-off:hover { color: var(--pink); background: none; }
+
+.dates-off {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-faint);
+}
+.dates-off button {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: var(--empty);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: none;
+}
+.dates-off button:hover { background: var(--teal-soft); color: var(--teal-deep); }
+.dates-off button i { font-style: normal; font-weight: 700; color: var(--ink-faint); }

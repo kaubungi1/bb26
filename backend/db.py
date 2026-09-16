@@ -130,6 +130,20 @@ CREATE TABLE IF NOT EXISTS guildMembers (
   UNIQUE ("guildId", "nickname", "role")
 );
 
+-- 길드 배경 낙서. 한 사람이 한 길드에 한 장이고, 다 같이 한 벽에 그린다.
+-- 지우는 것은 자기 줄뿐이다. strokes 는 [{"c":"#39c5bb","w":3,"p":[[x,y],...]}] 이고
+-- 좌표는 1600x1000 고정 캔버스 기준이다 — 화면 크기마다 그림이 어긋나면 안 된다.
+-- 들어오는 값은 routers/drawings.py 가 개수·크기·색까지 전부 잘라서 받는다.
+CREATE TABLE IF NOT EXISTS guildDrawings (
+  "id" SERIAL PRIMARY KEY,
+  "guildId" INTEGER NOT NULL REFERENCES guilds("id") ON DELETE CASCADE,
+  "nickname" TEXT NOT NULL,
+  "strokes" JSONB NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE ("guildId", "nickname")
+);
+
 -- 멤버 프로필. 닉네임이 곧 열쇠다. 본인이 색·아바타·칭호를 정한다.
 CREATE TABLE IF NOT EXISTS members (
   "nickname" TEXT PRIMARY KEY,
@@ -181,6 +195,11 @@ CREATE TABLE IF NOT EXISTS songComments (
 MIGRATIONS = [
     'CREATE INDEX IF NOT EXISTS idx_songcomments_song ON songComments ("songId", "id")',
     'CREATE INDEX IF NOT EXISTS idx_songs_guild ON songs ("guildId")',
+    # 길드 꾸미기: 테마 이름과 문장(육각 틀 + 문양 + 색 둘)을 한 칸에 담는다.
+    # {"theme":"miku","crest":{"shape":"wing","bg":"#00b8ad","fg":"#ffffff"}}
+    # 값이 늘어도(글씨색·버튼·배경) 키만 붙으므로 마이그레이션이 다시 필요 없다.
+    # 들어오는 값은 routers/guilds.py 가 화이트리스트로 거른다 — 자유 문자열은 안 받는다.
+    'ALTER TABLE guilds ADD COLUMN IF NOT EXISTS "style" JSONB',
     # 악보: 곡과의 결합 제거 + 분류/검색용 컬럼
     'ALTER TABLE sheets ADD COLUMN IF NOT EXISTS "artist" TEXT',
     'ALTER TABLE sheets ADD COLUMN IF NOT EXISTS "role" TEXT',
@@ -231,6 +250,10 @@ MIGRATIONS = [
     'CREATE INDEX IF NOT EXISTS idx_eventsongs_song ON eventSongs("songId")',
     'CREATE INDEX IF NOT EXISTS idx_eventlineups_event ON eventLineups("eventId")',
     'CREATE INDEX IF NOT EXISTS idx_guildmembers_guild ON guildMembers("guildId")',
+    # 후보 날짜는 지우지 않고 끈다. 지우면 그 날 '된다'고 찍은 기록이 같이 사라진다.
+    # (sessions.active 와 같은 이유·같은 방식)
+    'ALTER TABLE eventDates ADD COLUMN IF NOT EXISTS "active" BOOLEAN NOT NULL DEFAULT true',
+
     # 2단계: 멤버 캐릭터 이미지 (256px 정사각형 WebP)
     'ALTER TABLE members ADD COLUMN IF NOT EXISTS "image" BYTEA',
     'ALTER TABLE members ADD COLUMN IF NOT EXISTS "imageUpdatedAt" TIMESTAMPTZ',

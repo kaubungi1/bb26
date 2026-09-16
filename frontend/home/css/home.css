@@ -43,13 +43,13 @@
 .home .chips{display:flex;flex-wrap:wrap;align-items:center;gap:2px;margin-bottom:20px;min-height:28px}
 .home .chip{min-height:28px;padding:0 10px;border:0;border-radius:0;background:none;color:var(--ink-muted);font-size:12px;font-weight:700;box-shadow:none}
 .home .chip:hover{color:var(--ink);filter:none}
-.home .chip[aria-pressed=true]{background:var(--ink);color:#fff}
+.home .chip[aria-pressed=true]{background:var(--ink-fill);color:var(--on-ink)}
 .home .chip.part{padding:0 8px;font-family:ui-monospace,Menlo,Consolas,monospace}
 .home .chip.part[aria-pressed=true]{background:var(--pink)}
 .home .chip.clear{margin-left:auto;color:var(--ink-faint)}
 .home .chip.clear:hover{color:var(--pink)}
 /* 필터 접기. 넓은 화면에서는 토글을 숨기고 항상 펼쳐 둔다. */
-.home .chip-toggle{display:none;align-items:center;gap:6px;min-height:28px;padding:0 10px;border:0;border-radius:0;background:var(--ink);color:#fff;font-size:12px;font-weight:800;box-shadow:none}
+.home .chip-toggle{display:none;align-items:center;gap:6px;min-height:28px;padding:0 10px;border:0;border-radius:0;background:var(--ink-fill);color:var(--on-ink);font-size:12px;font-weight:800;box-shadow:none}
 .home .chip-toggle b{padding:0 5px;background:#ffffff33;font-size:11px}
 .home .chip-gap{width:1.5px;height:14px;background:var(--line);margin:0 8px}
 .home .chip-label{font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--ink-faint);margin-right:2px}
@@ -91,6 +91,12 @@
 .home .jk-genre{position:absolute;left:9px;top:9px;z-index:2;padding:3px 9px;background:#ffffffd9;
   color:var(--jk-ink);font-size:11px;font-weight:800;letter-spacing:.14em;transform:skew(var(--skew))}
 .home .jk-genre>span{display:inline-block;transform:skew(calc(var(--skew) * -1))}
+/* 어느 길드의 곡인지. 장르 칩 오른쪽에 붙는다 — 왼쪽 위가 이 카드의 '꼬리표' 자리다.
+   오른쪽 위는 유튜브 버튼이 쓰고, 아래 띠는 제목·아티스트라 더 넣을 자리가 없다.
+   길드 안에서는 안 그린다(home.js). 전부 그 길드 것이라 줄만 차지한다. */
+.home .jk-guild{position:absolute;left:9px;top:31px;z-index:2;max-width:calc(100% - 18px)}
+.home .jk-guild .guild-badge{max-width:100%;background:#ffffffd9;color:var(--g)}
+.home .jk-guild .guild-badge>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .home .jk-band{flex:none;padding:9px 13px 10px;background:var(--band);color:#fff}
 .home .jacket b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
   margin:0;font-size:15px;line-height:1.25;letter-spacing:-.01em;overflow-wrap:anywhere;font-weight:800}
@@ -115,7 +121,7 @@
 .home .slot u{text-decoration:none;font-size:12px}
 /* 띠 색을 그대로 두고 밝기만 올린다. 고정 남색을 쓰면 보라·자홍 띠 위에서 따로 논다. */
 .home .slot.on{background:#ffffff2b;color:#fff}
-.home .slot.mine{background:var(--teal);color:#06343a}
+.home .slot.mine{background:var(--accent);color:var(--on-accent)}
 .home .slot.on em{opacity:.62}
 .home .slot.mine em{opacity:.75}
 .home .slot.off{opacity:.45}
@@ -171,33 +177,26 @@
 .home .slot-wrap{position:relative;min-width:0;display:flex}
 .home .slot-wrap .slot-btn{flex:1;min-width:0}
 .home .slot-btn{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:8px;align-items:center;text-align:left;min-height:0;padding:10px 11px;border:0;border-radius:0;background:var(--field);color:var(--ink);font-size:12px;box-shadow:none;position:relative;transition:background .12s}
-.home .slot-btn:hover{filter:none;background:#e3edf4}
-.home .sl-abbr{grid-row:1/3;display:grid;place-items:center;width:30px;height:30px;background:var(--ink);color:#fff;font-size:10px;font-weight:900;font-family:ui-monospace,Menlo,Consolas,monospace}
+.home .slot-btn:hover{filter:none;background:var(--hover)}
+.home .sl-abbr{grid-row:1/3;display:grid;place-items:center;width:30px;height:30px;background:var(--ink-fill);color:var(--on-ink);font-size:10px;font-weight:900;font-family:ui-monospace,Menlo,Consolas,monospace}
 .home .sl-role{font-weight:800;font-size:12px;line-height:1.2;color:var(--ink-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .home .sl-people{font-size:12px;font-weight:800;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .home .sl-act{display:none}
 .home .slot-btn.off{background:var(--empty)}
-.home .slot-btn.off:hover{background:#dde7ef}
+.home .slot-btn.off:hover{background:var(--hover-2)}
 .home .slot-btn.off .sl-abbr{background:#cfdbe5;color:#6d7f92}
 .home .slot-btn.off .sl-people{color:var(--ink-faint);font-weight:700}
 /* 배경의 민트 번짐과 섞이지 않도록 한 단계 진하게 쓴다. */
-.home .slot-btn.mine{background:#b3e8ed}
-.home .slot-btn.mine:hover{background:#a2e2e8}
+.home .slot-btn.mine{background:var(--mine)}
+.home .slot-btn.mine:hover{background:var(--mine-hover)}
 .home .slot-btn.mine .sl-abbr{background:var(--teal)}
 .home .slot-btn:disabled{opacity:.5}
 
-/* 지연 없는 쪽지. 브라우저 기본 title 은 1~3초 뒤에 뜨고 그 시간을 못 바꾼다.
-   손가락으로 쓰는 화면에서는 탭했을 때 붙어 남으므로 막는다. */
-@media(hover:hover){
-  .home .slot-wrap[data-full]:hover::after,.home .slot-wrap[data-full]:focus-within::after{
-    content:attr(data-full);position:absolute;left:0;bottom:calc(100% + 5px);z-index:6;
-    max-width:260px;padding:6px 9px;background:var(--ink);color:#fff;
-    font-size:11px;font-weight:700;line-height:1.45;white-space:normal;overflow-wrap:anywhere;
-    pointer-events:none;box-shadow:2px 2px 0 #0e1a2e40}
-  /* 오른쪽 끝 두 칸은 쪽지를 왼쪽으로 붙여 화면 밖으로 나가지 않게 한다. */
-  .home .now-slots>.slot-wrap:nth-last-child(-n+2)[data-full]:hover::after,
-  .home .now-slots>.slot-wrap:nth-last-child(-n+2)[data-full]:focus-within::after{left:auto;right:0}
-}
+/* 잘린 이름을 꺼내 보는 일은 common/peek.js 와 peek.css 가 맡는다. 곡 페이지와 같은 부품이다.
+   전에는 여기에 @media(hover:hover) 로 CSS 쪽지를 따로 두었는데, 그 조건 때문에
+   손가락으로 쓰는 화면에서는 규칙 자체가 걸리지 않아 지원자 전체를 볼 방법이 없었다.
+   peek.js 는 마우스면 올려놓기, 손가락이면 길게 누르기, 키보드면 포커스로 같은 쪽지를 연다.
+   화면 밖으로 나가지 않게 좌우를 물리는 것도 peek.js 가 재서 하므로 여기서 할 일이 없다. */
 .home .slot-edit{position:absolute;right:4px;bottom:4px;display:grid;place-items:center;width:20px;height:20px;min-height:0;padding:0;border:0;background:none;box-shadow:none;opacity:0;transition:opacity .12s}
 .home .slot-edit svg{width:11px;height:11px;fill:none;stroke:var(--ink-faint);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .home .slot-wrap:hover .slot-edit,.home .slot-wrap:focus-within .slot-edit{opacity:1}
@@ -210,7 +209,7 @@
 .home .slot-form input{width:100%;min-height:32px;padding:0 10px;border:0;border-bottom:2px solid #a9dfe4;border-radius:3px 3px 0 0;background:var(--paper);font-size:13px;font-weight:700;color:var(--ink);box-shadow:none}
 .home .slot-form input:focus{border-bottom-color:var(--teal)}
 .home .slot-form-act{display:flex;gap:4px}
-.home .slot-form button{min-height:32px;padding:0 12px;border:0;background:var(--teal);color:#fff;font-size:12px;font-weight:800;box-shadow:none}
+.home .slot-form button{min-height:32px;padding:0 12px;border:0;background:var(--accent);color:var(--on-accent);font-size:12px;font-weight:800;box-shadow:none}
 .home .slot-form button[data-cancel]{background:none;color:var(--teal-deep)}
 .home .no-results{margin:0;padding:14px 20px 0;background:none;text-align:center}
 
@@ -252,27 +251,20 @@
 .home .section-heading h2{font-size:22px;margin:0;letter-spacing:-.02em}
 .home .section-heading a{font-size:12px;font-weight:800;color:var(--ink-muted)}
 .home .section-heading a:hover{color:var(--teal-deep)}
-.home .event-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}
-.home .meeting{display:flex;align-items:center;gap:16px;padding:16px 0;border-bottom:1.5px solid var(--line)}
+.home .event-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 24px}
+/* 면과 타일. 선 하나로 두었더니 곡 자켓 아래에서 묻혔다.
+   라운드도 그림자도 없다 — 반투명 흰 면에 흰 테두리 하나다. */
 .home .meeting:hover h3{color:var(--teal-deep)}
 .home .meeting>div{min-width:0;flex:1}
 .home .meeting small{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--teal-deep)}
-.home .meeting h3{font-size:16px;margin:4px 0 3px;overflow-wrap:anywhere}
+.home .meeting h3{font-size:17px;margin:4px 0 3px;overflow-wrap:anywhere}
 .home .meeting p{margin:0;font-size:12px;color:var(--ink-muted);font-weight:600;font-variant-numeric:tabular-nums}
 .home .meeting>b{flex:none;font-size:12px;font-weight:800;color:var(--ink-muted)}
 
-/* ---------- 길드 패널 ---------- */
-.home .guild-home-panel{margin-bottom:24px;padding:0 0 18px;background:none;border:0;border-bottom:2px solid var(--ink);box-shadow:none}
-.home .guild-home-panel .section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.home .guild-home-panel h2{font-size:19px;margin:0}
-.home .guild-home-panel p{margin:0 0 12px;font-size:13px;color:var(--ink-muted)}
-.home .guild-roster{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
-.home .guild-person{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700}
-.home .guild-home-panel button{min-height:30px;padding:0;border:0;background:none;color:var(--ink-muted);font-size:12px;font-weight:800;box-shadow:none}
-.home .guild-home-panel button:hover{color:var(--teal-deep);filter:none}
+/* 다음 합주와 길드 파티창은 길드 홈으로 옮겼다 — frontend/guild-home/css/guild-home.css. */
 
 .home #home-error{padding:11px 13px;margin-bottom:12px;background:var(--pink-soft);color:#96204f;font-size:13px;font-weight:700;border-left:4px solid var(--pink)}
-.home [data-retry]{min-height:36px;padding:0 14px;border:0;background:var(--ink);color:#fff;font-size:13px;font-weight:800;box-shadow:none}
+.home [data-retry]{min-height:36px;padding:0 14px;border:0;background:var(--ink-fill);color:var(--on-ink);font-size:13px;font-weight:800;box-shadow:none}
 
 /* ---------- 반응형 ---------- */
 @media(max-width:1100px){.home .now-slots{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -285,7 +277,7 @@
   .home .my-rail a small{flex-basis:auto}
   .home .my-rail a b{margin-left:4px;font-size:13px}
   .home .my-rail button{margin:0 0 0 auto}
-  .home .event-grid{grid-template-columns:1fr;gap:0}
+  .home .event-grid{grid-template-columns:1fr;gap:12px}
 }
 @media(max-width:600px){
   .home .selector-head h1{font-size:25px}
@@ -298,9 +290,11 @@
   .home .chip-toggle{display:inline-flex}
   .home .chips[data-collapsed]>:not(.chip-toggle){display:none}
   .home .chip{min-height:26px;padding:0 8px;font-size:11px}
-  /* 필터 접기. 넓은 화면에서는 토글을 숨기고 항상 펼쳐 둔다. */
-.home .chip-toggle{display:none;align-items:center;gap:6px;min-height:28px;padding:0 10px;border:0;border-radius:0;background:var(--ink);color:#fff;font-size:12px;font-weight:800;box-shadow:none}
-.home .chip-toggle b{padding:0 5px;background:#ffffff33;font-size:11px}
+  /* 여기서 .chip-toggle 의 모양을 다시 선언하지 않는다. 모양은 '필터 접기' 절의 규칙이 대고,
+     이 블록은 바로 위에서 display 만 덮는다. 전에는 그 절이 주석까지 통째로 복사돼 있었고,
+     복사본의 display:none 이 뒤에 와서 위의 inline-flex 를 이겼다.
+     그 결과 좁은 화면에서 토글이 사라지고, data-collapsed 가 나머지 칩을 가린 채로 남아
+     장르·빈 자리·길드 필터와 '필터 해제' 에 닿을 방법이 없었다. */
 .home .chip-gap{flex-basis:100%;height:0;margin:0;background:none}
   .home .chip.clear{margin-left:0}
   .home .guildbox{flex:1 1 100%}
@@ -318,7 +312,6 @@
   .home .transport button,.home .transport a{padding:0 7px;font-size:12px}
   .home .now-slots{grid-template-columns:repeat(2,minmax(0,1fr));gap:3px}
   .home .sl-abbr{width:27px;height:27px;font-size:9px}
-  .home .meeting{gap:12px;padding:13px 0}
   .home .meeting h3{font-size:15px}
   .home .section-heading h2{font-size:19px}
   .home .mm-write{opacity:1}

@@ -5,47 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>일정 - 불법이륙</title>
   <link rel="stylesheet" href="/common/tokens.css?v=4" />
+  <link rel="stylesheet" href="/common/themes.css?v=4" />
   <link rel="stylesheet" href="/common/common.css?v=4" />
   <link rel="stylesheet" href="/common/profile.css?v=4" />
+  <link rel="stylesheet" href="/common/peek.css?v=4" />
+  <link rel="stylesheet" href="/common/stage.css?v=4" />
+  <link rel="stylesheet" href="/common/eventcard.css?v=4" />
   <link rel="stylesheet" href="/schedule/css/schedule.css?v=4" />
-  <link rel="stylesheet" href="/common/game.css?v=4" />
 </head>
 <body>
   <header id="app-header" class="app-bar"></header>
-  <div class="container">
-    <section class="card">
-      <div class="section-head">
-        <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> 일정</h2>
-        <div class="cal-nav">
-          <button type="button" class="ghost cal-nav-btn" id="prev-month">‹</button>
-          <span id="cal-title" class="cal-title"></span>
-          <button type="button" class="ghost cal-nav-btn" id="next-month">›</button>
-        </div>
-      </div>
-      <div id="calendar" class="calendar"></div>
-      <div class="cal-legend">
-        <span><i class="legend-dot confirmed"></i>확정</span>
-        <span><i class="legend-dot polling"></i>조율 중</span>
-        <button type="button" class="ghost" id="today-btn">오늘</button>
-      </div>
-    </section>
-
+  <div class="container schedule">
+    <!-- 달력은 두지 않는다. 한 달에 일정이 아홉 건이라 서른 칸 중 스물두 칸이 빈다.
+         날짜순이 이미 정해져 있어 목록이 달력보다 조밀하고 읽기 쉽다. -->
     <section class="card" id="polls-card">
-      <div class="section-head">
-        <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> 합주 일정</h2>
-        <button type="button" class="pink add-btn-sm" id="add-poll-btn">＋ 일정 추가</button>
+      <!-- 머리 문법은 곡 페이지(.list-head)와 같다. 아이콘도 채운 버튼도 두지 않는다. -->
+      <div class="list-head">
+        <div>
+          <span class="overline"><span>SCHEDULE</span></span>
+          <h1>모임 · 일정<small id="event-count"></small></h1>
+        </div>
+        <button type="button" class="add-link" id="add-poll-btn">＋ 일정 추가</button>
       </div>
       <div id="poll-list" class="poll-list"></div>
     </section>
 
-    <section class="card" id="day-card" hidden>
-      <h2 id="day-title"></h2>
-      <div id="day-list" class="plain-list"></div>
-    </section>
-
     <section class="card" id="past-card" hidden>
       <div class="section-head">
-        <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg> 지난 합주</h2>
+        <h2>지난 합주</h2>
       </div>
       <div id="past-list" class="poll-list"></div>
     </section>
@@ -62,6 +49,19 @@
           <span class="range-tilde">~</span>
           <input type="date" id="in-to" required />
         </div>
+        <!-- 요일을 고르면 그 요일만 후보가 된다. 아무것도 안 고르면 기간 안 모든 날이다.
+             주말 정기합주는 토·일만 고르면 10/3~10/31 이 29일이 아니라 9일이 된다. -->
+        <div class="dow-pick" id="dow-pick" role="group" aria-label="후보 요일">
+          <span class="dow-pick-label">요일</span>
+          <button type="button" data-dow="0">일</button>
+          <button type="button" data-dow="1">월</button>
+          <button type="button" data-dow="2">화</button>
+          <button type="button" data-dow="3">수</button>
+          <button type="button" data-dow="4">목</button>
+          <button type="button" data-dow="5">금</button>
+          <button type="button" data-dow="6">토</button>
+          <span class="dow-pick-hint" id="dow-hint">전체</span>
+        </div>
         <input id="in-note" placeholder="메모 (선택)" />
         <button type="submit" class="pink">후보 생성</button>
         <button type="button" class="ghost" id="add-cancel">취소</button>
@@ -69,28 +69,29 @@
     </div>
   </div>
 
-  <div class="fullscreen" id="poll-view" hidden>
-    <header class="poll-view-head">
-      <button type="button" class="ghost" id="poll-back">‹ 뒤로</button>
-      <div class="poll-view-title">
-        <strong id="poll-title"></strong>
+  <!-- 일정 상세. 전체화면으로 덮지 않고 목록에서 펼친다.
+       이 덩어리는 한 벌뿐이고, 펼친 항목 안으로 옮겨 다닌다. 다시 만들지 않으므로
+       입력 중이던 값과 불러온 곡 목록이 그대로 남는다. 닫히면 아래 보관함으로 돌아온다. -->
+  <div id="poll-park" hidden>
+    <div id="poll-detail" class="poll-detail">
+      <div class="poll-detail-head">
         <span id="poll-meta" class="muted"></span>
+        <button type="button" class="ghost" id="poll-delete">삭제</button>
       </div>
-      <button type="button" class="ghost" id="poll-delete">삭제</button>
-    </header>
-    <div class="poll-body">
+
       <div class="poll-toolbar">
         <label class="chk"><input type="checkbox" id="weekend-only" /> 주말만</label>
-        <span id="poll-hint" class="muted">빈칸을 탭해 가능 표시 · 다시 탭하면 해제</span>
+        <span id="poll-hint" class="muted"></span>
       </div>
       <div id="matrix" class="matrix-wrap"></div>
+
       <div class="confirmed-bar" id="confirmed-bar" hidden>
         <div class="confirmed-info">
           <span class="confirmed-badge"><span>확정</span></span>
           <span id="confirmed-detail"></span>
         </div>
         <div class="confirmed-actions">
-          <button type="button" class="pink add-btn-sm" id="add-member-btn">＋ 인원 추가</button>
+          <button type="button" class="add-link" id="add-member-btn">＋ 인원 추가</button>
           <button type="button" class="ghost" id="unconfirm-btn">확정 해제</button>
         </div>
       </div>
@@ -104,14 +105,18 @@
         <div id="setlist" class="setlist"></div>
       </section>
 
-      <!-- 조율 중엔 후보 날짜별로, 확정 후엔 확정일 기준으로 -->
+      <!-- 조율 중엔 후보 날짜별로, 확정 후엔 확정일 기준으로.
+           넓은 화면에서는 왼쪽이 곡 목록, 오른쪽이 합주실이다. -->
       <section class="ps-section" id="playable-section" hidden>
         <div class="ps-head">
           <h3 class="ps-title" id="ps-title">이 날이면 되는 곡</h3>
           <button type="button" class="ghost" id="ps-toggle">전체 보기</button>
         </div>
         <div class="ps-dates" id="ps-dates"></div>
-        <div class="ps-wrap" id="playable-list"></div>
+        <div class="ps-split">
+          <div class="ps-wrap" id="playable-list"></div>
+          <div class="ps-stage" id="playable-stage"></div>
+        </div>
       </section>
 
       <div class="confirm-bar" id="confirm-bar">
@@ -130,6 +135,11 @@
 
   <nav id="app-tabbar" class="tab-bar"></nav>
   <script src="/common/common.js?v=4"></script><script src="/common/crop.js?v=4"></script><script src="/common/profile.js?v=4"></script>
+  <script src="/common/peek.js?v=4"></script>
+  <!-- 소속 배지에 길드 문장을 그린다(common.js 의 guildBadge) -->
+  <script src="/common/crest.js?v=4"></script>
+  <script src="/common/eventcard.js?v=4"></script>
+  <script src="/common/stage.js?v=4"></script>
   <script src="/schedule/js/schedule.js?v=4"></script>
 </body>
 </html>

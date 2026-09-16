@@ -1,7 +1,12 @@
 """라우터들이 같이 쓰는 작은 도구. 곡 묶기, 태그 정규화, 길드 해석."""
 from fastapi import HTTPException
 
-GUILD_BRIEF = ('id', 'slug', 'name', 'color', 'emblem')
+import thumbs
+
+# 곡·일정에 딸려 나가는 길드 요약. 목록 화면의 소속 배지가 이걸로 그려진다.
+# emblem(이모지 하나) 대신 style 을 보낸다 — 배지에 문장을 그리기 때문이다.
+# 이모지는 기기마다 그림이 달라 길드 표식으로 약했고, 쓰는 길드도 없었다.
+GUILD_BRIEF = ('id', 'slug', 'name', 'color', 'style')
 
 # 밴드 한 팀의 자리. 곡마다 이 여섯이 늘 있고, 쓰지 않는 자리는 지우는 게 아니라 끈다.
 # 순서도 여기서 정해진다. 화면의 여섯 칸이 곡마다 같은 자리에 오도록 하기 위함이다.
@@ -98,7 +103,12 @@ def build_songs(conn, song_rows):
     for s in songs:
         # 자켓 그림은 목록에 싣지 않는다. 바이트라서 JSON 으로 못 바꾸고,
         # 실을 이유도 없다. 화면은 /api/songs/{id}/thumb 주소로 따로 받는다.
-        s['hasThumb'] = bool(s.pop('hasThumbBlob', None)) or bool(s.get('thumbVideoId'))
+        # 주소에서 영상 id 가 뽑히면 그림이 있다고 본다. thumbVideoId 가 비어 있어도 마찬가지다 —
+        # thumbs.ensure() 가 주소에서 직접 뽑아 받아 저장하기 때문이다.
+        # 옛 DB 에서 옮겨 온 곡은 thumbVideoId 가 없어서 화면이 /thumb 을 아예 요청하지 않았고,
+        # 그래서 자켓이 영영 안 나왔다. 여기서 막지 않으면 요청 한 번으로 스스로 채워진다.
+        s['hasThumb'] = (bool(s.pop('hasThumbBlob', None)) or bool(s.get('thumbVideoId'))
+                         or bool(thumbs.video_id(s.get('youtubeUrl'))))
         s.pop('thumb', None)
         s.pop('thumbUpdatedAt', None)
         s['isCandidate'] = bool(s['isCandidate'])

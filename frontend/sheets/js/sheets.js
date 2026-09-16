@@ -41,6 +41,7 @@ let selected = new Set();
 let editingId = null;
 let editRole = '';            /* 수정 중인 줄의 파트 */
 let editTag = '';             /* 수정 중인 줄의 태그 */
+let openDrop = null;          /* 열려 있는 도구줄 메뉴 — 'role' | 'tag' | null */
 
 const $ = (id) => document.getElementById(id);
 const listEl = $('list');
@@ -67,34 +68,74 @@ function bindChips(el, html, onPick) {
   };
 }
 
-function renderChips() {
+/* 목록 필터의 한 줄 — 곡 목록(songs.js)의 .menu-item 과 같은 부품이다.
+   파트도 태그도 하나만 고르므로 체크가 아니라 점 표시가 붙는다. */
+function menuHtml(value, label, on, count) {
+  return '<button type="button" class="menu-item' + (on ? ' is-on' : '') +
+    '" data-v="' + escapeHtml(value) + '">' + escapeHtml(label) +
+    (count ? '<i>' + count + '</i>' : '') + '</button>';
+}
+
+function renderTools() {
+  /* 올릴 때 고르는 파트·태그와 일괄 처리의 파트·태그는 칩 그대로 둔다.
+     이미 펼쳐 놓은 판 안에 있어서 고르는 즉시 결과가 보인다. 메뉴로 한 번 더 감출 이유가 없다. */
   bindChips($('up-role'), ROLES.map((r) => chipHtml(r, r, r === upRole)).join(''),
-    (v) => { upRole = v; renderChips(); });
+    (v) => { upRole = v; renderTools(); });
 
   bindChips($('up-tags'), TAGS.map((t) => chipHtml(t, t, t === upTag)).join(''),
     (v) => {
       upTag = (v === upTag) ? '' : v;      /* 다시 누르면 해제 */
       /* 위에서 고른 태그는 이미 담아둔 파일 전부에 즉시 반영한다. */
       pending.forEach((p) => { p.tag = upTag; });
-      renderChips();
+      renderTools();
       paintPreview();
     });
-
-  bindChips($('filter-role'),
-    chipHtml('', '전체', !filterRole) + ROLES.map((r) => chipHtml(r, r, r === filterRole)).join(''),
-    (v) => { filterRole = v; renderChips(); refresh(); });
-
-  bindChips($('filter-tags'),
-    chipHtml('', '전체', !filterTag) +
-    TAGS.map((t) => chipHtml(t, t, t === filterTag, tagCounts[t])).join(''),
-    (v) => { filterTag = v; renderChips(); refresh(); });
 
   bindChips($('bulk-tags'), TAGS.map((t) => chipHtml(t, t, false)).join(''),
     (v) => applyBulk({ tag: v }));
 
   bindChips($('bulk-role'), ROLES.map((r) => chipHtml(r, r, false)).join(''),
     (v) => applyBulk({ role: v }));
+
+  /* 도구줄에는 현재 값만 글자로 남는다. 고르지 않았으면 항목 이름이 그대로 라벨이다. */
+  $('role-label').textContent = filterRole || '파트';
+  $('drop-role').classList.toggle('is-set', !!filterRole);
+  $('menu-role').innerHTML = menuHtml('', '전체', !filterRole) +
+    ROLES.map((r) => menuHtml(r, r, r === filterRole)).join('');
+
+  $('tag-label').textContent = filterTag || '태그';
+  $('drop-tag').classList.toggle('is-set', !!filterTag);
+  $('menu-tag').innerHTML = menuHtml('', '전체', !filterTag) +
+    TAGS.map((t) => menuHtml(t, t, t === filterTag, tagCounts[t])).join('');
+
+  for (const k of ['role', 'tag']) {
+    $('menu-' + k).hidden = openDrop !== k;
+    $('drop-' + k).classList.toggle('is-open', openDrop === k);
+  }
 }
+
+/* 도구줄: 메뉴 열고 닫기 + 항목 고르기. 곡 목록과 같은 규칙이다. */
+document.querySelector('.tool-line').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-drop]');
+  if (btn) {
+    openDrop = openDrop === btn.dataset.drop ? null : btn.dataset.drop;
+    renderTools();
+    return;
+  }
+  const item = e.target.closest('.menu-item');
+  if (!item) return;
+  const which = item.closest('.drop').id === 'drop-role' ? 'role' : 'tag';
+  if (which === 'role') filterRole = item.dataset.v;
+  else filterTag = item.dataset.v;
+  openDrop = null;
+  renderTools();
+  refresh().catch(console.error);
+});
+
+/* 바깥을 누르면 닫힌다 */
+document.addEventListener('click', (e) => {
+  if (openDrop && !e.target.closest('.drop')) { openDrop = null; renderTools(); }
+});
 
 /* ---------- 목록 ---------- */
 function fmtSize(bytes) {
@@ -106,7 +147,7 @@ function fmtSize(bytes) {
 function sheetRow(s) {
   if (s.id === editingId) {
     return [
-      '<li class="is-editing" data-row="', s.id, '">',
+      '<li class="sheet-item is-editing" data-row="', s.id, '">',
       '<div class="edit-grid">',
       '<input type="text" data-f="title" value="', escapeHtml(s.title || ''), '" placeholder="제목" />',
       '<input type="text" data-f="artist" value="', escapeHtml(s.artist || ''), '" placeholder="아티스트" />',
@@ -124,33 +165,68 @@ function sheetRow(s) {
       '</div></div></li>',
     ].join('');
   }
-  const tagHtml = s.tags
-    ? '<span class="tag-pill"><span>' + escapeHtml(s.tags) + '</span></span>' : '';
-  const bits = [s.role, s.artist, s.bpm ? '♩' + s.bpm : ''].filter(Boolean).map(escapeHtml).join(' · ');
+  /* 제목 줄은 곡 목록과 같다 — 제목, 그 옆에 태그를 면 없이 글자로. 알약을 줄마다
+     빛내면 제목이 안 읽힌다. 파트는 악보에서 제목 다음으로 중요하므로 앞에 세운다. */
+  const bits = [s.artist, s.bpm ? '♩' + s.bpm : '', fmtSize(s.sizeBytes)]
+    .filter(Boolean).map(escapeHtml).join('<span class="meta-sep">·</span>');
+  /* 잘렸을 때만 켠다 — fitPeek() 가 실제로 재서 정한다. 여기서는 담아만 둔다. */
+  const peek = [s.title || '제목 없음', s.artist, s.role, s.tags].filter(Boolean).join(' · ');
   return [
-    '<li class="', selected.has(s.id) ? 'is-picked' : '', '" data-id="', s.id, '"',
+    '<li class="sheet-item', selected.has(s.id) ? ' is-picked' : '', '" data-id="', s.id, '"',
+    ' data-peek-full="', escapeHtml(peek), '"',
     selectMode ? '' : ' data-open="' + s.id + '"', '>',
     selectMode ? '<span class="pick-box">' + (selected.has(s.id) ? '✓' : '') + '</span>' : '',
-    /* 1쪽 썸네일 — 화면에 보일 때만 받는다(lazy). 선택 모드가 아니면 눌러서 바로 연다. */
-    '<img class="sheet-thumb" loading="lazy" alt="" src="/api/sheets/', s.id, '/page/1?w=400" />',
+    /* 1쪽 썸네일 — 화면에 보일 때만 받는다(lazy). 선택 모드가 아니면 눌러서 바로 연다.
+       못 그린 악보는 이미지만 숨고 장르색 바탕이 남는다. 홈·곡의 자켓과 같은 규칙이다. */
+    '<span class="sheet-thumb genre-', songTone(s), '">',
+    '<img class="th-img" loading="lazy" alt="" src="/api/sheets/', s.id, '/page/1?w=400" />',
+    '</span>',
     '<span class="sheet-main">',
+    '<span class="sheet-title-row">',
     '<span class="sheet-name">', escapeHtml(s.title || '제목 없음'), '</span>',
-    '<span class="sheet-sub">', bits || '분류 없음', ' · ', fmtSize(s.sizeBytes),
-    s.uploadedBy ? ' ' + avatarChip(s.uploadedBy, 'tiny') : '', '</span>',
-    tagHtml ? '<span class="tag-row">' + tagHtml + '</span>' : '',
+    '<span class="sheet-role">', escapeHtml(s.role || '분류 없음'), '</span>',
+    s.tags ? '<span class="sheet-tag">' + escapeHtml(s.tags) + '</span>' : '',
+    '</span>',
+    '<span class="sheet-sub">', bits,
+    s.uploadedBy ? '<span class="meta-sep">·</span>' + avatarChip(s.uploadedBy, 'tiny') : '', '</span>',
     '</span>',
     selectMode ? '' : '<button type="button" class="row-edit" data-edit="' + s.id + '">수정</button>',
     '</li>',
   ].join('');
 }
 
+/* 제목이 칸에 들어가는지 실제로 재서, 잘린 줄에만 쪽지를 켠다.
+   글자 수로 어림하지 않는다 — 곡 목록의 fitNames() 와 같은 이유다.
+   읽기를 전부 한 번에 하고 쓰기를 전부 한 번에 한다. */
+function fitPeek() {
+  const rows = [...listEl.querySelectorAll('.sheet-item[data-peek-full]')];
+  if (!rows.length) return;
+  const clipped = rows.map((li) => {
+    const n = li.querySelector('.sheet-name');
+    return n && n.scrollWidth > n.clientWidth + 1;
+  });
+  rows.forEach((li, i) => {
+    if (clipped[i]) li.setAttribute('data-peek', li.dataset.peekFull);
+    else li.removeAttribute('data-peek');
+  });
+}
+
+/* 창 폭이 바뀌면 칸 폭도 바뀐다. 연달아 들어오는 동안은 마지막 것만 센다. */
+let fitTimer = null;
+addEventListener('resize', () => {
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(fitPeek, 120);
+});
+
 function paint() {
   listEl.innerHTML = sheets.length
     ? sheets.map(sheetRow).join('')
-    : '<p class="muted empty-msg">조건에 맞는 악보가 없습니다.</p>';
-  $('list-count').textContent = sheets.length ? sheets.length + '개' : '';
+    : '<li class="sheet-empty muted">조건에 맞는 악보가 없습니다.</li>';
+  /* 개수는 제목 옆 숫자로 간다 — 곡 목록과 같은 자리다. 필터를 걸면 몇 개가 남았는지 바로 보인다. */
+  $('list-count').textContent = sheets.length || '';
   $('select-all').hidden = !selectMode;
   $('select-toggle').classList.toggle('is-on', selectMode);
+  fitPeek();
   paintBulk();
 }
 
@@ -175,7 +251,7 @@ async function refresh() {
   sheets = rows;
   tagCounts = counts;
   selected = new Set([...selected].filter((id) => sheets.some((s) => s.id === id)));
-  renderChips();
+  renderTools();
   paint();
 }
 
@@ -187,19 +263,21 @@ searchEl.addEventListener('input', () => {
 
 /* 렌더에 실패한 썸네일은 자리만 남기고 숨긴다 (error는 버블링하지 않아 캡처로 받는다) */
 listEl.addEventListener('error', (e) => {
-  if (e.target.classList && e.target.classList.contains('sheet-thumb')) {
+  if (e.target.classList && e.target.classList.contains('th-img')) {
     e.target.classList.add('is-broken');
   }
 }, true);
 
-/* ---------- 업로드 접기 — 평소엔 목록이 주인공이다 ---------- */
+/* ---------- 업로드 접기 — 평소엔 목록이 주인공이다 ----------
+   전에는 카드 머리 전체가 누르는 자리였고 ▾ 이 뒤집혔다. 지금은 제목 줄의
+   '＋ 악보 올리기' 가 그 일을 한다 — 곡 목록의 '＋ 곡 등록' 과 같은 자리, 같은 무게다.
+   진짜 <button> 이라 Enter·Space 는 브라우저가 알아서 받는다. */
 $('upload-toggle').addEventListener('click', () => {
   const body = $('upload-body');
+  const btn = $('upload-toggle');
   body.hidden = !body.hidden;
-  $('upload-card').classList.toggle('is-open', !body.hidden);
-});
-$('upload-toggle').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('upload-toggle').click(); }
+  btn.setAttribute('aria-expanded', String(!body.hidden));
+  btn.textContent = body.hidden ? '＋ 악보 올리기' : '× 닫기';
 });
 
 /* ---------- 파일 담기 → 악보에서 정보 뽑기 ---------- */
@@ -878,7 +956,7 @@ window.addEventListener('resize', () => {
 });
 
 mountChrome('sheets');
-renderChips();
+renderTools();
 refresh().catch(console.error);
 
 Pair.init({

@@ -1,14 +1,207 @@
-.member-filters { margin: 12px 0 4px; }
-.member-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
-.member-entry { min-width: 0; padding: 20px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
-.member-entry-head { display: flex; align-items: center; gap: 10px; }
-.member-name { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 2px; }
-.member-name strong { font-size: 15px; }
-.member-name > span { font-size: 11px; color: var(--ink-muted); }
-.member-role-line { color: var(--teal-deep); font-size: 12px; margin-top: 12px; font-weight: 700; }
-.member-status { font-size: 13px; margin: 10px 0; }
-.member-intro { font-size: 13px; white-space: pre-wrap; margin: 8px 0; }
-.member-availability { display: flex; align-items: baseline; gap: 5px; font-size: 12px; color: var(--ink-muted); }
-.member-guilds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.member-guilds a { text-decoration: none; }
-@media (max-width: 540px) { .member-list { grid-template-columns: minmax(0, 1fr); } }
+/* 멤버 — 명함.
+
+   위는 짙은 잉크 면(로고·칭호·이름·상태), 아래는 흰 면(소개·정보).
+   라운드도 그림자도 없다. 경계는 카드 테두리 선 하나뿐이다.
+
+   아래쪽은 PARTS / TIME / GUILD 라벨 열로 세워 정렬한다 — 명함 뒷면의 연락처 블록 문법.
+   파트는 회색 글자가 아니라 채워진 면이다. 곡 페이지의 파트 여섯 칸과 같은 생각으로,
+   색이 차 있으면 그 파트를 한다는 뜻이다. */
+
+/* ---------- 머리 ---------- */
+/* 곡 페이지의 .list-head 와 같은 문법. 상자도 아이콘도 채운 버튼도 두지 않는다. */
+.members .card {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 0;
+  margin: 0 0 28px;
+}
+.members .card h2::before { content: none; }
+
+.members .list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.members .list-head h1 { font-size: 28px; line-height: 1.15; margin: 7px 0 0; letter-spacing: -0.02em; }
+.members .list-head h1 small {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--teal-deep);
+  margin-left: 9px;
+  vertical-align: 5px;
+}
+.members .overline { display: inline-block; font-size: 9px; letter-spacing: 0.2em; font-weight: 800; }
+.members .add-link {
+  min-height: 0;
+  padding: 8px 2px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--ink-muted);
+  font-size: 14px;
+  font-weight: 800;
+  transition: color 0.12s;
+}
+.members .add-link:hover { color: var(--ink); background: none; filter: none; }
+
+/* 검색칸은 곡 페이지와 같다 — 윤곽선이 아니라 채워진 면과 아래 선 하나 */
+.members .search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 0 12px;
+  background: var(--paper);
+  border: 0;
+  border-bottom: 2px solid var(--line);
+  border-radius: 3px 3px 0 0;
+}
+.members .search:focus-within { border-bottom-color: var(--teal); }
+.members .search svg { width: 17px; height: 17px; flex: none; fill: none; stroke: var(--ink-faint); stroke-width: 2; stroke-linecap: round; }
+.members .search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.members .search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.member-filters { margin: 12px 0 18px; }
+
+/* ---------- 명함 ---------- */
+/* 격자는 명함 폭에 맞춘다. common.css 의 2·3열 규칙을 여기서 덮는다. */
+.members .member-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+  column-gap: 20px;
+}
+
+.bcard {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--line);
+  min-width: 0;
+}
+
+/* 잉크 면은 높이가 고정이다. 칭호가 있고 없고에 따라 면이 오르내리면
+   한 줄에 선 카드들의 흰 면 시작점이 서로 어긋난다.
+   184px = 패딩 38 + 얼굴 76 + 여백 18 + 칭호 16 + 이름 35 (칭호가 있을 때의 높이). */
+.bc-head {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 184px;
+  padding: 20px 24px 18px;
+  background: var(--ink-fill);
+  color: var(--on-ink);
+}
+/* 칭호가 없어도 이름은 늘 잉크 면 바닥에 붙는다. */
+.bc-id { margin-top: auto; }
+.bc-body { padding: 16px 24px 20px; }
+
+.bc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+/* 로고는 검은 그림이라 짙은 면 위에서 안 보인다. 흰색으로 뒤집는다. */
+.bc-logo { height: 19px; width: auto; display: block; filter: brightness(0) invert(1); opacity: 0.92; }
+
+/* 얼굴은 avatarChip 을 그대로 쓴다. 그림·이모지·첫 글자 규칙이 사이트에 하나만 있어야 한다. */
+.bcard .avatar-chip {
+  width: 76px;
+  height: 76px;
+  font-size: 26px;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--chip-fg) 34%, var(--ink));
+  color: #fff;
+}
+.bcard .avatar-chip img { width: 100%; height: 100%; object-fit: contain; }
+
+/* 칭호는 30자까지라 두 줄이 되면 면 높이가 또 어긋난다. 한 줄로 자른다. */
+.bc-over {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: var(--teal);
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bc-name { display: block; font-size: 29px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; overflow-wrap: anywhere; }
+/* 상태는 이름의 일부처럼 붙는다. 카톡에서 쿠로민(V)(37.6) 처럼 쓰던 그대로다. */
+.bc-name i { font-style: normal; font-size: 14px; font-weight: 700; opacity: 0.62; }
+
+.bc-edit {
+  position: absolute;
+  right: 20px;
+  bottom: 16px;
+  min-height: 0;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 0;
+  background: #ffffff1f;
+  box-shadow: none;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+.bc-edit:hover { background: #ffffff33; filter: none; }
+
+.bc-intro {
+  margin: 0 0 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--line);
+  min-height: 42px;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.bc-intro:empty { display: none; }
+
+.bc-rows { display: flex; flex-direction: column; gap: 8px; }
+.bc-row { display: flex; align-items: baseline; gap: 14px; font-size: 11.5px; line-height: 1.5; }
+.bc-key {
+  flex: none;
+  width: 42px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--ink-muted);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.bc-val { min-width: 0; flex: 1; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.bc-val a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.bc-val a:hover { color: var(--teal-deep); }
+
+.bc-parts { display: inline-flex; flex-wrap: wrap; gap: 3px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px; font-weight: 800; }
+.bc-parts b { display: inline-grid; place-items: center; min-width: 30px; height: 21px; padding: 0 5px; }
+.bc-parts b.on { background: var(--ink-fill); color: var(--on-ink); }
+.bc-parts b.off { background: var(--empty); color: #a8bccd; }
+
+@media (max-width: 560px) {
+  .members .member-list { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .bc-head { padding: 16px 18px 14px; }
+  .bc-body { padding: 14px 18px 16px; }
+  .bc-head { min-height: 156px; }
+  .bcard .avatar-chip { width: 60px; height: 60px; font-size: 21px; }
+  .bc-name { font-size: 24px; }
+  .bc-edit { right: 16px; bottom: 12px; }
+}

@@ -9,6 +9,10 @@ from helpers import attach_guilds, guild_brief, guild_where, resolve_guild_id
 
 router = APIRouter()
 
+# 후보 날짜 상한. 한 달치를 넘기지 않는다 — 매트릭스가 그만큼 길어지고,
+# 아무도 안 찍을 날이 줄로 남는다.
+MAX_DATES = 40
+
 
 # ---------- 직렬화 ----------
 def _setlists(conn, event_ids):
@@ -100,6 +104,34 @@ def create_event(body: dict):
         raise HTTPException(400, 'dateFrom과 dateTo는 필수입니다.')
     if date_from > date_to:
         raise HTTPException(400, '후보 기간이 올바르지 않습니다.')
+
+    # 요일 고르기. 0=일 … 6=토 (자바스크립트 getDay 과 같은 번호).
+    # 비어 있으면 기간 안 모든 날이 후보다. 주말 정기합주는 [0, 6] 을 준다.
+    try:
+        weekdays = {int(x) for x in (body.get('weekdays') or [])}
+    except (TypeError, ValueError):
+        raise HTTPException(400, 'weekdays 가 올바르지 않습니다.')
+    if weekdays - set(range(7)):
+        raise HTTPException(400, 'weekdays 는 0(일)~6(토) 입니다.')
+
+    d0 = _date.fromisoformat(date_from)
+    d1 = _date.fromisoformat(date_to)
+    if (d1 - d0).days > 400:
+        raise HTTPException(400, '후보 기간이 너무 깁니다.')
+    days = []
+    d = d0
+    while d <= d1:
+        # date.weekday() 는 0=월 이라 자바스크립트 번호로 옮긴다
+        if not weekdays or ((d.weekday() + 1) % 7) in weekdays:
+            days.append(d.isoformat())
+        d += timedelta(days=1)
+    if not days:
+        raise HTTPException(400, '고른 요일이 기간 안에 없습니다.')
+    if len(days) > MAX_DATES:
+        raise HTTPException(
+            400, f'후보 날짜가 {len(days)}일입니다. {MAX_DATES}일까지만 만들 수 있습니다. '
+                 f'기간을 줄이거나 요일을 고르세요.')
+
     conn = get_db()
     guild_id = resolve_guild_id(conn, body)
     cur = conn.execute(
@@ -107,14 +139,11 @@ def create_event(body: dict):
         (title, 'poll', body.get('note'), body.get('createdBy'), guild_id),
     )
     event_id = cur.fetchone()['id']
-    d = _date.fromisoformat(date_from)
-    d1 = _date.fromisoformat(date_to)
-    while d <= d1:
+    for day in days:
         conn.execute(
             'INSERT INTO eventDates ("eventId", "date") VALUES (%s,%s) ON CONFLICT DO NOTHING',
-            (event_id, d.isoformat()),
+            (event_id, day),
         )
-        d += timedelta(days=1)
     conn.commit()
     row = conn.execute('SELECT * FROM events WHERE "id"=%s', (event_id,)).fetchone()
     result = serialize_event(conn, row)
@@ -142,6 +171,32 @@ def delete_event(event_id: int):
     return {'ok': True}
 
 
+# ---------- 후보 날짜 끄고 켜기 ----------
+@router.post('/{event_id}/dates/{day}/toggle')
+def toggle_date(event_id: int, day: str):
+    """후보 날짜를 끄거나 켠다. 지우지 않으므로 그 날 찍어 둔 기록은 그대로 남는다.
+    10/24 가 정모일이라 후보에서 빠지는 것 같은 경우를 위한 것이다."""
+    conn = get_db()
+    event = _load(conn, event_id)
+    row = conn.execute(
+        'SELECT * FROM eventDates WHERE "eventId"=%s AND "date"=%s', (event_id, day)
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(400, '후보 기간에 없는 날짜입니다.')
+    if event['status'] == 'confirmed' and event['date'] == day and row['active']:
+        conn.close()
+        raise HTTPException(400, '확정된 날짜는 끌 수 없습니다. 확정을 먼저 해제하세요.')
+    nxt = not row['active']
+    conn.execute('UPDATE eventDates SET "active"=%s WHERE "id"=%s', (nxt, row['id']))
+    conn.commit()
+    kept = conn.execute(
+        'SELECT COUNT(*) AS n FROM eventAvails WHERE "eventId"=%s AND "date"=%s', (event_id, day)
+    ).fetchone()['n']
+    conn.close()
+    return {'date': day, 'active': nxt, 'keptAvails': kept}
+
+
 # ---------- 참석 토글 ----------
 @router.post('/{event_id}/avail/toggle')
 def toggle_avail(event_id: int, body: dict):
@@ -157,11 +212,11 @@ def toggle_avail(event_id: int, body: dict):
         conn.close()
         raise HTTPException(400, '확정된 일정은 확정 날짜의 인원만 변경할 수 있습니다.')
     date_row = conn.execute(
-        'SELECT * FROM eventDates WHERE "eventId"=%s AND "date"=%s', (event_id, day)
+        'SELECT * FROM eventDates WHERE "eventId"=%s AND "date"=%s AND "active"', (event_id, day)
     ).fetchone()
     if not date_row:
         conn.close()
-        raise HTTPException(400, '후보 기간에 없는 날짜입니다.')
+        raise HTTPException(400, '후보에 없거나 꺼 둔 날짜입니다.')
     existing = conn.execute(
         'SELECT "id" FROM eventAvails WHERE "eventId"=%s AND "date"=%s AND nickname=%s',
         (event_id, day, nickname),
@@ -189,11 +244,11 @@ def confirm_event(event_id: int, body: dict):
     conn = get_db()
     _load(conn, event_id)
     date_row = conn.execute(
-        'SELECT * FROM eventDates WHERE "eventId"=%s AND "date"=%s', (event_id, day)
+        'SELECT * FROM eventDates WHERE "eventId"=%s AND "date"=%s AND "active"', (event_id, day)
     ).fetchone()
     if not date_row:
         conn.close()
-        raise HTTPException(400, '후보 기간에 없는 날짜입니다.')
+        raise HTTPException(400, '후보에 없거나 꺼 둔 날짜입니다.')
     conn.execute(
         'UPDATE events SET status=\'confirmed\', "date"=%s, "startTime"=%s, "endTime"=%s, place=%s, '
         '"updatedAt"=now() WHERE "id"=%s',
@@ -236,12 +291,15 @@ def _attendees(conn, event_id, day):
 
 
 def _song_map(conn):
-    """곡 → 세션 → 지원자. 풀 전체를 한 번에 읽는다. 길드 곡도 섞여 들어온다."""
+    """곡 → 세션 → 지원자. 풀 전체를 한 번에 읽는다. 길드 곡도 섞여 들어온다.
+
+    꺼 둔 자리(active=false)는 뺀다. 안 쓰는 자리가 needed 에 들어가면 같은 곡이
+    곡 페이지에서는 4/5, 일정에서는 4/6 으로 보인다."""
     rows = conn.execute(
         'SELECT s."id" AS "songId", s.title, s.artist, s."youtubeUrl", s."guildId", '
         'se."id" AS "sessionId", se.role, se.label, sp.nickname '
         'FROM songs s '
-        'JOIN sessions se ON se."songId"=s."id" '
+        'JOIN sessions se ON se."songId"=s."id" AND se."active" '
         'LEFT JOIN sessionSupports sp ON sp."sessionId"=se."id" '
         'ORDER BY s."id", se."id"'
     ).fetchall()
@@ -293,10 +351,10 @@ def playable_songs(event_id: int, date: str | None = None):
         conn.close()
         raise HTTPException(400, 'date를 지정하세요.')
     if not conn.execute(
-        'SELECT 1 FROM eventDates WHERE "eventId"=%s AND "date"=%s', (event_id, day)
+        'SELECT 1 FROM eventDates WHERE "eventId"=%s AND "date"=%s AND "active"', (event_id, day)
     ).fetchone():
         conn.close()
-        raise HTTPException(400, '후보 기간에 없는 날짜입니다.')
+        raise HTTPException(400, '후보에 없거나 꺼 둔 날짜입니다.')
     result = _playable(conn, event, day)
     conn.close()
     return result

@@ -609,6 +609,14 @@ async function onListClick(e) {
     await refresh();
     return;
   }
+  /* 칸을 누르면 지원되는 게 아니라 파트 상세가 열린다. 홈(home.js)은 같은 칸을 누르면
+     즉시 지원·취소된다. 어긋난 것이 아니라 두 화면의 설계 철학이 다르기 때문이다. 맞추지 말 것.
+
+     여기는 보는 화면이다. 한 칸에 지원자 전원과 '이 곡에서 보일 내 이름 ✎' 이 들어가야 하고,
+     칸 자체는 fitNames() 가 이름을 '아카 +2' 까지 줄여 놓은 상태라 누가 있는지 다 보이지 않는다.
+     모달이 그 한 단계로 정보를 편다. 홈은 고르는 화면이라 동작이 하나로 끝난다(§9.2).
+
+     이 차이를 없애려면 양쪽 화면의 성격을 먼저 다시 정해야 한다. */
   const cell = e.target.closest('.session-cell');
   if (cell && !cell.classList.contains('off')) openSheet(Number(cell.dataset.session));
 }
@@ -644,7 +652,9 @@ function renderSheet() {
   const me = Nick.get();
   const mine = sess.supports.find((sp) => sp.nickname === me);
 
-  sheetTitleEl.textContent = sess.label ? `${sess.label} (${sess.role})` : sess.role;
+  /* 잉크 바 제목. 곡 정보·프로필 모달과 같은 부품이라 아이콘을 함께 넣는다. */
+  sheetTitleEl.innerHTML = `${icon('user')} ` +
+    escapeHtml(sess.label ? `${sess.label} (${sess.role})` : sess.role);
   sheetSubEl.textContent = `${song.title} · ${song.artist}`;
 
   sheetMembersEl.innerHTML = sess.supports.length
@@ -652,16 +662,14 @@ function renderSheet() {
         <div class="sheet-member${sp.nickname === me ? ' me' : ''}">
           ${avatarChip(sp.nickname, 'lg')}
           <span class="sheet-member-name">${escapeHtml(supportName(sp))}</span>
-          ${sp.comment ? `<span class="sheet-member-comment">${escapeHtml(sp.comment)}</span>` : ''}
-          ${sp.nickname === me ? `<button type="button" class="sheet-member-tag" data-sheet-comment="${sp.id}" data-comment="${escapeHtml(sp.comment || '')}" title="한마디 수정">나 ✎</button>` : ''}
+          ${sp.nickname === me ? `<button type="button" class="sheet-member-tag" data-sheet-label="${sp.id}" data-label="${escapeHtml(sp.label || '')}" title="이 곡에서 보일 내 이름">나 ✎</button>` : ''}
         </div>`).join('')
     : `<p class="sheet-empty">아직 지원한 멤버가 없습니다.</p>`;
 
   sheetActionsEl.innerHTML = mine
     ? `<button type="button" class="secondary" data-sheet-cancel="${mine.id}">지원 취소</button>
        <button type="button" class="ghost" data-sheet-close>닫기</button>`
-    : `<input id="sheet-comment" class="sheet-comment" placeholder="한마디 (선택, 40자)" maxlength="40" />
-       <button type="button" class="pink" data-sheet-support>지원하기</button>
+    : `<button type="button" class="pink" data-sheet-support>지원하기</button>
        <button type="button" class="ghost" data-sheet-close>닫기</button>`;
 }
 
@@ -676,19 +684,18 @@ sheetEl.addEventListener('click', async (e) => {
     await refresh();
     return;
   }
-  const editComment = e.target.closest('[data-sheet-comment]');
-  if (editComment) {
-    const input = prompt('한마디 (비우면 지움, 40자)', editComment.dataset.comment);
+  const editLabel = e.target.closest('[data-sheet-label]');
+  if (editLabel) {
+    const input = prompt('이 곡에서 보일 내 이름 (비우면 닉네임 그대로, 20자)', editLabel.dataset.label);
     if (input === null) return;
-    await api.put(`/sessions/${id}/support/${editComment.dataset.sheetComment}`, { comment: input.trim() });
+    await api.put(`/sessions/${id}/support/${editLabel.dataset.sheetLabel}`, { label: input.trim() });
     await refresh();
     return;
   }
   if (e.target.closest('[data-sheet-support]')) {
     const name = await Nick.ensure();
     if (!name) return;
-    const comment = (document.getElementById('sheet-comment')?.value || '').trim();
-    await api.post(`/sessions/${id}/support`, { nickname: name, comment });
+    await api.post(`/sessions/${id}/support`, { nickname: name });
     await refresh();
   }
 });

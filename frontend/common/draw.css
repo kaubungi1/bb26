@@ -1,0 +1,66 @@
+/* 길드 배경 낙서 (common/draw.js) */
+
+/* 그림 판. 배경 위, 글 아래에 깔린다.
+
+   음수 z-index 로는 안 된다. body 에 배경이 있으면 그 배경이 음수 자식보다 나중에
+   칠해져서 낙서를 덮는다 — 실제로 저장한 낙서가 편집 중에만 보였다. 배경을 html 로
+   올려 봤더니 이번엔 배경이 통째로 사라졌다. 그래서 기대지 않고 순서를 적는다:
+   판은 0, 본문은 1. 헤더 20 · 탭바 30 · 모달 50 은 원래 값 그대로 위에 있다.
+
+   본문을 올리는 건 낙서가 있는 화면에서만이다(body.gd-page). 모든 .container 를
+   올리면 악보 화면의 드롭다운(z-index 40)이 .container 안에 갇혀 탭바 밑으로 간다. */
+.gd-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+body.gd-page .container { position: relative; z-index: 1; }
+.gd-layer svg { display: block; width: 100%; height: 100%; }
+.gd-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.gd-hit { fill: none; stroke: transparent; stroke-linecap: round; stroke-linejoin: round;
+  pointer-events: none; }
+
+/* 그릴 때만 위로 올라오고 클릭을 먹는다 */
+.gd-layer.is-editing { z-index: 30; pointer-events: auto; background: #0a1a2a26; }
+.gd-layer.is-editing svg { cursor: crosshair; touch-action: none; }
+.gd-layer.is-editing .gd-hit { pointer-events: stroke; cursor: pointer; }
+.gd-layer.is-editing .gd-hit:hover + .gd-stroke { stroke-opacity: 0.45; }
+body.gd-on { overflow: hidden; }
+
+/* 팔레트. 화면 아래에 붙는다 */
+.gd-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 31;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px;
+  padding: 10px max(14px, calc((100% - 1280px) / 2 + 32px));
+  padding-bottom: calc(10px + var(--safe-bottom));
+  background: #101c28; color: #e6eef5;
+  box-shadow: 0 -10px 30px -18px #000;
+}
+.gd-group { display: flex; align-items: center; gap: 4px; }
+.gd-group.gd-end { margin-left: auto; }
+
+.gd-color {
+  width: 26px; height: 26px; min-height: 0; padding: 0; flex: none;
+  border: 0; border-radius: 0; background: var(--c); cursor: pointer;
+  box-shadow: inset 0 0 0 1px #ffffff40;
+}
+.gd-color.is-on { box-shadow: 0 0 0 2px #101c28, 0 0 0 4px #e6eef5; }
+.gd-custom { position: relative; overflow: hidden; display: inline-block;
+  background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+.gd-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+.gd-width { display: grid; place-items: center; width: 30px; height: 26px; min-height: 0;
+  padding: 0; flex: none; border: 0; border-radius: 0; background: #1d2c3a; cursor: pointer; }
+.gd-width i { display: block; width: 16px; height: var(--w); background: #e6eef5; border-radius: 99px; }
+.gd-width.is-on { background: #e6eef5; }
+.gd-width.is-on i { background: #101c28; }
+
+.gd-tool { min-height: 28px; padding: 0 12px; flex: none;
+  border: 0; border-radius: 0; background: #1d2c3a; color: #e6eef5;
+  font-size: 12px; font-weight: 800; cursor: pointer; }
+.gd-tool:hover { background: #26394b; }
+.gd-tool.is-on { background: #e6eef5; color: #101c28; }
+.gd-save { background: var(--accent); color: var(--on-accent); }
+.gd-note { font-size: 12px; color: #9fb3c6; }
+
+@media (max-width: 700px) {
+  .gd-bar { gap: 6px 10px; padding: 8px 12px calc(8px + var(--safe-bottom)); }
+  .gd-tool { padding: 0 9px; font-size: 11.5px; }
+  .gd-color, .gd-width { width: 24px; height: 24px; }
+}

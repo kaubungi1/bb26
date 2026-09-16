@@ -1,0 +1,130 @@
+/* 길드 파티창.
+
+   곡 자켓(home.css)과 같은 골격이다 — 위가 색 띠, 아래가 파트 칸.
+   자켓은 장르색(--band)을 쓰고 여기는 길드가 정한 색(--g)을 쓴다.
+   글자가 그림 위에 올라가지 않으므로 어떤 길드색이든 대비가 같다.
+
+   상자를 두르지 않는다. 띠와 칸이 붙어 있는 것만으로 한 덩어리로 읽힌다 —
+   테두리를 더하면 §9.3 이 지목한 윤곽선 상자가 된다. */
+
+.party { display: flex; flex-direction: column; min-width: 0; }
+
+/* ---------- 색 띠 ---------- */
+.party-band {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  background: var(--g);
+  color: #fff;
+}
+.party-emblem { flex: none; display: grid; place-items: center; width: 24px; height: 24px; font-size: 20px; line-height: 1; }
+/* 방패 아이콘은 선이라 조금 작게, 문장은 육각이라 칸을 꽉 채운다. */
+.party-emblem > svg { width: 20px; height: 20px; opacity: 0.85; }
+.party-emblem > .crest-svg { width: 100%; height: 100%; opacity: 1; }
+.party-name {
+  flex: 1; min-width: 0;
+  font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: #fff; text-decoration: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+a.party-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* 자리와 사람. 한 사람이 기타도 치고 건반도 치면 6/6 이어도 네 명이다.
+   둘은 다른 질문이라 둘 다 쓰되, 자리 쪽을 크게 둔다 — 합주가 되는지를 먼저 본다. */
+.party-count { flex: none; display: flex; align-items: baseline; gap: 7px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.party-count { font-size: 15px; font-weight: 900; }
+.party-count i { font-style: normal; font-size: 12px; font-weight: 700; opacity: 0.62; margin-left: -2px; }
+.party-count em { font-style: normal; font-size: 11px; font-weight: 700; opacity: 0.72; }
+
+/* ---------- 파트 칸 ---------- */
+/* 여섯이 3열 두 줄로 앉는다. 파트가 일곱 이상인 길드는 칸을 좁히지 않고 줄을 늘린다 —
+   좁히면 여섯 칸의 자리가 길드마다 어긋나서 나란히 비교할 수 없게 된다. */
+.party-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; background: #00000026; padding: 3px 0 0; }
+
+/* 파트명이 칸의 머리로 올라가고 그 아래 사람이 한 줄씩 선다.
+   여럿이 기본이라 접지 않는다. 그리드가 한 줄의 세 칸 키를 맞춰 주므로,
+   두 명짜리 칸이 섞여도 줄이 어긋나지 않는다. */
+.pslot {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  text-align: left;
+  min-width: 0;
+  min-height: 0;
+  padding: 9px 10px 10px;
+  border: 0;
+  border-radius: 0;
+  background: var(--field);
+  color: var(--ink);
+  box-shadow: none;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.pslot:hover { background: var(--hover); filter: none; }
+.ps-role { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; color: var(--ink-faint);
+  font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+/* 사람이 많은 파트는 세로로만 쌓으면 칸 하나가 여섯 줄이 된다.
+   auto-fill 로 두면 칸 폭에 따라 열이 알아서 늘고 준다 — 새 분기점을 만들지 않고
+   지금 있는 반응형(파티창 2열 / 1열 / 폰)을 그대로 따라간다.
+   이름이 좁아져 잘리는 건 fitParty() 가 재서 쪽지를 켠다. */
+.ps-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 4px 8px; min-width: 0; }
+.ps-person { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ps-person .avatar-chip { flex: none; width: 20px; height: 20px; font-size: 10px; box-shadow: none; }
+/* 이름만 줄어든다. 별은 끝에 붙어 남는다 — 한 덩어리로 두면 이름이 길 때 별이 먼저 사라진다. */
+.ps-who { min-width: 0; font-size: 12.5px; font-weight: 800; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 팀장. 그 사람 이름 옆이다. 칸에 붙이면 한 사람이 두 파트를 맡을 때
+   두 칸 모두에 별이 서서 엉뚱한 사람이 팀장으로 읽힌다. */
+.ps-lead { flex: none; font-style: normal; font-size: 9px; line-height: 1; color: var(--g); }
+
+/* 빈 자리. 흐리게 두되 지우지 않는다 — 빈 칸이 곧 모집 공고다. */
+.pslot.off { background: var(--empty); }
+.pslot.off:hover { background: var(--hover-2); }
+.ps-none { min-height: 20px; align-items: center; }
+.ps-plus { display: grid; place-items: center; width: 20px; height: 20px; background: var(--hover-2); color: var(--ink-faint); font-size: 13px; font-weight: 700; }
+/* 내가 낀 자리만 색을 가진다 — 곡 목록·홈과 같은 청록이다. */
+.pslot.mine { background: var(--mine); }
+.pslot.mine:hover { background: var(--mine-hover); }
+.pslot.mine .ps-role { color: var(--teal-deep); }
+.pslot:disabled { opacity: 0.5; cursor: default; }
+
+/* ---------- 발치 ---------- */
+.party-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 2px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-faint);
+  min-width: 0;
+}
+.party-slogan { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.party-leader { flex: none; }
+.party-foot .meta-sep { color: #c3d2de; user-select: none; }
+.party-go { flex: none; margin-left: auto; color: var(--ink-muted); text-decoration: none; font-weight: 800; white-space: nowrap; }
+.party-go:hover { color: var(--teal-deep); }
+
+/* ---------- 좁은 화면 ---------- */
+/* 3열을 유지한다. 2열로 접으면 여섯 칸이 3줄이 되면서 파트 자리가 길드마다 어긋난다. */
+@media (max-width: 520px) {
+  .party-band { padding: 9px 11px; gap: 7px; }
+  .party-name { font-size: 15px; }
+  .party-count { font-size: 14px; gap: 5px; }
+  .pslot { padding: 7px 7px 8px; gap: 5px; }
+  .ps-person { gap: 5px; }
+  .ps-person .avatar-chip, .ps-plus { width: 17px; height: 17px; font-size: 9px; }
+  .ps-plus { font-size: 11px; }
+  .ps-none { min-height: 17px; }
+  .ps-who { font-size: 11.5px; }
+  .ps-role { font-size: 9px; }
+}
+
+/* ---------- 되묻는 창 ---------- */
+.confirm-modal { max-width: 360px; }
+.confirm-body { margin: 0 0 4px; font-size: 13.5px; line-height: 1.65; color: var(--ink-2); }
+.confirm-body b { font-weight: 800; color: var(--ink); }
+.modal-form button.danger { background: #c62872; color: #fff; box-shadow: none; border-radius: 3px; }
+.modal-form button.danger:hover { background: #b2245f; filter: none; }

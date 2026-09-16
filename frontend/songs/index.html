@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>곡 리스트 - 불법이륙</title>
   <link rel="stylesheet" href="/common/tokens.css?v=4" />
+  <link rel="stylesheet" href="/common/themes.css?v=4" />
   <link rel="stylesheet" href="/common/common.css?v=4" />
   <link rel="stylesheet" href="/common/peek.css?v=4" />
   <link rel="stylesheet" href="/common/profile.css?v=4" />
   <link rel="stylesheet" href="/songs/css/songs.css?v=4" />
-  <link rel="stylesheet" href="/common/game.css?v=4" />
 </head>
 <body>
   <header id="app-header" class="app-bar"></header>
@@ -57,19 +57,25 @@
   <!-- 좁은 칸을 여는 법: 마우스는 올려놓기, 손가락은 길게 누르기 -->
   <p class="peek-hint">칸을 <b>길게 누르면</b> 지원자 전체가 보입니다. 짧게 누르면 지원·취소입니다.</p>
 
-  <div class="sheet-backdrop" id="session-sheet" hidden>
-    <div class="sheet">
-      <div class="sheet-grip"></div>
-      <h3 class="sheet-title" id="sheet-title"></h3>
-      <p class="sheet-sub" id="sheet-sub"></p>
-      <div class="sheet-members" id="sheet-members"></div>
-      <div class="sheet-actions" id="sheet-actions"></div>
+  <!-- 파트 상세. 곡 정보·프로필과 같은 모달 부품을 쓴다.
+       전에는 바닥에서 올라오는 시트였는데, 끌어내릴 수 없는 PC 에서도 바닥에 붙어
+       버튼이 잘렸다. 창이 뜨는 방식은 사이트에 하나만 둔다. -->
+  <div class="modal-backdrop" id="session-sheet" hidden>
+    <div class="modal part-modal" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <h3 class="modal-title" id="sheet-title"></h3>
+      <div class="part-body">
+        <p class="part-sub" id="sheet-sub"></p>
+        <div class="sheet-members" id="sheet-members"></div>
+        <div class="sheet-actions" id="sheet-actions"></div>
+      </div>
     </div>
   </div>
 
   <nav id="app-tabbar" class="tab-bar"></nav>
   <script src="/common/common.js?v=4"></script><script src="/common/crop.js?v=4"></script><script src="/common/profile.js?v=4"></script>
   <script src="/common/peek.js?v=4"></script>
+  <!-- 소속 배지에 길드 문장을 그린다(common.js 의 guildBadge) -->
+  <script src="/common/crest.js?v=4"></script>
   <script src="/common/songedit.js?v=4"></script>
   <script src="/songs/js/songs.js?v=4"></script>
 </body>

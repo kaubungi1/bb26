@@ -9,11 +9,27 @@
    값은 홈 화면에서 쓰던 것으로 맞췄다. 페이지마다 다른 값을 두지 않는다. */
 
 :root {
-  /* 청록. --teal-deep 은 글자색으로 쓰이므로 흰 바탕 대비 4.5 아래로 내리지 않는다.
+  /* ---------- 강조 ----------
+     값은 --accent* 에 있고 --teal* 은 옛 이름이다. 사이트가 var(--teal…) 을 149곳에서
+     쓰고 있어서, 이름을 바꾸는 대신 별칭으로 이어 둔다. 테마는 --accent* 셋만 덮으면
+     그 149곳이 전부 따라온다. 옛 이름은 페이지를 손볼 때마다 한 곳씩 옮긴다.
+
+     --accent-deep 은 글자색으로 쓰이므로 밝은 바탕 대비 4.5 아래로 내리지 않는다.
      지금 4.53 이고 한 단계만 진해져도 미달이 된다. */
-  --teal: #00b3bf;
-  --teal-deep: #00838d;
-  --teal-soft: #dbf3f5;
+  --accent: #00b3bf;
+  --accent-deep: #00838d;
+  --accent-soft: #dbf3f5;
+  /* 강조 면 위에 앉는 글자. #00b3bf 위의 흰 글자는 대비 2.3 이라 못 쓴다.
+     테마마다 강조색 밝기가 달라서 어두운 글자일 수도 흰 글자일 수도 있다. */
+  --on-accent: #06343a;
+  /* '내가 낀 자리'. 곡 칸·파티창 칸·악보 선택이 같은 색을 쓴다.
+     전에는 #b3e8ed 가 네 파일에 박혀 있어서 테마가 닿지 못했다. */
+  --mine: #b3e8ed;
+  --mine-hover: #a2e2e8;
+
+  --teal: var(--accent);
+  --teal-deep: var(--accent-deep);
+  --teal-soft: var(--accent-soft);
 
   --pink: #ef2f88;
   --pink-soft: #ffeaf3;
@@ -23,6 +39,17 @@
   --ink-2: #33445f;
   --ink-muted: #53657c;
   --ink-faint: #64768b;
+  /* --ink 는 '글자색' 이다. 그걸 면으로 깔면 어두운 테마에서 화면이 뒤집힌다 —
+     --ink 가 밝아지므로 스탯 줄·칩·현재 탭이 하얀 띠가 된다. 실제로 그렇게 됐다.
+     그래서 '채워진 면' 은 --ink-fill 로 따로 둔다. 밝은 테마에서는 값이 --ink 와 같아서
+     화면이 하나도 안 바뀌고, 어두운 테마만 여기를 제 색으로 덮는다.
+     --on-ink 는 그 면 위에 앉는 글자다. */
+  --ink-fill: #1b2a45;
+  --on-ink: #ffffff;
+  /* 칸에 마우스를 올렸을 때의 면. 아홉 곳에 #e3edf4·#dde7ef·#f2f7fa 가 박혀 있었다.
+     어두운 테마에서 그 값이 그대로면 어두운 바탕에 흰 칸이 번쩍인다. */
+  --hover: #e3edf4;
+  --hover-2: #dde7ef;
 
   /* 면 */
   --bg: #fff;
@@ -39,11 +66,30 @@
   --radius: 6px;
   --radius-sm: 4px;
 
+  /* 로고(assets/logo.png)는 순수 검정 투명 PNG 다. 어두운 테마는 헤더도 어두워지므로
+     그대로 두면 안 보인다. 어두운 테마만 이 값을 1 로 두어 흰 로고로 뒤집는다. */
+  --logo-invert: 0;
+
   /* 사선. 프로세카 문법의 핵심이라 각도는 사이트 전체가 하나여야 한다.
+     테마는 색과 풍경만 바꾼다 — 각도와 모서리는 건드리지 않는다.
+     전에는 테마마다 --skew 를 0deg~-8deg 로 다르게 줘서, 현재 탭이 어떤 테마에서는
+     마름모, 어떤 테마에서는 직사각형이 됐다. 골격이 테마마다 달라지면 안 된다.
      기울인 것의 안쪽 글자는 calc(var(--skew) * -1) 로 되돌린다. */
   --skew: -8deg;
 
-  --accent: var(--teal);
+  /* ---------- 페이지 바탕 ----------
+     두 층으로 나뉜다. --page-art 가 그림(스카이라인·산·기둥), --page-bg 가 색이다.
+     나누지 않으면 테마가 색만 바뀐 것처럼 보인다 — 실제로 그랬다.
+     common.css 의 body 가 `var(--page-art), var(--page-bg)` 순으로 얹는다.
+
+     기본값은 그림 없음 + 지금까지 쓰던 색이다. 길드 밖 화면은 아무것도 안 바뀐다. */
+  --page-art: none;
+  --page-bg:
+    repeating-linear-gradient(125deg, transparent 0 95px, #fff7 96px 98px, transparent 99px 165px),
+    radial-gradient(ellipse at 0 30%, #90f1eb77, transparent 55%),
+    radial-gradient(ellipse at 100% 80%, #b7bcff66, transparent 60%),
+    #eef6fb;
+
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --spring: cubic-bezier(0.2, 1.35, 0.4, 1);
 

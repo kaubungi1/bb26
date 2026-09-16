@@ -14,17 +14,15 @@ html, body { margin: 0; }
 
 [hidden] { display: none !important; }
 
+/* background 는 여기에 두지 않는다. 아래쪽 '공통 화면' 절의 body 규칙이 늘 덮으므로
+   여기 적어봐야 죽은 값이고, 두 곳에 다른 배경이 적혀 있으면 파일을 읽어서
+   무슨 색이 나오는지 알 수 없다. 실제 값은 tokens.css 의 --page-bg 한 곳에 있다. */
 body {
   min-height: 100svh;
   color: var(--ink);
   overflow-x: hidden;
   overflow-wrap: anywhere;
   word-break: break-word;
-  background:
-    radial-gradient(70% 45% at 90% -5%, rgba(34, 184, 230, 0.22), transparent 62%),
-    radial-gradient(70% 45% at 0% 6%, rgba(0, 184, 173, 0.2), transparent 60%),
-    radial-gradient(60% 40% at 60% 108%, rgba(236, 72, 153, 0.16), transparent 62%),
-    var(--bg);
 }
 
 .container {
@@ -36,21 +34,10 @@ body {
 /* 상단 바 */
 /* 배경은 화면 끝까지 깔되, 안의 내용은 콘텐츠(720px)와 같은 축에 세운다.
    그러지 않으면 넓은 화면에서 브랜드만 저 멀리 구석에 떠 보인다. */
-.app-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  margin: 0;
-  padding: 11px calc(18px + (100% - min(100%, 720px)) / 2);
-  min-height: 48px;
-  background: rgba(244, 248, 250, 0.72);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-}
+/* .app-bar 의 모든 선언은 이 파일 아래쪽 '공통 화면' 절에 있다. 여기에 다시 두지 않는다.
+   헤더의 면은 --paper 다. 전에는 background:#fff 로 못 박아 놓고 글자만 --ink 를 썼는데,
+   어두운 테마는 --ink 가 밝은 색이라 흰 면에 흰 글자가 됐다 — 길드 이름 대비가 1.25 였다.
+   면과 글자는 같은 편에 서야 한다. 로고는 --logo-invert 로 뒤집는다. */
 .brand {
   display: flex;
   align-items: center;
@@ -81,19 +68,7 @@ body {
 /* 하단 탭 바 */
 /* 상단바와 같은 유리면. 화면 끝까지 깔고, 안의 내용만 콘텐츠(720px) 축에 세운다.
    위는 면, 아래는 떠 있는 섬이면 한 화면에서 마감이 어긋나 보인다. */
-.tab-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
-  display: flex;
-  gap: 4px;
-  padding: 6px calc(12px + (100% - min(100%, 720px)) / 2) calc(6px + var(--safe-bottom));
-  background: rgba(244, 248, 250, 0.72);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-}
+/* .tab-bar 의 모든 선언은 이 파일 아래쪽 '공통 화면' 절에 있다. 여기에 다시 두지 않는다. */
 .tab-item {
   flex: 1;
   display: flex;
@@ -165,30 +140,37 @@ body {
 .empty-msg { padding: 8px 0; }
 .field-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
 .field-row.tight { margin-bottom: 6px; }
+/* 칩 줄 앞에 서는 라벨. 홈의 .chip-label 과 같은 문법이다 — 작게, 자간을 벌려,
+   한 단계 뒤로. 옆의 칩이 주인공이고 이건 그 줄이 무엇인지만 말한다. */
 .field-label {
   flex: none;
-  width: 32px;
-  padding-top: 7px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--ink-muted);
+  width: auto;
+  min-width: 30px;
+  padding-top: 9px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
 }
-.chip-set { display: flex; flex-wrap: wrap; gap: 2px 16px; flex: 1; min-width: 0; }
-/* 배경 없는 글자만. 고른 것에만 기울어진 밑줄이 붙는다. */
+/* 면이 차면 10px 안쪽 여백이 간격 노릇을 한다. 전에는 글자만 있어서 16px 이 필요했다. */
+.chip-set { display: flex; flex-wrap: wrap; gap: 2px 4px; flex: 1; min-width: 0; }
+/* 평소엔 글자만. 고른 것만 면이 찬다 — 홈(.home .chip)과 같은 문법이다.
+   전에는 청록 글자에 기울어진 그라디언트 밑줄이 붙었다. --grad-teal 은
+   tokens.css 가 걷어내라고 적어둔 넷 중 하나여서 여기서 하나를 줄인다. */
 .chip {
   position: relative;
-  padding: 5px 1px 7px;
+  min-height: 28px;
+  padding: 0 10px;
   border: none;
   border-radius: 0;
   background: transparent;
   color: var(--ink-muted);
-  font-size: 13.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: -0.2px;
-  min-height: auto;
   box-shadow: none;
   cursor: pointer;
-  transition: color 0.14s ease;
+  transition: background 0.12s, color 0.12s;
 }
 .chip:hover { color: var(--ink); background: transparent; box-shadow: none; }
 .chip i {                       /* 개수 — 이름보다 뒤로 물러난다 */
@@ -198,18 +180,13 @@ body {
   opacity: 0.45;
   margin-left: 3px;
 }
-.chip.is-on { color: var(--teal-deep); }
-.chip.is-on::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 1px;
-  height: 3px;
-  transform: skewX(var(--skew));
-  border-radius: 2px;
-  background: var(--grad-teal);
-}
+.chip.is-on { background: var(--ink-fill); color: var(--on-ink); }
+.chip.is-on i { opacity: 0.72; }   /* 흰 글자 위에서는 0.45 가 너무 흐리다 */
+/* 파트는 핑크, 태그·날짜는 잉크 — 홈과 같은 배정이다.
+   data-role 은 프로필 모달의 연주 파트와 멤버 페이지의 파트 필터를 함께 잡는다.
+   data-erole 은 악보 수정 줄의 파트다. 악보의 올리기·일괄은 컨테이너로 가른다. */
+.chip[data-role].is-on, .chip[data-erole].is-on,
+#up-role .chip.is-on, #bulk-role .chip.is-on { background: var(--pink); }
 
 /* 검색창 (곡·악보가 함께 쓴다) */
 .search-box {
@@ -615,54 +592,40 @@ button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
 .avatar-chip.lg { width: 30px; height: 30px; font-size: 13px; box-shadow: none; }
 .avatar-chip.more { background: rgba(22, 40, 47, 0.08); color: var(--ink-muted); }
 
-/* 하단 시트 */
-.sheet-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  background: rgba(16, 32, 39, 0.42);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-.sheet {
-  width: 100%;
-  max-width: 480px;
-  background: rgba(255, 255, 255, 0.96);
-  -webkit-backdrop-filter: blur(24px) saturate(1.6);
-  backdrop-filter: blur(24px) saturate(1.6);
-  border-radius: 22px 22px 0 0;
-  padding: 10px 18px calc(20px + var(--safe-bottom));
-  box-shadow: 0 -12px 40px rgba(22, 46, 58, 0.16);
-  animation: sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-}
-@keyframes sheet-up { from { transform: translateY(14px); opacity: 0; } }
-.sheet-grip {
-  width: 38px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(22, 40, 47, 0.16);
-  margin: 0 auto 14px;
-}
-.sheet-title { font-size: 16px; font-weight: 800; margin: 0; }
-.sheet-sub { font-size: 12px; color: var(--ink-muted); margin: 2px 0 14px; }
-.sheet-members { display: flex; flex-direction: column; }
-.sheet-member {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--line);
-}
-.sheet-member:last-child { border-bottom: none; }
-.sheet-member-name { flex: 1; min-width: 0; font-weight: 700; font-size: 14px; }
-.sheet-member.me .sheet-member-name { color: var(--teal-deep); }
-.sheet-member-tag { font-size: 11px; font-weight: 800; color: var(--teal-deep); }
-.sheet-empty { color: var(--ink-muted); font-size: 13px; padding: 10px 0 4px; }
-.sheet-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-.sheet-actions button { flex: 1; }
+/* 파트 상세 — 껍데기(.modal)만 빌려 쓰고 안쪽은 여기서 전부 정한다.
+
+   .modal-form 에 얹지 않는다. 그 규칙이 common.css 와 game.css 에 반씩 나뉘어 있어
+   flex-direction 은 이쪽, flex-wrap 은 저쪽에서 오던 시절에 그렇게 정했다.
+   두 파일은 합쳤지만 결정은 그대로 둔다 — 파트 상세는 입력 폼이 아니라 사람 목록이라
+   .modal-form 이 앞으로 어떻게 바뀌든 따라갈 이유가 없다. 필요한 값을 직접 적는다.
+
+   바닥에서 올라오던 하단 시트는 없앴다. 끌어내릴 수 없는 화면에서도 바닥에 붙어
+   버튼이 잘렸고, 같은 사이트에서 창이 두 가지로 뜨는 것도 맞지 않았다. */
+.part-body { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 12px; padding: 16px 20px 20px; }
+
+/* 이름이 악보 목록의 .sheet-sub 와 겹쳐서 part-sub 로 따로 뒀다. 악보 쪽은 건드리지 않는다. */
+.part-sub { margin: 0; font-size: 12px; color: var(--ink-muted); overflow-wrap: anywhere; }
+
+.part-body .sheet-members { display: flex; flex-direction: column; }
+.part-body .sheet-member { display: flex; flex-direction: row; align-items: center; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid var(--line); }
+.part-body .sheet-member:last-child { border-bottom: none; }
+/* 사람 이름은 어떤 폭에서도 글자 단위로 쪼개지지 않는다. 좁으면 … 로 자른다. */
+.part-body .sheet-member-name { flex: 1 1 auto; min-width: 0; font-weight: 700; font-size: 14px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.part-body .sheet-member.me .sheet-member-name { color: var(--teal-deep); }
+/* 이름 옆 작은 ✎. 큰 버튼과 역할이 다르므로 늘어나지 않는다. */
+.part-body .sheet-member-tag { flex: 0 0 auto; margin-left: auto; min-height: 0; padding: 0 4px;
+  border: 0; background: none; font-size: 11px; font-weight: 800; color: var(--teal-deep); cursor: pointer; }
+.part-body .sheet-empty { margin: 0; padding: 10px 0 4px; color: var(--ink-muted); font-size: 13px; }
+
+.part-body .sheet-actions { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 10px; margin-top: 4px; }
+.part-body .sheet-actions button { flex: 1 1 auto; min-height: 40px; padding: 0 16px;
+  border: 0; border-radius: 0; font-size: 13px; font-weight: 800; box-shadow: none; }
+.part-body .sheet-actions .ghost { flex: 0 0 auto; background: none; color: var(--ink-muted); font-weight: 700; }
+.part-body .sheet-actions .ghost:hover { background: none; color: var(--ink); }
+.part-body .sheet-actions .secondary { background: var(--teal-soft); color: var(--teal-deep); }
+.part-body .sheet-actions .secondary:hover { background: #c9ebee; filter: none; }
 
 /* 추첨 */
 /* 후보곡 — 곡·악보 탭과 같은 구분선 목록. 고른 것만 왼쪽에 사선 액센트가 선다.
@@ -881,21 +844,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
   justify-content: center;
   padding: 24px;
 }
-.modal {
-  width: 100%;
-  max-width: 360px;
-  background: #fff;
-  border-radius: 22px;
-  padding: 26px 22px;
-  box-shadow: 0 24px 60px rgba(22, 46, 58, 0.2);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.modal-title { margin: 0; font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
-.modal-desc { margin: 0 0 6px; color: var(--ink-muted); font-size: 13px; }
-.modal-form { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 2px; }
-.modal-form button { width: 100%; }
+/* 모달의 모든 선언은 이 파일 아래쪽 '모달' 절에 있다. 여기에 다시 두지 않는다.
+   전에는 common.css 와 game.css 가 반씩 정의해서, game.css 가 flex-wrap 만 다시 쓰고
+   common.css 의 flex-direction:column 이 그대로 살아남았다. 어느 파일을 읽어도
+   최종 모습을 알 수 없었고, 그 위에 얹은 화면이 의도하지 않은 방향으로 흘렀다.
+   그래서 game.css 를 이 파일로 합쳤다. 지금은 한 파일 안의 위아래 순서가 곧 우선순위다. */
 
 @media (min-width: 720px) {
   .container { padding: 0 24px calc(108px + var(--safe-bottom)); }
@@ -931,6 +884,25 @@ button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
 
 /* ===== 불법이륙 2.0: 길드 문맥 ===== */
 /* 길드 안에서는 --accent 가 그 길드 색으로 바뀐다. 기본값은 tokens.css 에 있다. */
+
+/* 길드 안이라는 걸 헤더가 말한다. 전에는 이름만 바뀌고 배경도 선도 그대로여서
+   지금 길드 안인지 밖인지 화면으로 알 수 없었다. */
+.app-bar.is-guild { border-bottom: 3px solid var(--accent); }
+/* 브랜드 두 덩이는 가운데가 아니라 아랫줄을 맞춘다. 전에는 .brand-guild 가 세로로
+   쌓이면서 '불법이륙 ›' 의 › 가 혼자 아래로 떨어졌다. */
+.brand-set { align-items: flex-end; }
+.brand-home { display: inline-flex; align-items: baseline; white-space: nowrap; padding-bottom: 3px; }
+.brand-home::after { margin-left: 6px; }
+.brand.is-guild { align-items: flex-end; }
+.brand-guild { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.brand-guild .overline { font-size: 8px; letter-spacing: 0.24em; color: var(--accent); line-height: 1; }
+.brand-guild b { font-size: 22px; font-weight: 900; line-height: 1.1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 내비의 두 덩이 사이. 왼쪽은 길드 안, 오른쪽은 길드 밖이다. */
+.game-nav .nav-gap { flex: none; width: 1.5px; height: 16px; margin: 0 8px; background: var(--line); }
+/* 길드 밖으로 나가는 항목. 눌러도 길드에 머물지 않는다는 뜻이다. */
+.game-nav.in-guild a.is-out > span::after { content: '↗'; margin-left: 3px; font-size: 0.8em; opacity: 0.55; }
+
 .brand-set { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .brand-home {
   font-size: 12px;
@@ -943,11 +915,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
 .brand-home::after { content: '›'; margin-left: 6px; opacity: 0.6; }
 a.brand { text-decoration: none; }
 .brand.is-guild::before { background: var(--accent); }
-.brand-emblem { font-size: 15px; line-height: 1; }
+.brand-emblem { display: grid; place-items: center; width: 26px; height: 26px; }
+.brand-emblem svg { display: block; width: 100%; height: 100%; }
+.guild-badge svg { display: block; width: 13px; height: 13px; flex: none;
+  transform: skewX(calc(var(--skew) * -1)); }
 
 /* 길드 배지 — 사선 라벨, 색은 길드가 정한다 */
 .guild-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex: none;
   padding: 2px 8px;
   transform: skewX(var(--skew));
@@ -978,3 +955,101 @@ a.brand { text-decoration: none; }
 .member-activity b { color: var(--ink); font-weight: 800; }
 .member-activity a { color: var(--ink-muted); text-decoration: underline; text-underline-offset: 2px; }
 .member-activity a:hover { color: var(--teal-deep); }
+
+/* ══════════════════════════════════════════════════════════════
+   공통 화면 — 헤더·내비·카드·모달·닉네임 창.
+   전에는 game.css 라는 별도 파일이 맨 뒤에 실려 이 파일을 덮었다.
+   디자인이 하나인데 공용 CSS 가 둘일 이유가 없어서 여기로 합쳤다.
+   위아래 순서가 곧 우선순위다. 같은 선택자가 두 번 나오면 아래가 이긴다.
+   ══════════════════════════════════════════════════════════════ */
+/* 토큰은 common/tokens.css 한 곳에 있다. 여기 있던 :root 는 옮겼다.
+   장르색 다섯 개(--genre-*)는 아무도 쓰지 않아 함께 지웠다. 홈은 .genre-* 클래스에
+   자기 --tone 을 따로 둔다. */
+/* 바탕값은 tokens.css 의 --page-bg 한 곳에 있다. 길드 테마가 그 한 줄만 덮는다. */
+/* 배경은 body 에 둔다. html 로 올려 봤다가 배경이 통째로 사라져서 되돌렸다.
+   낙서(.gd-layer)를 배경 위·글 아래에 두는 일은 음수 z-index 로 풀지 않는다 —
+   그 방법은 배경이 어느 요소에 붙어 있느냐에 기대서, 한쪽을 고치면 다른 쪽이 깨진다.
+   낙서는 0, 본문은 1 로 두어 순서를 명시한다(draw.css). */
+body{min-height:100svh;background:var(--page-art),var(--page-bg);background-attachment:fixed}
+.container{max-width:1280px;padding:24px 32px 44px;margin:auto}/* 헤더. common.css 에서 살아남던 값(top·z-index·justify-content·backdrop-filter)까지
+   여기로 옮겨 적었다. 이 파일만 읽고 최종 모습을 알 수 있어야 한다. */
+.app-bar{position:relative;top:0;z-index:20;max-width:none;margin:0;min-height:72px;padding:12px max(24px,calc((100% - 1280px)/2 + 32px));background:var(--paper);border-bottom:1.5px solid var(--border);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);display:grid;grid-template-columns:1fr auto 1fr;justify-content:space-between;align-items:center;gap:20px}.brand{font-size:24px;font-weight:900;color:var(--ink);text-decoration:none}.brand{display:inline-flex;align-items:center;gap:10px;align-self:center}.brand{justify-self:start}
+/* 로고는 가로 2.28:1 이라 정사각 칸에 넣지 않는다. 높이만 정하고 폭은 따라온다. */
+.brand-mark{height:38px;width:auto;flex:none;display:block;background:none;transform:none;box-shadow:none;filter:invert(var(--logo-invert))}
+.brand-home .brand-mark{height:22px}
+.game-nav{display:flex;gap:6px;background:none;border:0;box-shadow:none;transform:none;padding:0;justify-self:center}.game-nav a{padding:9px 16px;color:var(--ink-muted);font-size:15px;font-weight:700;text-decoration:none;white-space:nowrap;border-radius:0;transition:background .12s,color .12s}.game-nav a:hover{background:none;color:var(--ink)}.game-nav a[aria-current=page]{background:var(--ink-fill);color:var(--on-ink);font-weight:800;transform:skew(var(--skew))}
+.game-nav a[aria-current=page]>span{display:inline-block;transform:skew(calc(var(--skew) * -1))}.name-text{border:0;background:none!important;color:var(--ink-muted)!important;border-radius:0;min-height:38px;padding:0 4px;justify-self:end;box-shadow:none;font-size:14px;font-weight:700}
+.name-text:hover{color:var(--ink)!important;background:none!important}/* 아래 탭 줄은 쓰지 않는다. 안 보이지만 값은 여기 다 적어 둔다. */
+.tab-bar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:30;gap:4px;padding:6px calc(12px + (100% - min(100%, 720px)) / 2) calc(6px + var(--safe-bottom));background:color-mix(in srgb, var(--paper) 82%, transparent);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4)}.card{border:1px solid white;border-radius:6px;box-shadow:0 8px 24px #2649630b;background:#ffffffdb;padding:24px}.section-head{margin-bottom:20px}.section-head h2{font-size:21px;color:var(--ink)}/* 채도 86% 는 화면에서 혼자 튀고 흰 글자 대비도 3.87 로 모자랐다.
+   색상은 그대로 두고 채도·밝기만 낮춰 대비 5.32 로 올린다. 딱딱한 그림자는 뺀다. */
+button.pink,.pink.btn-link{background:#c62872;color:#fff;box-shadow:none;border-radius:3px;font-weight:800}
+button.pink:hover,.pink.btn-link:hover{background:#b2245f;filter:none}.suggest-button{display:inline-block;padding:11px 20px;text-decoration:none;transform:skew(var(--skew));font-size:13px}.overline{display:block;font-size:9px;letter-spacing:2px;font-weight:800;color:var(--teal-deep)}.tools input,.tools select,.tools button{color:var(--ink)}/* 키보드로 이동할 때만 보인다. 입력칸은 틸 밑줄이 이미 알려주므로 뺀다. */
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}/* 곡 페이지는 songs.css 가 직접 정한다. 여기서 덧칠하지 않는다. */
+/* 이 자리에 있던 !important 묶음은 모두 걷어냈다. 길드는 파티창, 일정은 아코디언,
+   멤버는 명함이 되면서 각자 자기 파일에서 모양을 정한다. 이 묶음이 그 파일들이 적는
+   것을 전부 눌러서, 파일을 읽어서는 실제 모습을 알 수 없었다. */.song-item:target{outline:3px solid var(--teal);outline-offset:3px}.modal,.profile-modal{border-radius:8px}.modal-backdrop{backdrop-filter:blur(5px)}.tool-line{background:#edf6fa;padding:10px;border:1px solid #dbe8ee;border-radius:4px}.member-list{gap:16px}
+/* 멤버 목록 격자. 넓은 쪽부터 좁은 쪽 순서로 읽는다. 뒤 규칙이 앞을 덮는다.
+   540px 분기는 800px 분기가 늘 뒤에 와서 덮으므로 실제로 걸리는 일이 없다. 기록만 남긴다. */
+.member-list{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));column-gap:24px;gap:16px}.pf-preview img,.avatar-chip img{object-fit:contain!important}
+/* 일정 페이지의 2열은 여기 있던 body:has(#calendar) 격자였다. 달력을 걷어내면서
+   페이지 전체를 가르지 않고, 상세 안에서 곡 표와 합주실을 가르는 쪽으로 옮겼다
+   (schedule.css 의 .ps-split). 페이지를 가르면 아코디언이 반쪽 폭이 된다. */
+@media(min-width:1000px){.member-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:800px){.app-bar{display:flex;flex-wrap:wrap;padding:12px 18px 10px;min-height:auto;gap:12px}.game-nav{order:3;width:100%;margin:0;justify-content:space-between;gap:0}.game-nav a{padding:8px 10px;font-size:13px}.name-text{margin-left:auto}.container{padding:20px 18px 35px}.card{padding:18px}.brand{font-size:22px}.member-list{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.game-nav a{padding:7px 6px;font-size:12px}.container{padding:16px 12px 30px}.card{padding:14px}.app-bar{padding:16px 14px 10px}.section-head h2{font-size:18px}.brand{font-size:21px}.suggest-button{padding:10px 14px;font-size:11px}.member-list{grid-template-columns:1fr}.tool-line{padding:7px}}
+
+
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+/* 닉네임 확인 안내. 인증이 아니라 오타로 이름이 갈리는 것을 막는 장치다. */
+.nick-hint{width:100%;margin:-2px 0 2px;padding:12px;background:#f3f8fb;border-left:4px solid var(--pink);text-align:left}
+.nick-warn{margin:0 0 8px;font-size:13px;font-weight:700;color:#26334c}
+.nick-warn b{color:var(--pink)}
+.nick-ask{margin:0 0 6px;font-size:12px;font-weight:700;color:#61778b}
+.nick-near{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.nick-near button{min-height:34px;padding:0 14px;border:0;border-radius:4px;background:#00b3bf;color:#fff;font-size:13px;font-weight:800;box-shadow:none}
+.nick-near button:hover{filter:brightness(1.06)}
+.nick-note{margin:0 0 10px;font-size:12px;line-height:1.55;color:#61778b}
+.nick-new{width:100%;min-height:36px;padding:0 12px;border:1.5px solid #cfdbe5;border-radius:4px;background:#fff;color:#61778b;font-size:12px;font-weight:800;box-shadow:none}
+.nick-new:hover{border-color:#00b3bf;color:#26334c;filter:none}
+
+/* ── 모달 ──
+   메인 화면과 같은 규칙을 쓴다. 큰 라운드·통통한 그림자·알약 버튼·윤곽선 상자를 걷어낸다.
+   나누는 방법은 채워진 면, 선 하나, 여백 셋뿐이다. */
+.modal-backdrop{background:#16283fa8;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+/* 모달. 한 선택자의 레이아웃은 한 파일에서 전부 적는다 — 값이 같아도 적는다.
+   그래야 이 파일만 읽고 최종 모습을 알 수 있다. */
+.modal{width:100%;max-width:420px;border-radius:0;padding:0;background:#fff;box-shadow:6px 6px 0 #1b2a45;display:flex;flex-direction:column;gap:6px}
+.modal-title{display:flex;align-items:center;gap:8px;margin:0;padding:16px 20px;
+  background:#1b2a45;color:#fff;font-size:15px;font-weight:800;letter-spacing:-.01em}
+.modal-title svg{width:17px;height:17px}
+.modal-desc{margin:0;padding:14px 20px 0;font-size:13px;color:#69798f;line-height:1.6}
+/* 세로로 쌓는다. flex-wrap 은 뺐다 — 세로 배치에서 wrap 은 컨테이너 높이가 정해져야
+   의미가 있는데 .modal 은 높이가 auto 라 아무 일도 하지 않았다. */
+.modal-form{display:flex;flex-direction:column;gap:10px;margin:8px 0 2px;padding:16px 20px 20px}
+.modal-form input,.modal-form textarea,.modal-form select{
+  width:100%;min-height:40px;padding:0 12px;border:0;border-bottom:2px solid #d3e0ea;border-radius:3px 3px 0 0;
+  background:#eef4f8;font-size:14px;font-weight:600;color:#1b2a45;box-shadow:none}
+.modal-form textarea{padding:10px 12px;min-height:66px;line-height:1.6;resize:vertical}
+.modal-form input:focus,.modal-form textarea:focus,.modal-form select:focus{border-bottom-color:#00b3bf;box-shadow:none}
+.modal-form button{flex:1 1 auto;min-height:40px;padding:0 16px;border:0;border-radius:0;
+  font-size:13px;font-weight:800;box-shadow:none}
+.modal-form button.pink{background:#c62872;color:#fff;box-shadow:none;border-radius:3px}
+.modal-form button.pink:hover{background:#b2245f;filter:none}
+.modal-form button.pink:active{background:#9c1f54}
+.modal-form button.ghost{flex:0 0 auto;background:none;color:#69798f;font-weight:700}
+.modal-form button.ghost:hover{background:none;color:#1b2a45}
+.modal-form button.ghost.mini{min-height:30px;padding:0 6px;font-size:12px}
+.pf-logout{flex:1 1 100%!important;margin-top:4px;padding-top:12px!important;
+  border-top:1.5px solid #e4eff5!important;background:none!important;color:#69798f!important;font-weight:700!important}
+.pf-logout:hover{color:#ef2f88!important}
+
+/* 닉네임 확인 안내를 같은 언어로 */
+.nick-hint{border-left:4px solid var(--pink);background:var(--empty);border-radius:0}
+.nick-near button{border-radius:0;background:#00b3bf}
+.nick-new{border:0;border-radius:0;background:#eef4f8;color:#69798f}
+.nick-new:hover{background:#e2ecf3;color:#1b2a45}
+
+/* 헤더 로고. 좁아지면 높이만 줄인다 — 폭은 비율이 알아서 따라온다. */
+@media (max-width: 800px) { .brand-mark { height: 32px; } }
+@media (max-width: 480px) { .brand-mark { height: 28px; } }
