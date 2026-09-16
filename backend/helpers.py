@@ -3,6 +3,11 @@ from fastapi import HTTPException
 
 GUILD_BRIEF = ('id', 'slug', 'name', 'color', 'emblem')
 
+# 밴드 한 팀의 자리. 곡마다 이 여섯이 늘 있고, 쓰지 않는 자리는 지우는 게 아니라 끈다.
+# 순서도 여기서 정해진다. 화면의 여섯 칸이 곡마다 같은 자리에 오도록 하기 위함이다.
+# 프론트의 common.js ROLE_ORDER 와 같은 값이어야 한다.
+PART_ROLES = ('보컬', '일렉1', '일렉2', '베이스', '키보드', '드럼')
+
 
 def like_escape(text):
     """LIKE/ILIKE 패턴에서 %, _ 가 와일드카드로 해석되지 않게 이스케이프한다."""
@@ -76,12 +81,26 @@ def attach_guilds(conn, rows):
     return rows
 
 
+# 곡을 읽을 때 쓰는 컬럼 목록. thumb 은 뺀다.
+# 이미지가 장당 100KB 라 SELECT * 로 읽으면 목록 한 번에 15MB 를 끌어온다.
+# 화면은 /api/songs/{id}/thumb 주소로 따로 받으므로 여기 실을 이유가 없다.
+SONG_COLS = ('SELECT "id","title","artist","category","youtubeUrl","status","isCandidate",'
+             '"note","createdBy","createdAt","updatedAt","tags","guildId",'
+             '"bumpedBy","bumpedAt","bumpNote","thumbVideoId",'
+             '(thumb IS NOT NULL) AS "hasThumbBlob" FROM songs')
+
+
 def build_songs(conn, song_rows):
     """곡 행 목록에 세션·지원자·길드·마지막 합주일을 붙인다."""
     if not song_rows:
         return []
     songs = [dict(r) for r in song_rows]
     for s in songs:
+        # 자켓 그림은 목록에 싣지 않는다. 바이트라서 JSON 으로 못 바꾸고,
+        # 실을 이유도 없다. 화면은 /api/songs/{id}/thumb 주소로 따로 받는다.
+        s['hasThumb'] = bool(s.pop('hasThumbBlob', None)) or bool(s.get('thumbVideoId'))
+        s.pop('thumb', None)
+        s.pop('thumbUpdatedAt', None)
         s['isCandidate'] = bool(s['isCandidate'])
         s['sessions'] = []
         s['lastPlayed'] = None

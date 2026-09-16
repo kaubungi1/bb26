@@ -18,9 +18,56 @@
 }
 .pf-preview img { width: 100%; height: 100%; object-fit: cover; }
 .pf-preview .emoji { font-size: 38px; line-height: 1; }
-.pf-top-fields { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.pf-nick { font-weight: 800; font-size: 15px; }
-.pf-file { cursor: pointer; }
+.pf-top-fields { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; min-width: 0; }
+.pf-nick { font-weight: 900; font-size: 20px; line-height: 1.2; }
+.pf-nick-note { margin: 0; font-size: 12px; color: var(--ink-muted); }
+
+/* 원 자체가 파일 선택 버튼이다. 제일 큰 과녁에 동작을 둔다.
+   입력칸은 hidden 이 아니라 눈에만 안 보이게 둔다. hidden 이면 탭으로 닿지 않는다. */
+.pf-avatar { position: relative; flex: none; width: 72px; height: 72px; }
+.pf-file { position: relative; display: block; width: 72px; height: 72px; border-radius: 50%; cursor: pointer; }
+.pf-file-input { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: 0; border: 0; opacity: 0; }
+.pf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pf-file-hint {
+  position: absolute; inset: 0; z-index: 1;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: #00000099; color: #fff;
+  font-size: 12px; font-weight: 800;
+  opacity: 0; transition: opacity .12s; pointer-events: none;
+}
+@media (hover: hover) { .pf-file:hover .pf-file-hint { opacity: 1; } }
+@media (hover: none) { .pf-file-hint { opacity: 1; } }
+.pf-file:focus-within .pf-file-hint { opacity: 1; }
+.pf-file:focus-within { outline: 2px solid #1b2a45; outline-offset: 3px; }
+/* 지우기는 원 밖, 글자 칸 셋째 줄이다. 원 모서리에 두면 사진 위로 16px 올라탄다.
+   이미지가 없을 때도 줄을 그대로 두고 감추기만 한다. 줄 수가 바뀌면 이름이 튄다. */
+.pf-clear {
+  min-height: 0; padding: 4px 0; margin-top: 2px;
+  border: 0; background: none; box-shadow: none;
+  color: var(--ink-muted); font-size: 12px; font-weight: 700;
+  text-align: left; cursor: pointer;
+}
+.pf-clear:hover { background: none; color: #c62872; }
+.pf-clear.is-off { visibility: hidden; pointer-events: none; }
+
+/* 둥글게 자르기 창. 원 바깥을 흐려 잘릴 범위를 그대로 보여 준다. */
+.crop-modal { max-width: 340px; }
+.crop-help { margin: 0; font-size: 12px; color: var(--ink-muted); }
+.crop-stage {
+  position: relative; width: 260px; height: 260px; margin: 12px auto 0;
+  overflow: hidden; border-radius: 8px; background: #16232e;
+  cursor: grab; touch-action: none; user-select: none;
+}
+.crop-stage:active { cursor: grabbing; }
+.crop-canvas { display: block; width: 260px; height: 260px; }
+.crop-hole {
+  position: absolute; inset: 0; border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgba(20, 32, 42, 0.62);
+  pointer-events: none;
+}
+.crop-zoom { width: 260px; margin: 12px auto 0; display: block; min-height: 0; padding: 0; border: 0; background: none; }
+.crop-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
 .pf-short { width: 70px; flex: none; }
 .pf-colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .pf-color {
@@ -58,8 +105,32 @@
 .profile-modal, .guild-modal { max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; }
 .profile-form .field-row { flex-wrap: wrap; }
 .profile-form .field-label { flex: 0 0 48px; }
-.pf-file { display: inline-flex; align-items: center; min-height: 34px; font-size: 13px; color: var(--teal-deep); text-decoration: underline; }
 .guild-modal { max-width: 420px; }
 .guild-modal label { display: grid; gap: 5px; font-size: 12px; color: var(--ink-muted); }
 .guild-editor-row { display: grid; grid-template-columns: 1fr 84px; gap: 12px; }
 .guild-editor-row input[type=color] { padding: 4px; }
+
+/* ---------- 곡 정보 모달 (common/songedit.js) ----------
+   프로필 편집기와 같은 골격이다. 여기서는 자켓 미리보기 자리만 따로 잡는다.
+   pf-preview 가 정사각형인 것과 달리 자켓은 16:9 라 비율이 다르다. */
+.song-modal .se-top { display: flex; gap: 14px; width: 100%; align-items: flex-start; }
+.song-modal .se-top-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.song-modal .se-preview {
+  flex: none; width: 128px; aspect-ratio: 16 / 9; overflow: hidden;
+  display: grid; place-items: center; background: var(--empty);
+}
+.song-modal .se-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 주소가 없거나 아직 안 맞을 때 — 곡 리스트·홈과 같은 장르색 + 글자 */
+.song-modal .se-preview.is-mark { background: linear-gradient(140deg, var(--tone), var(--tone-l)); }
+.song-modal .se-mark { font-size: 40px; font-weight: 900; line-height: 1; color: #ffffffbf; letter-spacing: -0.04em; }
+.song-modal .se-note { width: 100%; margin: -4px 0 0; font-size: 11.5px; color: var(--ink-faint); }
+.song-modal .form-error { width: 100%; margin: 0; font-size: 12px; font-weight: 700; color: var(--pink); }
+/* 삭제는 저장 옆이 아니라 아래 줄에 따로. 실수로 누르지 않게 한다. */
+.song-modal .se-del { flex: 1 1 100% !important; margin-top: 4px; padding-top: 12px !important;
+  border-top: 1.5px solid var(--line-2) !important; color: var(--ink-faint) !important; }
+.song-modal .se-del:hover { color: var(--pink) !important; }
+
+@media (max-width: 460px) {
+  .song-modal .se-top { flex-direction: column; }
+  .song-modal .se-preview { width: 100%; }
+}

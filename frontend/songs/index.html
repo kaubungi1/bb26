@@ -4,24 +4,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>곡 리스트 - 불법이륙</title>
+  <link rel="stylesheet" href="/common/tokens.css?v=4" />
   <link rel="stylesheet" href="/common/common.css?v=4" />
+  <link rel="stylesheet" href="/common/peek.css?v=4" />
+  <link rel="stylesheet" href="/common/profile.css?v=4" />
   <link rel="stylesheet" href="/songs/css/songs.css?v=4" />
   <link rel="stylesheet" href="/common/game.css?v=4" />
 </head>
 <body>
   <header id="app-header" class="app-bar"></header>
-  <div class="container">
-    <section class="card">
-      <div class="section-head">
-        <h2><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> 곡 리스트</h2>
-        <div class="head-actions">
-          <button type="button" class="pink add-btn-sm" id="add-btn">＋ 곡 추가</button>
+  <div class="container songs">
+    <section class="list-page">
+      <!-- 합주 시트를 승계한 화면. 곡 하나가 두 줄이고, 아래 줄이 파트 여섯 칸이다. -->
+      <div class="list-head">
+        <div>
+          <span class="overline"><span>SONG LIST</span></span>
+          <h1>곡<small id="song-count"></small></h1>
         </div>
+        <button type="button" class="add-link" id="add-btn">＋ 곡 등록</button>
       </div>
 
       <!-- 검색 · 지원 · 길드 · 태그 · 정렬을 한 줄에. 글자만 두고 누르면 아래로 메뉴가 열린다 -->
       <div class="tool-line">
-        <input type="search" id="search" class="search-box" placeholder="제목 · 아티스트 · 업로더 검색" autocomplete="off" />
+        <label class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="search" class="search-box" placeholder="곡명 · 아티스트 · 사람" aria-label="곡명 · 아티스트 · 사람 검색" autocomplete="off" />
+        </label>
         <div class="drop" id="drop-mine">
           <button type="button" class="drop-btn" data-drop="mine"><span id="mine-label">지원</span></button>
           <div class="drop-menu" id="menu-mine" hidden></div>
@@ -40,32 +48,14 @@
         </div>
       </div>
 
-      <div id="add-form" class="form-col" hidden>
-        <input id="in-title" placeholder="곡명" />
-        <input id="in-artist" placeholder="아티스트" />
-        <input id="in-youtube" placeholder="유튜브 URL (선택)" />
-        <div class="role-picker">
-          <span class="role-picker-label">태그</span>
-          <div class="chip-set" id="tag-toggles"></div>
-        </div>
-        <div class="role-picker" id="guild-picker-row">
-          <span class="role-picker-label">소속</span>
-          <div class="chip-set" id="guild-toggles"></div>
-        </div>
-        <div class="role-picker">
-          <span class="role-picker-label">세션</span>
-          <div class="role-toggles" id="role-toggles"></div>
-        </div>
-        <div class="form-actions">
-          <button type="button" class="pink" id="save-btn">추가</button>
-          <button type="button" class="secondary" id="close-btn">닫기</button>
-        </div>
-      </div>
+      <!-- 곡 등록·수정 폼은 common/songedit.js 의 모달이 맡는다 -->
 
       <div id="bump-slot"></div>
       <div id="song-list" class="song-list"></div>
     </section>
   </div>
+  <!-- 좁은 칸을 여는 법: 마우스는 올려놓기, 손가락은 길게 누르기 -->
+  <p class="peek-hint">칸을 <b>길게 누르면</b> 지원자 전체가 보입니다. 짧게 누르면 지원·취소입니다.</p>
 
   <div class="sheet-backdrop" id="session-sheet" hidden>
     <div class="sheet">
@@ -78,7 +68,9 @@
   </div>
 
   <nav id="app-tabbar" class="tab-bar"></nav>
-  <script src="/common/common.js?v=4"></script>
+  <script src="/common/common.js?v=4"></script><script src="/common/crop.js?v=4"></script><script src="/common/profile.js?v=4"></script>
+  <script src="/common/peek.js?v=4"></script>
+  <script src="/common/songedit.js?v=4"></script>
   <script src="/songs/js/songs.js?v=4"></script>
 </body>
 </html>

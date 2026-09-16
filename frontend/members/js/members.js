@@ -5,8 +5,11 @@ const memberSearchEl = document.getElementById('member-search');
 const memberErrorEl = document.getElementById('member-error');
 const roleFilterEl = document.getElementById('role-filter');
 
+/* 파트는 세 군데에서 온다. 본인이 적은 것, 길드에서 맡은 것, 실제로 지원한 것.
+   본인이 적은 것은 지금 아무도 없다. 실제 지원 기록이 제일 믿을 만하다. */
 function memberRoles(m) {
-  return [...new Set([...(m.mainRoles || '').split(','), ...(m.guilds || []).map((g) => g.role)].map((r) => r.trim()).filter(Boolean))];
+  return [...new Set([...(m.mainRoles || '').split(','), ...(m.guilds || []).map((g) => g.role),
+    ...(m.playedRoles || [])].map((r) => r.trim()).filter(Boolean))];
 }
 
 function renderMembers() {
@@ -15,7 +18,8 @@ function renderMembers() {
   const query = memberSearchEl.value.trim().toLocaleLowerCase();
   const rows = members.filter((m) => (!selectedRole || memberRoles(m).includes(selectedRole)) &&
     [m.nickname, m.title, m.status, m.intro, m.availability, ...(m.guilds || []).map((g) => g.name)]
-      .some((s) => (s || '').toLocaleLowerCase().includes(query)));
+      .some((s) => (s || '').toLocaleLowerCase().includes(query)))
+    .sort((a, b) => (b.songCount || 0) - (a.songCount || 0) || a.nickname.localeCompare(b.nickname, 'ko'));
   memberListEl.innerHTML = rows.map((m) => {
     const guilds = [...new Map((m.guilds || []).map((g) => [g.slug, g])).values()];
     return `<article class="member-entry">
@@ -24,6 +28,7 @@ function renderMembers() {
         ${m.nickname === Nick.get() ? '<button type="button" class="ghost mini" data-edit-me>편집</button>' : ''}
       </div>
       <div class="member-role-line">${escapeHtml(memberRoles(m).join(' · ') || '파트 미등록')}</div>
+      ${m.songCount ? `<p class="member-activity"><b>${m.songCount}곡</b>에 참여${m.recentSongs.length ? ` · 최근 ${m.recentSongs.map((s) => `<a href="/songs/?song=${s.id}">${escapeHtml(s.title)}</a>`).join(', ')}` : ''}</p>` : ''}
       ${m.status ? `<p class="member-status">“${escapeHtml(m.status)}”</p>` : ''}
       ${m.intro ? `<p class="member-intro">${escapeHtml(m.intro)}</p>` : ''}
       ${m.availability ? `<p class="member-availability">${icon('clock', 13)} ${escapeHtml(m.availability)}</p>` : ''}

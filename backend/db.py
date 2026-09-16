@@ -211,12 +211,20 @@ MIGRATIONS = [
     'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "bumpedAt" TIMESTAMPTZ',
     'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "bumpNote" TEXT',
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "label" TEXT',
-    'ALTER TABLE sessionSupports ADD COLUMN IF NOT EXISTS "comment" TEXT',
+    # 파트는 여섯 개가 늘 있고, 쓰지 않는 파트는 지우는 게 아니라 끈다.
+    # 지우면 같은 곡의 파트 구성이 곡마다 달라져 자리가 어긋나고, 되살릴 때
+    # 새 id 가 생겨 지난 기록과 이어지지 않는다. 끄면 자리와 id 가 그대로 남는다.
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "active" BOOLEAN NOT NULL DEFAULT true',
     # 시트에 적힌 원문 표기. nickname 은 누구인지(신원), label 은 그날 뭐라고 적었는지(표기).
     # 둘을 나눠야 "3개월뒤쯤의식빵" 을 식빵으로 합치면서도 농담을 잃지 않는다.
     'ALTER TABLE sessionSupports ADD COLUMN IF NOT EXISTS "label" TEXT',
     # 길드 명단에도 같은 원칙. nickname 은 신원, label 은 시트에 적혀 있던 표기.
     'ALTER TABLE guildMembers ADD COLUMN IF NOT EXISTS "label" TEXT',
+    # 자켓 그림. 유튜브 섬네일을 한 번 받아 두고 우리가 직접 준다.
+    # 브라우저가 매번 구글에 요청하지 않도록 하기 위함이다. 장당 20KB 남짓.
+    'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "thumb" BYTEA',
+    'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "thumbVideoId" TEXT',
+    'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "thumbUpdatedAt" TIMESTAMPTZ',
     'CREATE INDEX IF NOT EXISTS idx_songs_guild ON songs("guildId")',
     'CREATE INDEX IF NOT EXISTS idx_events_guild ON events("guildId")',
     'CREATE INDEX IF NOT EXISTS idx_eventsongs_event ON eventSongs("eventId")',

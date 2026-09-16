@@ -10,6 +10,47 @@ const TAGS = ['보컬로이드', '애니송(게임)', 'J-POP(남)', 'J-POP(여)'
 
 const SITE_NAME = '불법이륙';
 
+/* ---------- 곡의 얼굴 ----------
+   곡을 그리는 화면이면 어디서나 같은 규칙을 쓴다. 홈에만 있던 것을 여기로 옮겼다. */
+
+/* 그 곡의 장르. 태그가 먼저고, 없으면 옛 category, 그것도 없으면 미분류. */
+function songGenre(song) {
+  return song.tags || song.category || '미분류';
+}
+
+/* 장르색 클래스. tokens.css 의 .genre-* 가 --tone/--band 를 채운다. */
+const GENRE_TONE = {
+  '보컬로이드': 'vocaloid',
+  'J-POP(여)': 'jpop-f', 'J POP(여)': 'jpop-f',
+  'J-POP(남)': 'jpop-m', 'J POP(남)': 'jpop-m',
+  '애니송(게임)': 'anime',
+};
+function songTone(song) {
+  return GENRE_TONE[songGenre(song)] || 'other';
+}
+
+/* 섬네일이 없을 때 자리에 깔 글자.
+   가나·한자·영숫자만 쓰고 한글은 건너뛴다. 한글 한 글자는 획이 많아
+   크게 키우면 뭉개지고, 원제가 일본어인 곡이 대부분이라 원제 쪽이 더 곡을 가리킨다.
+   제목에서 못 뽑으면 아티스트에서, 그것도 없으면 음표. */
+function songLetter(song) {
+  const ok = (c) => {
+    const o = c.codePointAt(0);
+    return (o >= 0x3040 && o <= 0x30FF) || (o >= 0x4E00 && o <= 0x9FFF) || /[0-9A-Za-z]/.test(c);
+  };
+  for (const src of [song.title, song.artist || '']) {
+    const ch = [...src].filter(ok);
+    if (ch.length) return ch[0];
+  }
+  return '♪';
+}
+
+/* 유튜브 주소에서 11자 영상 id. 못 뽑으면 null. backend/thumbs.py 와 같은 규칙이다. */
+function youtubeId(url) {
+  const m = /(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/.exec(url || '');
+  return m ? m[1] : null;
+}
+
 /* ---------- 길드 문맥 ----------
    /guild/<slug>/… 아래에 있으면 그 길드의 얼굴로 같은 페이지를 보여준다.
    데이터는 하나이고, 목록 API 에 guild=<slug> 만 붙는다. */
@@ -81,37 +122,91 @@ const Nick = {
   },
 };
 
+/* 등록된 닉네임 명단. 한 번 받아 두고 재사용한다. */
+let ROSTER = null;
+async function roster() {
+  if (ROSTER) return ROSTER;
+  try { ROSTER = await api.get('/members/roster'); } catch { ROSTER = []; }
+  return ROSTER;
+}
+
+/* 오타를 잡기 위한 비슷한 이름 찾기. 인증이 아니라 실수 방지다. */
+function similarNames(input, names) {
+  const norm = (x) => x.normalize('NFKC').toLowerCase().replace(/[\s\-_.~!?/()[\]<>]+/g, '');
+  const a = norm(input);
+  if (!a) return [];
+  const score = (b) => {
+    const t = norm(b);
+    if (!t) return 0;
+    if (t === a) return 1;
+    if (t.includes(a) || a.includes(t)) return 0.9;
+    /* 앞 글자가 겹치는 만큼 점수를 준다. 식빵ㅋ 과 식빵 같은 경우를 잡는다. */
+    let i = 0;
+    while (i < a.length && i < t.length && a[i] === t[i]) i += 1;
+    return i / Math.max(a.length, t.length);
+  };
+  return names.map((n) => [score(n), n]).filter(([v]) => v >= 0.5)
+    .sort((x, y) => y[0] - x[0]).slice(0, 3).map(([, n]) => n);
+}
+
 function promptName() {
   return new Promise((resolve) => {
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
     backdrop.innerHTML = `
       <div class="modal">
-        <h3 class="modal-title">${icon('user')} 닉네임 입력</h3>
-        <p class="modal-desc">세션 지원 시 누가 지원했는지 표시됩니다.</p>
+        <h3 class="modal-title">${icon('user')} 닉네임</h3>
+        <p class="modal-desc">밴드에서 쓰는 이름을 넣어 주세요.</p>
         <form class="modal-form">
-          <input id="nick-input" placeholder="닉네임" maxlength="20" autofocus />
+          <input id="nick-input" placeholder="닉네임" maxlength="20" autocomplete="off" autofocus />
+          <div id="nick-hint" class="nick-hint" hidden></div>
           <button type="submit" class="pink">확인</button>
           <button type="button" class="ghost" data-cancel>취소</button>
         </form>
       </div>`;
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) { backdrop.remove(); resolve(''); }
-    });
-    backdrop.querySelector('[data-cancel]').addEventListener('click', () => {
-      backdrop.remove(); resolve('');
-    });
-    backdrop.querySelector('.modal-form').addEventListener('submit', (e) => {
+    const close = (v) => { backdrop.remove(); resolve(v); };
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(''); });
+    backdrop.querySelector('[data-cancel]').addEventListener('click', () => close(''));
+
+    const hint = backdrop.querySelector('#nick-hint');
+    const input = backdrop.querySelector('#nick-input');
+    const accept = (name) => { Nick.set(name); document.dispatchEvent(new Event('nickchange')); close(name); };
+
+    backdrop.querySelector('.modal-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const name = backdrop.querySelector('#nick-input').value.trim();
-      if (name && name.length <= 20) {
-        Nick.set(name); backdrop.remove();
-        document.dispatchEvent(new Event('nickchange'));
-        resolve(name);
+      const name = input.value.trim();
+      if (!name || name.length > 20) return;
+      const names = await roster();
+      if (names.includes(name)) return accept(name);
+
+      /* 명단에 없다. 오타인지 되묻는다. 막지는 않는다. */
+      const near = similarNames(name, names);
+      hint.hidden = false;
+      hint.innerHTML =
+        `<p class="nick-warn"><b>${escapeHtml(name)}</b> 은(는) 등록된 이름이 아닙니다.</p>` +
+        (near.length
+          ? `<p class="nick-ask">혹시 이 이름인가요?</p><div class="nick-near">` +
+            near.map((n) => `<button type="button" data-pick="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('') +
+            `</div>`
+          : '') +
+        `<p class="nick-note">한 사람이 이름 하나만 써 주세요. 이름이 갈리면 지원한 곡과 한마디가 따로 쌓입니다.</p>` +
+        `<button type="button" class="nick-new" data-new>${escapeHtml(name)} 으로 새로 등록</button>`;
+    });
+
+    hint.addEventListener('click', async (e) => {
+      const pick = e.target.closest('[data-pick]');
+      if (pick) return accept(pick.dataset.pick);
+      if (e.target.closest('[data-new]')) {
+        const name = input.value.trim();
+        if (!name) return;
+        try { await api.post('/members/register', { nickname: name }); ROSTER = null; } catch {}
+        accept(name);
       }
     });
+    input.addEventListener('input', () => { hint.hidden = true; });
+
     document.body.appendChild(backdrop);
-    setTimeout(() => backdrop.querySelector('#nick-input')?.focus(), 0);
+    setTimeout(() => input.focus(), 0);
   });
 }
 
@@ -141,47 +236,13 @@ function icon(name, size = 18) {
   return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 }
 
-function nameModal() {
-  return new Promise((resolve) => {
-    const cur = Nick.get();
-    const backdrop = document.createElement('div');
-    backdrop.className = 'modal-backdrop';
-    backdrop.innerHTML = `
-      <div class="modal">
-        <h3 class="modal-title">${icon('user')} 닉네임</h3>
-        <p class="modal-desc">현재: <strong>${escapeHtml(cur)}</strong> · 변경하거나 로그아웃하세요</p>
-        <form class="modal-form">
-          <input id="nick-input" placeholder="새 닉네임" maxlength="20" autofocus />
-          <button type="submit" class="pink">변경</button>
-          <button type="button" class="ghost" data-logout>로그아웃</button>
-          <button type="button" class="ghost" data-cancel>취소</button>
-        </form>
-      </div>`;
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) { backdrop.remove(); resolve(false); }
-    });
-    backdrop.querySelector('[data-cancel]').addEventListener('click', () => {
-      backdrop.remove(); resolve(false);
-    });
-    backdrop.querySelector('[data-logout]').addEventListener('click', () => {
-      Nick.logout();
-      backdrop.remove();
-      document.dispatchEvent(new Event('nickchange'));
-      resolve(true);
-    });
-    backdrop.querySelector('.modal-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const name = backdrop.querySelector('#nick-input').value.trim();
-      if (name && name.length <= 20) {
-        Nick.set(name);
-        backdrop.remove();
-        document.dispatchEvent(new Event('nickchange'));
-        resolve(true);
-      }
-    });
-    document.body.appendChild(backdrop);
-    setTimeout(() => backdrop.querySelector('#nick-input')?.focus(), 0);
-  });
+/* 헤더의 내 이름을 누르면 열린다. 프로필 편집과 로그아웃이 여기 모인다.
+   닉네임은 바꾸지 않는다. 다른 이름으로 쓰려면 로그아웃하고 다시 들어온다.
+   그래야 지원·한마디 기록이 갈라지지 않는다. */
+async function nameModal() {
+  const cur = Nick.get();
+  const changed = await openProfileEditor(cur, { withLogout: true });
+  return changed;
 }
 
 function startPolling(fn, ms = 5000) {
@@ -212,28 +273,34 @@ function guildBadge(guild, extra = '') {
     `<span>${guild.emblem ? escapeHtml(guild.emblem) + ' ' : ''}${escapeHtml(guild.name)}</span></span>`;
 }
 
+/* 임시 로고 마크. 이륙각으로 올라가는 기체.
+   실제 로고가 나오면 이 상수의 SVG 만 통째로 교체하면 된다. 다른 곳은 건드릴 필요 없다. */
+const BRAND_MARK = '<span class="brand-mark" aria-hidden="true">'
+  + '<svg viewBox="0 0 24 24"><path d="M2.5 18.5h13"/><path d="M6 14.2 19.2 5.4a2 2 0 0 1 2.4 3.1L12.3 16"/><path d="m9.4 10.6-3.9-1.1 2-1.5 2.6.6"/></svg>'
+  + '</span>';
+
 function mountChrome(activeKey) {
   const header = document.getElementById('app-header');
   if (header) {
-    /* 닉네임을 정했으면 아바타 칩으로 — 사이트 어디서나 사람은 같은 모양이다.
-       아직 안 정했으면 뭘 눌러야 할지 알 수 있게 글자로 둔다. */
+    /* 헤더에는 나 하나뿐이라 이름만 쓴다. 아바타 동그라미는 여러 사람이 나오는
+       지원자 목록과 한마디 줄에서만 쓴다. */
     const nameBtn = () => {
       const n = Nick.get();
       return n
-        ? `<button type="button" class="name-text is-chip" id="name-btn" title="${escapeHtml(n)}">${avatarChip(n)}</button>`
+        ? `<button type="button" class="name-text is-chip" id="name-btn">${avatarChip(n)}<span>${escapeHtml(n)}</span></button>`
         : '<button type="button" class="name-text" id="name-btn">닉네임 입력</button>';
     };
     const brand = () => {
-      if (!Site.slug) return `<a class="brand" href="/">${SITE_NAME}</a>`;
+      if (!Site.slug) return `<a class="brand" href="/">${BRAND_MARK}${SITE_NAME}</a>`;
       const g = Site.info;
       const name = g ? g.name : Site.slug;
       const emblem = g && g.emblem ? `<span class="brand-emblem">${escapeHtml(g.emblem)}</span>` : '';
       return `<span class="brand-set">` +
         `<a class="brand-home" href="/">${SITE_NAME}</a>` +
-        `<a class="brand is-guild" href="${Site.base}/">${emblem}${escapeHtml(name)}</a></span>`;
+        `<a class="brand is-guild" href="${Site.base}/">${emblem || BRAND_MARK}${escapeHtml(name)}</a></span>`;
     };
     const paintHeader = () => {
-      const items = [['songs','곡',Site.base+'/songs/'],['schedule','모임 · 일정',Site.base+'/schedule/'],['sheets','악보','/sheets/'],['guilds','길드','/guilds/'],['members','멤버','/members/']];
+      const items = [['home','홈',Site.base+'/'],['songs','곡',Site.base+'/songs/'],['schedule','모임 · 일정',Site.base+'/schedule/'],['sheets','악보','/sheets/'],['guilds','길드','/guilds/'],['members','멤버','/members/']];
       header.innerHTML = brand() + '<nav class="game-nav" aria-label="주요 메뉴">' + items.map(([key,label,href]) => `<a href="${href}"${key===activeKey?' aria-current="page"':''}><span>${label}</span></a>`).join('') + '</nav>' + nameBtn();
     };
     paintHeader();

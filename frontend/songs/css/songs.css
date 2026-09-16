@@ -20,7 +20,6 @@
 .song-tag.none { background: rgba(22, 40, 47, 0.06); color: var(--ink-muted); font-weight: 700; }
 .song-tag:hover { filter: brightness(0.97); }
 
-.song-tag-picker { margin-top: 8px; }
 
 
 .song-item-actions {
@@ -61,8 +60,6 @@
   line-height: 1.5;
 }
 .meta-sep { color: var(--border); user-select: none; }
-.song-yt { color: var(--teal); font-size: 12px; font-weight: 600; text-decoration: none; }
-.song-yt:hover { color: var(--teal-deep); }
 /* 세션 충원 현황 (텍스트) */
 .fill-badge {
   display: inline-flex;
@@ -75,7 +72,6 @@
   white-space: nowrap;
 }
 .fill-badge.full { color: var(--teal-deep); }
-.fill-badge .skew-gauge { width: 28px; height: 4px; }
 
 /* 세션 편집 토글 (텍스트 버튼) */
 .session-edit {
@@ -237,3 +233,176 @@
 }
 .sheet-comment:focus { outline: none; border-color: var(--teal); }
 button.sheet-member-tag { border: none; background: transparent; cursor: pointer; }
+
+
+/* ══════════════════════════════════════════════════════════════
+   합주 시트를 승계한 리스트.
+   곡 하나가 두 줄이다. 윗줄은 무슨 곡인지, 아랫줄은 자리가 비었는지.
+   상자로 나누지 않고 가로선 하나로 나눈다. 넓은 화면에서는 두 열로 앉힌다.
+   ══════════════════════════════════════════════════════════════ */
+
+.songs .list-page { max-width: none; }
+
+/* ---------- 머리 ---------- */
+.songs .list-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 14px; }
+.songs .list-head h1 { font-size: 28px; line-height: 1.15; margin: 7px 0 0; letter-spacing: -0.02em; }
+.songs .list-head h1 small { font-size: 13px; font-weight: 800; color: var(--teal-deep); margin-left: 9px; vertical-align: 5px; }
+.songs .overline { display: inline-block; font-size: 9px; letter-spacing: 0.2em; font-weight: 800; color: var(--teal-deep); }
+/* 가끔 하는 일이라 조용히 둔다. 홈의 곡 등록과 같은 문법. */
+.songs .add-link { padding: 8px 2px; border: 0; border-radius: 0; background: none; box-shadow: none;
+  color: var(--ink-muted); font-size: 14px; font-weight: 800; transition: color 0.12s; }
+.songs .add-link:hover { color: var(--ink); background: none; filter: none; }
+
+/* ---------- 검색 줄 ---------- */
+/* 입력칸만 경계를 가진다. 윤곽선이 아니라 채워진 면과 아래 선 하나다. */
+.songs .tool-line { display: flex; align-items: center; gap: 14px; margin-bottom: 18px;
+  padding: 0; border: 0; border-radius: 0; background: none; }
+.songs .tool-line .search { flex: 1; display: flex; align-items: center; gap: 9px; min-width: 0;
+  padding: 0 12px; background: var(--paper); border-bottom: 2px solid var(--line); border-radius: 3px 3px 0 0; }
+.songs .tool-line .search:focus-within { border-bottom-color: var(--teal); }
+.songs .tool-line .search svg { width: 17px; height: 17px; flex: none; fill: none; stroke: var(--ink-faint); stroke-width: 2; stroke-linecap: round; }
+.songs .tool-line .search-box { flex: 1; min-width: 0; min-height: 40px; margin: 0;
+  padding: 0; border: 0; background: transparent; border-radius: 0; box-shadow: none;
+  font-size: 14px; font-weight: 600; color: var(--ink); }
+.songs .tool-line .search-box::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+/* ---------- 두 열 ---------- */
+/* 1fr 은 minmax(auto,1fr) 이라 안쪽 내용의 min-content 아래로 절대 안 줄어든다.
+   긴 파트 이름 하나가 열을 화면 밖까지 밀어낸다. 0 을 바닥으로 박아 그 길을 막는다. */
+.songs .song-list { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 34px; align-items: start; }
+@media (min-width: 1000px) { .songs .song-list { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+/* ---------- 곡 한 줄 ---------- */
+.songs .song-item { padding: 11px 0 12px; border-bottom: 1px solid var(--line-2);
+  border-radius: 0; background: none; box-shadow: none; }
+.songs .song-item:last-child { border-bottom: 1px solid var(--line-2); }
+.songs .song-item-head { display: flex; align-items: center; gap: 11px; margin-bottom: 7px; }
+.songs .song-item-info { min-width: 0; flex: 1; }
+.songs .song-title-row { display: flex; align-items: baseline; gap: 7px; flex-wrap: nowrap; min-width: 0; }
+.songs .song-title { font-size: 14.5px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.songs .song-meta { display: flex; align-items: center; gap: 6px; margin-top: 1px; font-size: 11.5px; }
+.songs .song-artist { color: var(--ink-faint); font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 자켓. 줄 높이를 늘리지 않는 크기다. 누르면 유튜브로 간다. */
+.songs .song-thumb { flex: none; display: block; width: 56px; height: 32px; overflow: hidden;
+  background: var(--empty); }
+/* 섬네일이 없는 자리. 홈 자켓과 같은 규칙 — 장르색 바탕에 글자 하나.
+   한글은 songLetter() 가 건너뛰므로 여기 오는 건 가나·한자·영숫자뿐이다. */
+.songs .song-thumb.is-mark { display: grid; place-items: center;
+  background: linear-gradient(140deg, var(--tone), var(--tone-l)); }
+.songs .th-mark { font-size: 19px; font-weight: 900; line-height: 1; color: #ffffffbf;
+  letter-spacing: -0.04em; user-select: none; }
+.songs .song-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.songs a.song-thumb { transition: box-shadow 0.12s; }
+.songs a.song-thumb:hover { box-shadow: 0 0 0 2px var(--teal); }
+
+/* 몇 자리 찼는가. 숫자 하나면 충분하다. 게이지 막대는 뺐다. */
+.songs .fill-badge { flex: none; background: none; padding: 0; color: var(--ink-muted);
+  font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.songs .fill-badge i { font-style: normal; font-weight: 700; color: var(--ink-faint); }
+.songs .fill-badge.full { color: var(--teal-deep); }
+
+/* ---------- 파트 여섯 칸 ---------- */
+/* 상자가 아니라 채워진 면이다. 색이 차 있으면 사람이 있다는 뜻이다. */
+.songs .sessions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
+.songs .session-cell { display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: 1px; min-height: 40px; padding: 5px 8px; border: 0; border-radius: 0; min-width: 0; overflow: hidden;
+  background: var(--empty); clip-path: none; cursor: pointer; transition: background 0.12s; }
+.songs .session-cell:hover { background: #dde7ef; }
+.songs .session-cell .role { font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em;
+  color: var(--ink-faint); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* 넓으면 바꾼 이름, 좁으면 약칭. 좁은 칸에서 '키보드(브…' 는 읽히지도 않으면서 자리만 먹는다.
+   전체 이름은 길게 누르면 쪽지로 나온다. */
+.songs .session-cell .role.short { display: none; }
+.songs .session-cell .role.full { display: inline; }
+.songs .session-cell .names { flex: none; width: 100%; text-align: left; font-size: 12px; font-weight: 800;
+  color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 이름과 개수를 나눈 꼴. 이름만 … 로 잘리고 개수는 끝에 붙어 있는다.
+   한 덩어리로 두면 넘칠 때 "식빵 +…" 처럼 개수가 먼저 사라진다. */
+.songs .session-cell .names:has(.more) { display: flex; align-items: baseline; gap: 2px; }
+.songs .session-cell .names .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.songs .session-cell .names .more { flex: none; color: var(--ink-faint); font-weight: 700; }
+.songs .session-cell .empty { font-size: 13px; font-weight: 700; color: #a8bccd; opacity: 1; }
+
+/* 채워진 칸은 조용히. 빈 칸이 눈에 띄어야 한다 — 1,017칸 중 480칸이 비어 있다. */
+.songs .session-cell.filled { background: var(--paper); box-shadow: inset 0 0 0 1px var(--line-2); }
+.songs .session-cell.filled:hover { background: #f2f7fa; }
+.songs .session-cell.filled .role { color: var(--ink-faint); }
+/* 내가 낀 자리만 색을 가진다 */
+.songs .session-cell.mine { background: #b3e8ed; box-shadow: none; }
+.songs .session-cell.mine:hover { background: #a2e2e8; }
+.songs .session-cell.mine .role { color: var(--teal-deep); }
+.songs .session-cell.mine .names { color: var(--ink); }
+
+/* ---------- 줄 오른쪽 동작 ---------- */
+.songs .song-item-actions { flex: none; gap: 9px; }
+.songs .row-more { width: 24px; height: 24px; min-height: 24px; }
+
+/* ---------- 길게 누르는 법 ---------- */
+/* 마우스가 있는 화면에서는 올려놓으면 되므로 안내가 필요 없다. */
+.peek-hint { max-width: 1280px; margin: 0 auto; padding: 0 32px 28px; color: var(--ink-faint);
+  font-size: 11.5px; line-height: 1.6; }
+.peek-hint b { color: var(--ink-muted); font-weight: 800; }
+@media (hover: hover) and (pointer: fine) { .peek-hint { display: none; } }
+
+/* ---------- 좁은 화면 ---------- */
+@media (max-width: 560px) {
+  .songs .list-head h1 { font-size: 23px; }
+  .songs .song-thumb { width: 44px; height: 25px; }
+  .songs .session-cell { min-height: 36px; padding: 4px 5px; }
+  .songs .session-cell .role.short { display: inline; }
+  .songs .session-cell .role.full { display: none; }
+  .songs .session-cell .names { font-size: 11px; }
+  .peek-hint { padding: 0 14px 24px; }
+}
+
+/* 태그는 곡을 고르는 단서일 뿐 주인공이 아니다.
+   171줄이 반복되는 화면에서 알약이 줄마다 빛나면 제목이 안 읽힌다.
+   면을 걷고 글자만 남긴다. 누를 수 있다는 건 호버로 알린다. */
+.songs .song-tag { flex: none; padding: 0; border-radius: 0; background: none;
+  color: var(--ink-faint); font-size: 10.5px; font-weight: 800; letter-spacing: -0.01em;
+  white-space: nowrap; }
+.songs .song-tag.none { background: none; color: #b6c5d2; }
+.songs .song-tag:hover { color: var(--teal-deep); filter: none; }
+.songs .song-tag > span { transform: skewX(calc(var(--skew) * -1)); }
+
+/* 길드 꼬리표도 같은 이유로 한 단계 낮춘다 */
+.songs .song-title-row .guild-badge { font-size: 9.5px; }
+
+/* 정렬·필터 메뉴 버튼 — 검색칸과 같은 높이에 앉힌다 */
+.songs .tool-line .drop-btn { min-height: 40px; padding: 0 2px; font-size: 13px; font-weight: 800; color: var(--ink-muted); }
+.songs .tool-line .drop-btn:hover, .songs .tool-line .drop.is-open .drop-btn,
+.songs .tool-line .drop.is-set .drop-btn { color: var(--ink); }
+.songs .tool-line .drop.is-set .drop-btn { text-decoration: underline; text-underline-offset: 5px;
+  text-decoration-thickness: 2px; text-decoration-color: var(--teal); }
+
+/* 마지막 합주일·등록자는 배경으로 물러난다 */
+.songs .song-played, .songs .song-by { color: var(--ink-faint); font-size: 11px; font-weight: 700; }
+.songs .meta-sep { color: #c3d2de; }
+
+/* ---------- 쓰지 않는 자리 ---------- */
+/* 지우지 않고 끈다. 자리는 그대로 있어서 Ba 가 곡마다 같은 칸에 온다.
+   빗금 하나로 "여긴 안 쓴다"를 말한다. 누를 수 없고 지원자도 못 받는다. */
+.songs .session-cell.off {
+  background: repeating-linear-gradient(-45deg, #eef3f7 0 5px, #e5ecf2 5px 10px);
+  box-shadow: none;
+  cursor: default;
+}
+.songs .session-cell.off:hover { background: repeating-linear-gradient(-45deg, #eef3f7 0 5px, #e5ecf2 5px 10px); }
+.songs .session-cell.off .role { color: #a9bccb; }
+.songs .session-cell.off .off-mark { color: #a9bccb; font-weight: 700; font-size: 11px; }
+
+/* 편집 중일 때만 나오는 켜기/끄기 */
+.songs .session-toggle {
+  position: absolute; right: 4px; bottom: 3px;
+  min-height: 0; padding: 1px 5px; border: 0; border-radius: 0;
+  background: var(--ink); color: #fff; font-size: 9.5px; font-weight: 800; box-shadow: none;
+}
+.songs .session-toggle:hover { background: var(--teal-deep); filter: none; }
+.songs .session-cell.off .session-toggle { background: var(--teal); }
+.songs .session-cell.editing { position: relative; }
+.songs .session-label { position: absolute; right: 4px; top: 3px; }
+.songs .session-picker { padding: 7px 0 2px; }
+.songs .session-picker-hint { color: var(--ink-faint); font-size: 11px; font-weight: 700; }

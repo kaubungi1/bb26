@@ -1,0 +1,70 @@
+/* 토큰 한 곳.
+
+   색·기울기·모서리를 바꾸려면 이 파일만 고친다. 다른 파일에는 :root 를 두지 않는다.
+   전에는 common.css 와 game.css 가 각각 :root 를 선언해서, 나중에 실린 game.css 가
+   common.css 의 값을 조용히 덮었다. 파일을 읽어서는 어떤 색이 나오는지 알 수 없었다.
+
+   모든 페이지가 이 파일을 가장 먼저 싣는다.
+
+   값은 홈 화면에서 쓰던 것으로 맞췄다. 페이지마다 다른 값을 두지 않는다. */
+
+:root {
+  /* 청록. --teal-deep 은 글자색으로 쓰이므로 흰 바탕 대비 4.5 아래로 내리지 않는다.
+     지금 4.53 이고 한 단계만 진해져도 미달이 된다. */
+  --teal: #00b3bf;
+  --teal-deep: #00838d;
+  --teal-soft: #dbf3f5;
+
+  --pink: #ef2f88;
+  --pink-soft: #ffeaf3;
+
+  /* 남색 네 단계. 자켓 띠 색과 같은 채도대(S43~67)에 맞춰 잡았다. */
+  --ink: #1b2a45;
+  --ink-2: #33445f;
+  --ink-muted: #53657c;
+  --ink-faint: #64768b;
+
+  /* 면 */
+  --bg: #fff;
+  --card: #ffffffed;
+  --paper: #fff;
+  --field: #fff;
+  --empty: #f5f8fa;
+
+  /* 선. --line 은 캘린더 격자에도 쓰이므로 보이는 값이어야 한다. */
+  --border: #d7e5ee;
+  --line: #d3e0ea;
+  --line-2: #e7eff5;
+
+  --radius: 6px;
+  --radius-sm: 4px;
+
+  /* 사선. 프로세카 문법의 핵심이라 각도는 사이트 전체가 하나여야 한다.
+     기울인 것의 안쪽 글자는 calc(var(--skew) * -1) 로 되돌린다. */
+  --skew: -8deg;
+
+  --accent: var(--teal);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --spring: cubic-bezier(0.2, 1.35, 0.4, 1);
+
+  /* 아래 넷은 §9.3 이 지목한 그라디언트·통통한 그림자다.
+     값만 바꿔선 안 되고 쓰는 쪽을 함께 고쳐야 해서, 페이지를 개선할 때
+     한 페이지씩 걷어내고 마지막에 이 네 줄을 지운다. */
+  --grad-teal: linear-gradient(135deg, #2ee6d4, #22b8e6);
+  --glow-teal: 0 6px 18px -7px rgba(0, 165, 175, 0.85);
+  --shadow-sm: 0 1px 3px rgba(22, 46, 58, 0.06);
+  --shadow-md: 0 14px 34px -12px rgba(0, 110, 120, 0.3);
+}
+
+/* 장르색. 곡을 그리는 화면이면 어디서나 같은 색을 쓴다.
+
+   --tone / --tone-l  섬네일이 없을 때 까는 바탕. 두 색의 그라디언트다.
+   --band             제목이 앉는 잉크 띠. 다섯 색 전부 밝기 15~27% 라 한 세트로 읽힌다.
+   --jk-ink           밝은 바탕 위에 올리는 글자색.
+
+   장르가 아니라 '이 곡이 무엇인지' 를 가리키는 색이므로 강조색(--teal/--pink)과 섞지 않는다. */
+.genre-vocaloid { --tone: #63ded2; --tone-l: #a8efe7; --band: #0d3b42; --jk-ink: #0d3b42; }
+.genre-jpop-f   { --tone: #f19ac8; --tone-l: #f8cbe2; --band: #5a1f42; --jk-ink: #5a1f42; }
+.genre-jpop-m   { --tone: #85b0ee; --tone-l: #bcd5f7; --band: #1a3a63; --jk-ink: #1a3a63; }
+.genre-anime    { --tone: #ac95ee; --tone-l: #cfc2f6; --band: #362761; --jk-ink: #362761; }
+.genre-other    { --tone: #bccbd9; --tone-l: #e0e8ef; --band: #32465c; --jk-ink: #32465c; }

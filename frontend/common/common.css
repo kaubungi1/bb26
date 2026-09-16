@@ -1,28 +1,7 @@
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
 
+/* 토큰은 common/tokens.css 한 곳에 있다. 여기에 :root 를 다시 두지 않는다. */
 :root {
-  --teal: #00b8ad;
-  --teal-deep: #009b92;
-  --teal-soft: #e7faf8;
-  --pink: #ec4899;
-  --pink-soft: #fdeef7;
-  --ink: #16282f;
-  --ink-muted: #6b818a;
-  --bg: #f4f8fa;
-  --card: #ffffff;
-  --border: #e7eef2;
-  --line: #eef3f6;
-  --grad-teal: linear-gradient(135deg, #2ee6d4, #22b8e6);
-  --shadow-sm: 0 1px 3px rgba(22, 46, 58, 0.06);
-  --shadow-md: 0 14px 34px -12px rgba(0, 110, 120, 0.3);
-  --radius: 20px;
-  --radius-sm: 13px;
-  /* 프로세카 문법 — 기울기와 청록 글로우를 한 곳에서 관리한다 */
-  --skew: -12deg;
-  --glow-teal: 0 6px 18px -7px rgba(0, 165, 175, 0.85);
-  --glow-pink: 0 6px 18px -7px rgba(236, 72, 153, 0.75);
-  --spring: cubic-bezier(0.2, 1.35, 0.4, 1);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
   font-family: 'Pretendard Variable', Pretendard, 'Noto Sans KR', system-ui, sans-serif;
   line-height: 1.6;
   color: var(--ink);
@@ -81,16 +60,7 @@ body {
   letter-spacing: -0.2px;
   color: var(--ink);
 }
-/* 섹션 제목과 같은 사선 마크 — 작아져도 정체성은 남는다 */
-.brand::before {
-  content: '';
-  flex: none;
-  width: 3px;
-  height: 14px;
-  transform: skewX(var(--skew));
-  border-radius: 1px;
-  background: var(--grad-teal);
-}
+/* 로고 마크는 common.js 의 BRAND_MARK(SVG)가 맡는다. 옛 사선 막대는 제거했다. */
 .name-text {
   background: transparent;
   border: none;
@@ -104,7 +74,7 @@ body {
   cursor: pointer;
 }
 .name-text:hover { color: var(--ink); background: rgba(0, 0, 0, 0.04); }
-.name-text.is-chip { padding: 2px; background: transparent; }
+.name-text.is-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; background: transparent; }
 .name-text.is-chip:hover { background: transparent; }
 .name-text.is-chip .avatar-chip { width: 26px; height: 26px; font-size: 12px; }
 
@@ -960,8 +930,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ===== 불법이륙 2.0: 길드 문맥 ===== */
-/* 길드 안에서는 --accent 가 그 길드 색으로 바뀐다. 기본은 청록. */
-:root { --accent: var(--teal); }
+/* 길드 안에서는 --accent 가 그 길드 색으로 바뀐다. 기본값은 tokens.css 에 있다. */
 .brand-set { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .brand-home {
   font-size: 12px;
@@ -1003,3 +972,9 @@ a.brand { text-decoration: none; }
 .avatar-chip.xl { width: 44px; height: 44px; font-size: 18px; box-shadow: none; flex: none; }
 .avatar-chip.xl .emoji { font-size: 24px; }
 .form-error { color: #a52b3d; font-size: 13px; overflow-wrap: anywhere; }
+
+/* 멤버 카드의 활동 줄. 본인이 프로필을 안 채워도 여기에 보여 줄 것이 남는다. */
+.member-activity { margin: 4px 0 0; font-size: 12px; color: var(--ink-muted); line-height: 1.55; }
+.member-activity b { color: var(--ink); font-weight: 800; }
+.member-activity a { color: var(--ink-muted); text-decoration: underline; text-underline-offset: 2px; }
+.member-activity a:hover { color: var(--teal-deep); }

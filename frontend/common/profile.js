@@ -3,7 +3,7 @@
 
 const PROFILE_COLORS = ['#00b8ad', '#ec4899', '#6366f1', '#f59e0b', '#22b8e6', '#8b5cf6', '#2f9e54', '#ef4444'];
 
-async function openProfileEditor(nickname) {
+async function openProfileEditor(nickname, opts = {}) {
   // 캐시가 아직 도착하지 않았거나 다른 화면에서 바뀐 값으로 기존 소개를 덮지 않는다.
   try {
     const res = await fetch(`/api/members/${encodeURIComponent(nickname)}`);
@@ -30,17 +30,19 @@ async function openProfileEditor(nickname) {
         <h3 class="modal-title" id="profile-title">${icon('edit')} 내 프로필</h3>
         <form class="modal-form profile-form">
           <div class="pf-top">
-            <div class="pf-preview" id="pf-preview"></div>
+            <div class="pf-avatar">
+              <label class="pf-file" title="이미지 변경">
+                <div class="pf-preview" id="pf-preview"></div>
+                <span class="pf-file-hint" aria-hidden="true">변경</span>
+                <span class="pf-sr">프로필 이미지 올리기</span>
+                <input class="pf-file-input" type="file" id="pf-file" accept="image/*" />
+              </label>
+            </div>
             <div class="pf-top-fields">
               <div class="pf-nick">${escapeHtml(nickname)}</div>
-              <label class="pf-file ghost mini">이미지 올리기<input type="file" id="pf-file" accept="image/*" hidden /></label>
-              <button type="button" class="ghost mini" id="pf-clear" ${cur.hasImage ? '' : 'hidden'}>이미지 지우기</button>
+              <p class="pf-nick-note">닉네임은 여기서 바꿀 수 없습니다</p>
+              <button type="button" class="pf-clear${cur.hasImage ? '' : ' is-off'}" id="pf-clear">이미지 지우기</button>
             </div>
-          </div>
-          <div class="field-row">
-            <span class="field-label">이모지</span>
-            <input id="pf-avatar" class="pf-short" placeholder="🥁" maxlength="8" value="${escapeHtml(cur.avatar || '')}" />
-            <span class="muted">이미지가 없을 때 칩에 보입니다</span>
           </div>
           <div class="field-row">
             <span class="field-label">색</span>
@@ -50,23 +52,22 @@ async function openProfileEditor(nickname) {
             <span class="field-label">연주 파트 (선택)</span>
             <div class="chip-set" id="pf-roles"></div>
           </div>
-          <input id="pf-title" placeholder="칭호 (예: 3개월 뒤의 식빵)" maxlength="30" value="${escapeHtml(cur.title || '')}" />
-          <input id="pf-status" placeholder="상태 메시지 (선택)" maxlength="60" value="${escapeHtml(cur.status || '')}" />
+          <input id="pf-title" placeholder="칭호 (예: 천안아산최대JPOP어쩌구핑딱)" maxlength="30" value="${escapeHtml(cur.title || '')}" />
+          <input id="pf-status" placeholder="상태 메시지 (예: 임종)" maxlength="60" value="${escapeHtml(cur.status || '')}" />
           <input id="pf-avail" placeholder="가능 시간 (예: 평일 저녁, 주말 오후)" maxlength="80" value="${escapeHtml(cur.availability || '')}" />
           <textarea id="pf-intro" placeholder="한 줄 소개" maxlength="200" rows="2">${escapeHtml(cur.intro || '')}</textarea>
           <button type="submit" class="pink">저장</button>
           <button type="button" class="ghost" data-cancel>취소</button>
+          ${opts.withLogout ? '<button type="button" class="pf-logout" data-logout>로그아웃</button>' : ''}
         </form>
       </div>`;
 
     const preview = backdrop.querySelector('#pf-preview');
     const paintPreview = () => {
-      const avatar = backdrop.querySelector('#pf-avatar').value.trim();
       const fg = color || nickColor(nickname)[0];
       preview.style.setProperty('--chip-fg', fg);
       preview.style.setProperty('--chip-bg', `color-mix(in srgb, ${fg} 14%, #fff)`);
       if (previewUrl) preview.innerHTML = `<img src="${previewUrl}" alt="" />`;
-      else if (avatar) preview.innerHTML = `<span class="emoji">${escapeHtml(avatar)}</span>`;
       else preview.textContent = /^[a-zA-Z]/.test(nickname) ? nickname.slice(0, 2).toUpperCase() : nickname.slice(0, 1);
     };
     const paintColors = () => {
@@ -91,16 +92,26 @@ async function openProfileEditor(nickname) {
     backdrop.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(null); });
     backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(null); });
     backdrop.querySelector('[data-cancel]').addEventListener('click', () => close(null));
-    backdrop.querySelector('#pf-avatar').addEventListener('input', paintPreview);
-    backdrop.querySelector('#pf-file').addEventListener('change', (e) => {
+    /* 닉네임은 바꾸지 않는다. 다른 이름으로 쓰려면 로그아웃하고 다시 들어온다. */
+    backdrop.querySelector('[data-logout]')?.addEventListener('click', () => {
+      Nick.logout();
+      document.dispatchEvent(new Event('nickchange'));
+      close(true);
+    });
+    backdrop.querySelector('#pf-file').addEventListener('change', async (e) => {
       const f = e.target.files[0];
       if (!f) return;
-      if (f.size > 8 * 1024 * 1024) { alert('8MB 아래로 올려주세요.'); e.target.value = ''; return; }
-      imageFile = f; removeImage = false;
+      /* 값을 먼저 비운다. 같은 파일을 다시 골라도 change 가 뜬다. */
+      e.target.value = '';
+      if (f.size > 8 * 1024 * 1024) { alert('8MB 아래로 올려주세요.'); return; }
+      const cropped = await openCropper(f);
+      if (!cropped) return;                 /* 자르기를 취소했다. 여기서 끝낸다. */
+      imageFile = new File([cropped], 'avatar.png', { type: 'image/png' });
+      removeImage = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      objectUrl = URL.createObjectURL(f);
+      objectUrl = URL.createObjectURL(cropped);
       previewUrl = objectUrl;
-      backdrop.querySelector('#pf-clear').hidden = false;
+      backdrop.querySelector('#pf-clear').classList.remove('is-off');
       paintPreview();
     });
     backdrop.querySelector('#pf-clear').addEventListener('click', () => {
@@ -108,7 +119,7 @@ async function openProfileEditor(nickname) {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = '';
       backdrop.querySelector('#pf-file').value = '';
-      backdrop.querySelector('#pf-clear').hidden = true;
+      backdrop.querySelector('#pf-clear').classList.add('is-off');
       paintPreview();
     });
     backdrop.querySelector('#pf-colors').addEventListener('click', (e) => {
@@ -138,7 +149,6 @@ async function openProfileEditor(nickname) {
       e.preventDefault();
       if (busy) return;
       const body = {
-        avatar: backdrop.querySelector('#pf-avatar').value.trim(),
         color,
         mainRoles: role,
         title: backdrop.querySelector('#pf-title').value.trim(),

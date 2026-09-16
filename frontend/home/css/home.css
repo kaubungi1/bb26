@@ -1,18 +1,11 @@
 /* 홈: 초기 선곡 시안의 비율과 색상. 현재 필터·추천·간소화한 패널은 유지한다. */
-.home{
-  --ink:#1b2a45;--ink-2:#33445f;--ink-muted:#53657c;--ink-faint:#64768b;
-  --teal:#00b3bf;--teal-deep:#00838d;--teal-soft:#dbf3f5;
-  --pink:#ef2f88;--pink-soft:#ffeaf3;
-  --paper:#fff;--field:#fff;--stage:transparent;--empty:#f5f8fa;
-  --line:#d3e0ea;--line-2:#e7eff5;
-  --skew:-8deg;--drop:4px 4px 0 var(--ink);
-  color:var(--ink);
-}
+/* 토큰은 common/tokens.css 의 .home 블록에 있다. 여기에 다시 두지 않는다. */
+.home{color:var(--ink)}
 .home a{text-decoration:none;color:inherit}
 .home .muted{color:var(--ink-muted)}
 
 /* 꼬리표. 기울임은 여기서만. */
-.home .overline,.home .jk-genre,.home .suggest-button,.home .mm-count{transform:skew(var(--skew))}
+.home .overline,.home .jk-genre,.home .mm-count{transform:skew(var(--skew))}
 .home .overline>span,.home .jk-genre>span,.home .mm-count>span{display:inline-block;transform:none}
 .home .overline{display:inline-block;padding:0;background:none;color:var(--teal-deep);font-size:9px;letter-spacing:.2em;font-weight:800;transform:none}
 
@@ -24,21 +17,22 @@
 .home .selector-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px}
 .home .selector-head h1{font-size:28px;line-height:1.15;margin:7px 0 0;letter-spacing:-.02em}
 .home .selector-head h1 small{font-size:13px;font-weight:800;color:var(--teal-deep);margin-left:9px;vertical-align:5px}
-.home .suggest-button{display:inline-block;padding:11px 20px;background:var(--pink);color:#fff;font-size:13px;font-weight:800;box-shadow:var(--drop);transition:transform .12s,box-shadow .12s}
-.home .suggest-button:hover{transform:skew(var(--skew)) translate(-1px,-1px);box-shadow:5px 5px 0 var(--ink)}
-.home .suggest-button:active{transform:skew(var(--skew)) translate(2px,2px);box-shadow:2px 2px 0 var(--ink)}
+/* 가끔 하는 일이라 조용히 둔다. 화면의 주된 동작은 자켓과 여섯 칸이다. */
+.home .suggest-button{display:inline-flex;align-items:center;gap:5px;padding:8px 2px;background:none;color:#69798f;font-size:14px;font-weight:800;box-shadow:none;transition:color .12s}
+.home .suggest-button:hover{color:#1b2a45}
+.home .suggest-button:active{color:#00838d}
 
 /* ---------- 검색 · 정렬 ---------- */
 /* 입력칸만 경계를 가진다. 그것도 윤곽선이 아니라 채워진 면과 아래 선 하나다. */
 .home .tools{display:flex;gap:10px;margin-bottom:10px}
-.home .search{flex:1;display:flex;align-items:center;gap:9px;min-width:0;padding:0 12px;background:var(--field);border:0;border-bottom:2px solid var(--line);border-radius:3px 3px 0 0}
+.home .search{flex:1;display:flex;align-items:center;gap:9px;min-width:0;padding:0 12px;background:var(--paper);border:0;border-bottom:2px solid var(--line);border-radius:3px 3px 0 0}
 .home .search:focus-within{border-bottom-color:var(--teal)}
 .home .search svg{width:17px;height:17px;flex:none;fill:none;stroke:var(--ink-faint);stroke-width:2;stroke-linecap:round}
 .home .search input{flex:1;min-width:0;width:auto;min-height:40px;padding:0;border:0;background:transparent;font-size:14px;font-weight:600;color:var(--ink);box-shadow:none;border-radius:0}
 .home .search input::placeholder{color:var(--ink-faint);font-weight:500}
 .home .search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
 .home .sortbox{position:relative;flex:none}
-.home .sortbox select{appearance:none;-webkit-appearance:none;width:auto;min-height:40px;padding:0 30px 0 12px;border:0;border-bottom:2px solid var(--line);border-radius:3px 3px 0 0;background:var(--field);font-size:13px;font-weight:800;color:var(--ink);cursor:pointer;box-shadow:none}
+.home .sortbox select{appearance:none;-webkit-appearance:none;width:auto;min-height:40px;padding:0 30px 0 12px;border:0;border-bottom:2px solid var(--line);border-radius:3px 3px 0 0;background:var(--paper);font-size:13px;font-weight:800;color:var(--ink);cursor:pointer;box-shadow:none}
 .home .sortbox select:focus{border-bottom-color:var(--teal)}
 .home .sortbox::after{content:'';position:absolute;right:12px;top:45%;width:6px;height:6px;border-right:2px solid var(--ink-muted);border-bottom:2px solid var(--ink-muted);transform:translateY(-70%) rotate(45deg);pointer-events:none}
 .home .icon-btn{flex:none;min-height:40px;width:40px;padding:0;border:0;border-radius:0;background:none;color:var(--ink-muted);font-size:17px;font-weight:700;box-shadow:none;line-height:1}
@@ -54,6 +48,9 @@
 .home .chip.part[aria-pressed=true]{background:var(--pink)}
 .home .chip.clear{margin-left:auto;color:var(--ink-faint)}
 .home .chip.clear:hover{color:var(--pink)}
+/* 필터 접기. 넓은 화면에서는 토글을 숨기고 항상 펼쳐 둔다. */
+.home .chip-toggle{display:none;align-items:center;gap:6px;min-height:28px;padding:0 10px;border:0;border-radius:0;background:var(--ink);color:#fff;font-size:12px;font-weight:800;box-shadow:none}
+.home .chip-toggle b{padding:0 5px;background:#ffffff33;font-size:11px}
 .home .chip-gap{width:1.5px;height:14px;background:var(--line);margin:0 8px}
 .home .chip-label{font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--ink-faint);margin-right:2px}
 .home .guildbox select{min-height:28px;padding:0 24px 0 10px;font-size:12px;font-weight:700;background:none;border-bottom-width:0;color:var(--ink-muted)}
@@ -62,40 +59,99 @@
 
 /* ---------- 무대 ---------- */
 /* 옅은 선곡 배경과 흰 재킷 테두리로 깊이를 구분한다. */
-.home .carousel{position:relative;display:flex;align-items:center;gap:18px;height:305px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;scroll-snap-type:x mandatory;padding-inline:calc(50% - 130px);touch-action:pan-y;cursor:grab;user-select:none;overflow-anchor:none;background:repeating-linear-gradient(125deg,#fff4 0 1px,transparent 1px 40px),linear-gradient(100deg,#77e3df30,#96b9f120);border-block:1px solid white}
+.home .carousel{position:relative;display:flex;align-items:center;gap:18px;min-height:312px;height:auto;padding-block:16px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;scroll-snap-type:x mandatory;padding-inline:calc(50% - 130px);touch-action:pan-y;cursor:grab;user-select:none;overflow-anchor:none;background:repeating-linear-gradient(125deg,#fff4 0 1px,transparent 1px 40px),linear-gradient(100deg,#77e3df30,#96b9f120);border-block:1px solid white}
 .home .carousel:active{cursor:grabbing}
 .home .carousel::-webkit-scrollbar{display:none}
 
-.home .track{flex:0 0 260px;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;color:inherit;min-height:0;scroll-snap-align:center;position:relative;opacity:1;transform:scale(.84) rotate(-3deg);transition:transform .26s cubic-bezier(.2,.9,.3,1.15)}
+.home .track{flex:0 0 260px;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;color:inherit;min-height:0;scroll-snap-align:center;position:relative;opacity:1;transform:scale(.84) rotate(-3deg) translateZ(0);will-change:transform;backface-visibility:hidden;transition:transform .26s cubic-bezier(.2,.9,.3,1.15)}
 .home .track:hover{filter:none;opacity:1}
 .home .track.chosen{opacity:1;transform:none;z-index:1}
-.home .track.chosen .jacket{box-shadow:0 0 0 4px #fff,0 0 0 6px var(--teal)}
+.home .track.chosen .jacket{box-shadow:0 0 0 4px #fff,0 0 0 7px var(--teal)}
 .home .track.chosen::before{content:none}
 
 /* ---------- 자켓 ---------- */
-.home .jacket{width:100%;height:250px;display:flex;flex-direction:column;text-align:left;padding:18px 18px 0;position:relative;overflow:hidden;color:var(--jk-ink,#32465c);background:linear-gradient(135deg,var(--tone),var(--tone-light));border:4px solid white;border-radius:0;isolation:isolate}
-.home .jacket::before{content:'';position:absolute;width:210px;height:210px;border:26px solid #ffffff66;border-radius:50%;right:-80px;top:-65px;z-index:-1}
-.home .jacket::after{content:'';position:absolute;inset:auto -30% 40% -30%;height:24px;background:#ffffff66;transform:rotate(-45deg);z-index:-1}
-.home .jk-genre{align-self:flex-start;padding:0;background:none;font-size:9px;font-weight:800;letter-spacing:.12em;transform:none;margin-bottom:auto}
-.home .jacket b{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:12px;margin-bottom:0;font-size:24px;line-height:1.3;letter-spacing:-.02em;overflow-wrap:anywhere;font-weight:800}
-.home .jacket small{display:block;margin-top:6px;margin-bottom:auto;font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+
+
+
+
+
+
+
+/* ── 자켓 : 위 섬네일 / 아래 잉크 띠 / 파트 여섯 칸 ──
+   글자가 그림 위에 올라가지 않으니 섬네일이 무엇이든 대비가 일정하다.
+   띠 색은 장르마다 다르지만 전부 밝기 15~27% 라 한 세트로 보인다. */
+.home .track-wrap{position:relative;flex:0 0 260px;scroll-snap-align:center}
+.home .track{flex:none;width:100%;display:block}
+.home .jacket{width:100%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 0 4px #fff;border-radius:0;background:var(--band);text-align:left}
+/* 16:9 그대로 둔다. 영역이 조금이라도 다르면 cover 가 확대해서 흐려진다. */
+.home .jk-shot{position:relative;flex:none;width:100%;aspect-ratio:16/9;overflow:hidden;background:linear-gradient(140deg,var(--tone),var(--tone-l));display:grid;place-items:center}
+.home .jk-img{width:100%;height:100%;object-fit:cover;display:block}
+.home .jk-mark{font-size:92px;font-weight:900;line-height:1;color:#ffffff96;letter-spacing:-.04em;user-select:none}
+.home .jk-genre{position:absolute;left:9px;top:9px;z-index:2;padding:3px 9px;background:#ffffffd9;
+  color:var(--jk-ink);font-size:11px;font-weight:800;letter-spacing:.14em;transform:skew(var(--skew))}
+.home .jk-genre>span{display:inline-block;transform:skew(calc(var(--skew) * -1))}
+.home .jk-band{flex:none;padding:9px 13px 10px;background:var(--band);color:#fff}
+.home .jacket b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  margin:0;font-size:15px;line-height:1.25;letter-spacing:-.01em;overflow-wrap:anywhere;font-weight:800}
+.home .jacket small{display:block;margin-top:2px;font-size:13px;font-weight:700;opacity:.72;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .home .jacket small:empty{display:none}
-.home .slots{display:grid;grid-template-columns:repeat(6,1fr);gap:0;margin:12px -18px 0;background:#ffffff2b}
-.home .slot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:34px;font-style:normal;box-shadow:inset 1.5px 0 0 #ffffff45;color:var(--jk-ink,#32465c);font-size:9px;font-weight:800;line-height:1}
+
+/* 유튜브 아이콘. 자켓 버튼의 형제라 버튼 안에 링크가 들어가지 않는다. */
+/* 유튜브 아이콘. 자켓 버튼의 형제라 버튼 안에 링크가 들어가지 않는다.
+   흰 바탕에 빨간 아이콘이라 어떤 섬네일 위에서도 보인다. */
+.home .yt{position:absolute;right:8px;top:8px;z-index:3;display:grid;place-items:center;width:30px;height:24px;padding:0;border:0;border-radius:5px;background:#ffffffe8;box-shadow:0 1px 4px #00000030;transition:transform .12s,background .12s}
+.home .yt svg{width:24px;height:24px;display:block}
+.home .yt svg .body{fill:#ff0033}
+.home .yt svg .play{fill:#fff}
+.home .yt:hover{background:#fff}
+.home .yt:active{transform:scale(.92)}
+.home .track-wrap:not(:has(.chosen)) .yt{opacity:.55}
+.home .slots{display:grid;grid-template-columns:repeat(6,1fr);gap:0;margin:0;flex:none;background:#00000033}
+.home .slot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:38px;font-style:normal;box-shadow:inset 1.5px 0 0 #ffffff26;color:#fff;font-size:10px;font-weight:800;line-height:1}
 .home .slot:first-child{box-shadow:none}
 .home .slot em{font-style:normal;font-family:ui-monospace,Menlo,Consolas,monospace;opacity:.6}
 .home .slot u{text-decoration:none;font-size:12px}
-.home .slot.on{background:var(--ink);color:#fff}
-.home .slot.mine{background:var(--teal);color:#fff}
-.home .slot.on em,.home .slot.mine em{opacity:.7}
-.home .slot.off u{color:var(--jk-ink,#32465c);opacity:.42}
+/* 띠 색을 그대로 두고 밝기만 올린다. 고정 남색을 쓰면 보라·자홍 띠 위에서 따로 논다. */
+.home .slot.on{background:#ffffff2b;color:#fff}
+.home .slot.mine{background:var(--teal);color:#06343a}
+.home .slot.on em{opacity:.62}
+.home .slot.mine em{opacity:.75}
+.home .slot.off{opacity:.45}
 .home .slots:has(> :nth-child(7)){grid-template-columns:repeat(auto-fit,minmax(38px,1fr))}
 
-.home .genre-vocaloid{--tone:#83e8de;--tone-light:#b9f5ee;--jk-ink:#174c60}
-.home .genre-jpop-f{--tone:#edb5d5;--tone-light:#f9dceb;--jk-ink:#65274d}
-.home .genre-jpop-m{--tone:#94bced;--tone-light:#d3e5fb;--jk-ink:#234c70}
-.home .genre-anime{--tone:#b9a7eb;--tone-light:#dfd5f8;--jk-ink:#47366f}
-.home .genre-other{--tone:#cbd6e2;--tone-light:#e6eef4;--jk-ink:#3e556c}
+/* 로딩 판. 옅은 빛이 좌우로 훑고 지나간다. */
+.home .carousel.is-skeleton{pointer-events:none}
+.home .chips:empty{min-height:28px}
+.home .jacket.sk{background:#cbd8e3;color:transparent}
+.home .jacket.sk::before{display:none}
+.home .jacket.sk::after{content:'';position:absolute;inset:0;z-index:0;background:linear-gradient(100deg,transparent 18%,#ffffff96 50%,transparent 82%);transform:translateX(-100%);animation:sk-sweep 1.5s ease-in-out infinite}
+@keyframes sk-sweep{to{transform:translateX(100%)}}
+.home .sk-bar{display:inline-block;height:11px;min-width:24px;vertical-align:middle;background:#cbd8e3;position:relative;overflow:hidden}
+.home .sk-bar::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 18%,#ffffff96 50%,transparent 82%);transform:translateX(-100%);animation:sk-sweep 1.5s ease-in-out infinite}
+.home .sk-line{padding:12px 0;border-bottom:1.5px solid var(--line-2);margin:0}
+.home .my-rail .sk-row{color:var(--ink-muted);pointer-events:none}
+.home .sk-meeting{pointer-events:none}
+.home .sk-meeting h3{height:17px}
+
+/* 조건에 맞는 곡이 없을 때. 자켓 틀만 남기고 색을 뺀다.
+   스켈레톤의 반짝임(sk-sweep)은 쓰지 않는다. 그건 '불러오는 중' 신호다.
+   띠 글씨 #55687a on #dbe5ed = 4.51:1 로 본문 대비 기준을 넘긴다. */
+.home .carousel.is-ghost{pointer-events:none;user-select:none;justify-content:center;overflow:hidden;scroll-snap-type:none;padding-inline:16px;cursor:default}
+.home .jacket.ghost{background:#dbe5ed}
+.home .track.chosen .jacket.ghost{box-shadow:0 0 0 4px #fff}
+.home .jacket.ghost .jk-shot{background:#e9f0f5}
+.home .jacket.ghost .jk-band{background:#dbe5ed;color:#55687a}
+.home .jacket.ghost b{font-size:14px;letter-spacing:0}
+.home .jacket.ghost .slots{background:#c6d4e0}
+.home .jacket.ghost .slot{box-shadow:inset 1.5px 0 0 #ffffff8c;color:transparent}
+.home .jacket.ghost .slot:first-child{box-shadow:none}
+.home .gh-mark{font-size:92px;font-weight:900;line-height:1;color:#d2dee7;letter-spacing:-.04em;user-select:none}
+.home .retry-line{margin-top:14px}
+.home [aria-disabled=true]{opacity:.45;cursor:default}
+.home .suggest-button[aria-disabled=true]{pointer-events:none}
+/* 장르색은 common/tokens.css 로 옮겼다. 곡 페이지도 같은 색을 쓴다. */
 
 /* ---------- 이동 ---------- */
 /* 버튼에서 테두리를 걷었다. 글자와 기호만 남는다. */
@@ -117,63 +173,65 @@
 .home .slot-btn{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:8px;align-items:center;text-align:left;min-height:0;padding:10px 11px;border:0;border-radius:0;background:var(--field);color:var(--ink);font-size:12px;box-shadow:none;position:relative;transition:background .12s}
 .home .slot-btn:hover{filter:none;background:#e3edf4}
 .home .sl-abbr{grid-row:1/3;display:grid;place-items:center;width:30px;height:30px;background:var(--ink);color:#fff;font-size:10px;font-weight:900;font-family:ui-monospace,Menlo,Consolas,monospace}
-.home .sl-role{font-weight:800;font-size:11px;line-height:1.2;color:var(--ink-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.home .sl-role{font-weight:800;font-size:12px;line-height:1.2;color:var(--ink-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .home .sl-people{font-size:12px;font-weight:800;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .home .sl-act{display:none}
 .home .slot-btn.off{background:var(--empty)}
 .home .slot-btn.off:hover{background:#dde7ef}
 .home .slot-btn.off .sl-abbr{background:#cfdbe5;color:#6d7f92}
 .home .slot-btn.off .sl-people{color:var(--ink-faint);font-weight:700}
-.home .slot-btn.mine{background:var(--teal-soft)}
-.home .slot-btn.mine:hover{background:#c9edf0}
+/* 배경의 민트 번짐과 섞이지 않도록 한 단계 진하게 쓴다. */
+.home .slot-btn.mine{background:#b3e8ed}
+.home .slot-btn.mine:hover{background:#a2e2e8}
 .home .slot-btn.mine .sl-abbr{background:var(--teal)}
 .home .slot-btn:disabled{opacity:.5}
 
+/* 지연 없는 쪽지. 브라우저 기본 title 은 1~3초 뒤에 뜨고 그 시간을 못 바꾼다.
+   손가락으로 쓰는 화면에서는 탭했을 때 붙어 남으므로 막는다. */
+@media(hover:hover){
+  .home .slot-wrap[data-full]:hover::after,.home .slot-wrap[data-full]:focus-within::after{
+    content:attr(data-full);position:absolute;left:0;bottom:calc(100% + 5px);z-index:6;
+    max-width:260px;padding:6px 9px;background:var(--ink);color:#fff;
+    font-size:11px;font-weight:700;line-height:1.45;white-space:normal;overflow-wrap:anywhere;
+    pointer-events:none;box-shadow:2px 2px 0 #0e1a2e40}
+  /* 오른쪽 끝 두 칸은 쪽지를 왼쪽으로 붙여 화면 밖으로 나가지 않게 한다. */
+  .home .now-slots>.slot-wrap:nth-last-child(-n+2)[data-full]:hover::after,
+  .home .now-slots>.slot-wrap:nth-last-child(-n+2)[data-full]:focus-within::after{left:auto;right:0}
+}
 .home .slot-edit{position:absolute;right:4px;bottom:4px;display:grid;place-items:center;width:20px;height:20px;min-height:0;padding:0;border:0;background:none;box-shadow:none;opacity:0;transition:opacity .12s}
 .home .slot-edit svg{width:11px;height:11px;fill:none;stroke:var(--ink-faint);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .home .slot-wrap:hover .slot-edit,.home .slot-wrap:focus-within .slot-edit{opacity:1}
 .home .slot-edit:hover{filter:none}
 .home .slot-edit:hover svg{stroke:var(--teal-deep)}
-.home .slot-wrap[data-editing]{grid-column:1/-1}
-.home .slot-form{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;padding:12px;background:var(--teal-soft)}
+/* 편집 중인 칸은 자리를 지키고 표시만 바뀐다. 폼은 아래 줄에 따로 뜬다. */
+.home .slot-wrap[data-editing] .slot-btn{outline:2.5px solid var(--teal);outline-offset:-2.5px}
+.home .slot-form{margin-top:3px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;padding:12px;background:var(--teal-soft)}
 .home .slot-form label{flex:1;min-width:116px;display:flex;flex-direction:column;gap:4px;font-size:10px;font-weight:800;letter-spacing:.06em;color:var(--teal-deep)}
 .home .slot-form input{width:100%;min-height:32px;padding:0 10px;border:0;border-bottom:2px solid #a9dfe4;border-radius:3px 3px 0 0;background:var(--paper);font-size:13px;font-weight:700;color:var(--ink);box-shadow:none}
 .home .slot-form input:focus{border-bottom-color:var(--teal)}
 .home .slot-form-act{display:flex;gap:4px}
 .home .slot-form button{min-height:32px;padding:0 12px;border:0;background:var(--teal);color:#fff;font-size:12px;font-weight:800;box-shadow:none}
 .home .slot-form button[data-cancel]{background:none;color:var(--teal-deep)}
-.home .no-results{padding:64px 20px;background:var(--field);text-align:center;font-weight:700;color:var(--ink-muted)}
+.home .no-results{margin:0;padding:14px 20px 0;background:none;text-align:center}
 
 /* ---------- 곡 한마디 ---------- */
 .home .murmur{display:flex;align-items:center;gap:6px;min-height:34px;padding:0 4px}
-.home .mm-line{flex:1;min-width:0;display:flex;align-items:center;gap:7px;min-height:32px;padding:0;border:0;background:none;box-shadow:none;text-align:left;font-size:12px;color:var(--ink);transition:opacity .16s,transform .16s}
+.home .mm-line{flex:1;min-width:0;display:flex;align-items:center;gap:7px;min-height:32px;padding:0;border:0;background:none;box-shadow:none;text-align:left;font-size:12px;color:var(--ink);transition:opacity .18s ease,transform .18s ease}
 .home .mm-line:hover{filter:none}
-.home .mm-line.mm-out{opacity:0;transform:translateY(-5px)}
+.home .mm-line.mm-out{opacity:0;transform:translateY(-8px)}
+.home .mm-line.mm-in{opacity:0;transform:translateY(8px);transition:none}
 .home .mm-line .avatar-chip{width:18px;height:18px;font-size:9px;flex:none}
 .home .mm-line b{flex:none;font-weight:800;color:var(--ink-2)}
 .home .mm-line span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-muted);font-weight:600}
-.home .mm-empty{color:var(--ink-faint);font-weight:600}
-.home .mm-count{flex:none;padding:2px 8px;background:var(--ink);color:#fff;font-size:10px;font-weight:800;font-variant-numeric:tabular-nums}
-.home .mm-write{flex:none;display:grid;place-items:center;width:24px;height:24px;min-height:0;padding:0;border:0;background:none;box-shadow:none;opacity:.4;transition:opacity .12s}
-.home .mm-write svg{width:12px;height:12px;fill:none;stroke:var(--ink-muted);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.home .murmur:hover .mm-write{opacity:1}
-.home .mm-write:hover{filter:none}
-.home .mm-write:hover svg{stroke:var(--teal-deep)}
-.home .murmur.is-open{display:block;padding:12px;background:var(--field)}
-.home .mm-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--ink-muted)}
-.home .mm-head button{min-height:22px;width:22px;padding:0;border:0;background:none;color:var(--ink-muted);font-size:14px;line-height:1;box-shadow:none}
-.home .mm-list{list-style:none;margin:0 0 10px;padding:0;max-height:164px;overflow-y:auto}
-.home .mm-list li{display:flex;align-items:center;gap:7px;padding:6px 0;font-size:12px;border-bottom:1.5px solid var(--line-2)}
-.home .mm-list li:last-child{border-bottom:0}
-.home .mm-list .avatar-chip{width:20px;height:20px;font-size:9px;flex:none}
-.home .mm-list b{flex:none;font-weight:800;color:var(--ink-2)}
-.home .mm-list span{flex:1;min-width:0;color:var(--ink);font-weight:600;overflow-wrap:anywhere}
-.home .mm-list button{flex:none;width:20px;height:20px;min-height:0;padding:0;border:0;background:none;color:var(--ink-faint);font-size:13px;line-height:1;box-shadow:none}
-.home .mm-list button:hover{color:var(--pink);filter:none}
-.home .mm-form{display:flex;gap:6px}
-.home .mm-form input{flex:1;min-width:0;min-height:32px;padding:0 10px;border:0;border-bottom:2px solid var(--line);border-radius:3px 3px 0 0;background:var(--paper);font-size:13px;font-weight:600;color:var(--ink);box-shadow:none}
-.home .mm-form input:focus{border-bottom-color:var(--teal)}
-.home .mm-form button{flex:none;min-height:32px;padding:0 13px;border:0;background:var(--teal);color:#fff;font-size:12px;font-weight:800;box-shadow:none}
+.home .mm-write,.home .mm-delete{flex:none;display:grid;place-items:center;width:28px;height:32px;min-height:0;padding:0;border:0;background:none;box-shadow:none;color:var(--ink-muted);opacity:.65}
+.home .mm-write{margin-left:auto}
+.home .mm-write svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.home .mm-write:hover,.home .mm-write:focus-visible,.home .mm-delete:hover{opacity:1;color:var(--teal-deep);filter:none}
+.home .mm-form{display:flex;align-items:center;gap:6px;width:100%;min-width:0;margin:0}
+.home .mm-form input{flex:1;min-width:0;width:0;height:32px;min-height:32px;padding:0 6px;border:0;border-bottom:1px solid var(--teal);border-radius:0;background:transparent;font-size:12px;color:var(--ink);box-shadow:none}
+.home .mm-form button{flex:none;height:32px;min-height:32px;padding:0 8px;border:0;background:none;color:var(--teal-deep);font-size:12px;font-weight:800;box-shadow:none}
+.home .mm-form button[data-mm-close]{width:28px;padding:0;color:var(--ink-muted);font-size:16px}
+.home .mm-form :disabled{opacity:.5}
 
 /* ---------- 내 활동 ---------- */
 /* 상자 대신 선 하나와 여백. */
@@ -231,24 +289,29 @@
 }
 @media(max-width:600px){
   .home .selector-head h1{font-size:25px}
-  .home .suggest-button{padding:10px 14px;font-size:12px}
+  .home .suggest-button{padding:8px 2px;font-size:13px}
   .home .tools{flex-wrap:wrap;gap:8px}
   .home .search{flex:1 1 100%}
   .home .sortbox{flex:1}
   .home .sortbox select{width:100%}
   .home .chips{gap:1px;margin-bottom:14px}
+  .home .chip-toggle{display:inline-flex}
+  .home .chips[data-collapsed]>:not(.chip-toggle){display:none}
   .home .chip{min-height:26px;padding:0 8px;font-size:11px}
-  .home .chip-gap{flex-basis:100%;height:0;margin:0;background:none}
+  /* 필터 접기. 넓은 화면에서는 토글을 숨기고 항상 펼쳐 둔다. */
+.home .chip-toggle{display:none;align-items:center;gap:6px;min-height:28px;padding:0 10px;border:0;border-radius:0;background:var(--ink);color:#fff;font-size:12px;font-weight:800;box-shadow:none}
+.home .chip-toggle b{padding:0 5px;background:#ffffff33;font-size:11px}
+.home .chip-gap{flex-basis:100%;height:0;margin:0;background:none}
   .home .chip.clear{margin-left:0}
   .home .guildbox{flex:1 1 100%}
   .home .guildbox select{width:100%}
-  .home .carousel{height:265px;gap:16px;padding-inline:calc(50% - 110px)}
-  .home .track{flex-basis:220px}
+  .home .carousel{min-height:272px;gap:16px;padding-inline:calc(50% - 110px)}
+  .home .track-wrap{flex-basis:220px}
   .home .track.chosen::before{display:none}
-  .home .jacket{height:220px;padding:13px 13px 0}
-  .home .jacket b{font-size:20px}
-  .home .slots{margin:10px -13px 0}
-  .home .slot{height:38px;font-size:8px}
+  
+  
+  .home .slots{margin:0}
+  .home .slot{height:36px;font-size:9px}
   .home .slot u{font-size:11px}
   .home .transport{gap:2px;padding:12px 0 14px}
   .home .transport #position{min-width:58px}
@@ -261,13 +324,13 @@
   .home .mm-write{opacity:1}
 }
 @media(max-width:380px){.home .now-slots{grid-template-columns:1fr}}
-@media(prefers-reduced-motion:reduce){.home .carousel{scroll-behavior:auto}.home .track,.home .slot-btn,.home .meeting,.home .mm-line{transition:none}}
+@media(prefers-reduced-motion:reduce){.home .jacket.sk::after,.home .sk-bar::after{animation:none}.home .carousel{scroll-behavior:auto}.home .track,.home .slot-btn,.home .meeting,.home .mm-line{transition:none}}
 
 /* 읽고 조작하는 영역은 불투명한 흰 바탕으로 구분한다. */
 .home .tools{padding:0;margin-bottom:6px;background:none;border:0}
 .home .chips{padding:4px 0 8px;background:none;border:0}
-.home .now{padding:8px;background:#ffffffd9;border:1px solid white}
+
 .home .murmur{padding:0 4px;background:none;border:0}
 .home .my-rail{padding:16px;background:#ffffffba;border:1px solid white}
-.home .jacket{box-shadow:none}
+
 @media(max-width:900px){.home .my-rail{padding:14px}}

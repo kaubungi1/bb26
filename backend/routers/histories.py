@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException
 
 from db import get_db
+from helpers import SONG_COLS
 
 router = APIRouter()
 
@@ -13,7 +14,7 @@ def list_histories():
     result = []
     for hr in rows:
         h = dict(hr)
-        song = conn.execute('SELECT * FROM songs WHERE "id"=%s', (h['songId'],)).fetchone()
+        song = conn.execute(f'{SONG_COLS} WHERE "id"=%s', (h['songId'],)).fetchone()
         h['song'] = dict(song) if song else None
         result.append(h)
     conn.close()
@@ -27,7 +28,7 @@ def create_history(body: dict):
     if not song_id or not day:
         raise HTTPException(400, 'songId와 date는 필수입니다.')
     conn = get_db()
-    song = conn.execute('SELECT * FROM songs WHERE "id"=%s', (song_id,)).fetchone()
+    song = conn.execute(f'{SONG_COLS} WHERE "id"=%s', (song_id,)).fetchone()
     if not song:
         conn.close()
         raise HTTPException(404, '곡을 찾을 수 없습니다.')

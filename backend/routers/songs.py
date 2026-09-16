@@ -1,8 +1,11 @@
 """곡. 풀은 하나이고 길드는 꼬리표다. 끌올은 전체에서 한 곡만 30분 독점."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 
 from db import get_db
-from helpers import build_songs, guild_where, norm_tag, resolve_guild_id
+import hashlib
+
+import thumbs
+from helpers import PART_ROLES, SONG_COLS, build_songs, guild_where, norm_tag, resolve_guild_id
 
 router = APIRouter()
 
@@ -34,7 +37,7 @@ def _current_bump(conn):
 def list_songs(guild: str | None = None):
     conn = get_db()
     clause, params = guild_where(conn, guild)
-    rows = conn.execute(f'SELECT * FROM songs{clause} ORDER BY "createdAt" DESC', params).fetchall()
+    rows = conn.execute(f'{SONG_COLS}{clause} ORDER BY "createdAt" DESC', params).fetchall()
     result = build_songs(conn, rows)
     conn.close()
     return result
@@ -50,7 +53,7 @@ def get_bump():
 
 
 @router.post('')
-def create_song(body: dict):
+def create_song(body: dict, background: BackgroundTasks):
     title = (body.get('title') or '').strip()
     artist = (body.get('artist') or '').strip()
     if not title or not artist:
@@ -67,8 +70,21 @@ def create_song(body: dict):
         ),
     )
     song_id = cur.fetchone()['id']
+    # 파트 여섯은 곡을 만들 때 다 깔아 둔다. 고르지 않은 자리는 꺼진 채로 남는다.
+    # 나중에 켜면 되므로 자리를 새로 만들 일이 없고, 곡마다 파트 구성이 어긋나지 않는다.
+    # roles 를 안 보내면 여섯 다 켠다.
+    wanted = body.get('roles')
+    on = set(wanted) if isinstance(wanted, list) else set(PART_ROLES)
+    for role in PART_ROLES:
+        conn.execute(
+            'INSERT INTO sessions ("songId", "role", "active") VALUES (%s,%s,%s)',
+            (song_id, role, role in on),
+        )
+    thumbs.remember(conn, song_id, body.get('youtubeUrl'))
     conn.commit()
-    row = conn.execute('SELECT * FROM songs WHERE "id"=%s', (song_id,)).fetchone()
+    # 응답을 먼저 보내고 섬네일은 뒤에서 받는다. 등록한 사람도, 처음 보는 사람도 안 기다린다.
+    background.add_task(thumbs.warm, song_id)
+    row = conn.execute(f'{SONG_COLS} WHERE "id"=%s', (song_id,)).fetchone()
     result = build_songs(conn, [row])[0]
     conn.close()
     return result
@@ -77,7 +93,7 @@ def create_song(body: dict):
 @router.get('/{song_id}')
 def get_song(song_id: int):
     conn = get_db()
-    row = conn.execute('SELECT * FROM songs WHERE "id"=%s', (song_id,)).fetchone()
+    row = conn.execute(f'{SONG_COLS} WHERE "id"=%s', (song_id,)).fetchone()
     if not row:
         conn.close()
         raise HTTPException(404, '곡을 찾을 수 없습니다.')
@@ -87,8 +103,9 @@ def get_song(song_id: int):
 
 
 @router.put('/{song_id}')
-def update_song(song_id: int, body: dict):
+def update_song(song_id: int, body: dict, background: BackgroundTasks):
     conn = get_db()
+    before = conn.execute('SELECT "thumbVideoId" v FROM songs WHERE "id"=%s', (song_id,)).fetchone()
     fields = []
     values = []
     for key in ('title', 'artist', 'category', 'tags', 'youtubeUrl', 'status', 'isCandidate', 'note'):
@@ -109,11 +126,16 @@ def update_song(song_id: int, body: dict):
     fields.append('"updatedAt"=now()')
     values.append(song_id)
     cur = conn.execute(f'UPDATE songs SET {", ".join(fields)} WHERE "id"=%s', values)
+    changed_url = 'youtubeUrl' in body and before
+    if changed_url:
+        thumbs.remember(conn, song_id, body.get('youtubeUrl'), before['v'])
     conn.commit()
+    if changed_url:
+        background.add_task(thumbs.warm, song_id)
     if cur.rowcount == 0:
         conn.close()
         raise HTTPException(404, '곡을 찾을 수 없습니다.')
-    row = conn.execute('SELECT * FROM songs WHERE "id"=%s', (song_id,)).fetchone()
+    row = conn.execute(f'{SONG_COLS} WHERE "id"=%s', (song_id,)).fetchone()
     result = build_songs(conn, [row])[0]
     conn.close()
     return result
@@ -170,3 +192,22 @@ def release_bump(song_id: int, nickname: str):
     if cur.rowcount == 0:
         raise HTTPException(403, '끌올한 사람만 내릴 수 있습니다.')
     return {'ok': True}
+
+
+@router.get('/{song_id}/thumb')
+def song_thumb(song_id: int, request: Request):
+    """자켓 그림. 저장돼 있으면 바로 주고, 없으면 그 자리에서 받아 저장한 뒤 준다.
+       같은 그림을 다시 안 받도록 ETag 를 붙인다."""
+    conn = get_db()
+    try:
+        data = thumbs.ensure(conn, song_id)
+    finally:
+        conn.close()
+    if not data:
+        raise HTTPException(404, '자켓 그림이 없습니다.')
+    etag = '"%s"' % hashlib.md5(data).hexdigest()
+    cache = 'public, max-age=604800'
+    if request.headers.get('if-none-match') == etag:
+        return Response(status_code=304, headers={'ETag': etag, 'Cache-Control': cache})
+    return Response(content=data, media_type='image/jpeg',
+                    headers={'ETag': etag, 'Cache-Control': cache})

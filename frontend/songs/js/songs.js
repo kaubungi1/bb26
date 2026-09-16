@@ -9,15 +9,14 @@ let songs = [];
 let guilds = [];              /* 길드 목록 — 필터 메뉴와 소속 선택에 쓴다 */
 let bump = null;              /* 지금 끌올된 곡 {songId, bumpedBy, bumpNote, expiresAt} */
 let filterTags = new Set();   /* 태그 필터. 여러 개 고를 수 있고, 비어 있으면 전체 */
-let guildFilter = '';         /* 길드 필터. '' 전체 | 'none' 소속 없음 | slug */
+/* 길드 필터. '' 전체 | 'none' 길드에 붙지 않은 곡 = 불법이륙 공통 | slug
+   곡의 소속은 등록한 자리가 정한다. 길드 페이지에서 넣으면 그 길드, 메인에서 넣으면 공통이다. */
+let guildFilter = '';
 let query = '';               /* 검색어. 제목·아티스트·업로더에 부분 일치 */
 let mineFilter = new URLSearchParams(location.search).has('mine') ? 'in' : ''; /* 지원 여부 */
 let sortBy = 'recent';        /* 정렬 기준 — SORTS 의 키 */
 let sortDesc = true;          /* true 면 내림차순. 기본은 최신이 위 */
 let openDrop = null;          /* 열려 있는 메뉴 — 'mine' | 'guild' | 'tag' | 'sort' | null */
-let newTag = '';              /* 곡 추가 폼에서 고른 태그 */
-let newGuild = Site.slug || '';   /* 곡 추가 폼에서 고른 소속. 길드 안이면 고정 */
-let selectedRoles = new Set(PRESET_ROLES);
 let editingSongId = null;
 let moreId = null;            /* 액션을 펼쳐 둔 곡. 평소엔 ⋯ 하나만 보인다 */
 let songRouteHandled = false;
@@ -35,10 +34,6 @@ const sortDirEl = document.getElementById('sort-dir');
 const menuTagEl = document.getElementById('menu-tag');
 const menuSortEl = document.getElementById('menu-sort');
 const addBtn = document.getElementById('add-btn');
-const addForm = document.getElementById('add-form');
-const roleTogglesEl = document.getElementById('role-toggles');
-const tagTogglesEl = document.getElementById('tag-toggles');
-const guildTogglesEl = document.getElementById('guild-toggles');
 const sheetEl = document.getElementById('session-sheet');
 const sheetTitleEl = document.getElementById('sheet-title');
 const sheetSubEl = document.getElementById('sheet-sub');
@@ -49,7 +44,7 @@ let sheetSessionId = null;
 /* 길드 안에서는 길드 필터와 소속 선택이 필요 없다 — 이미 그 길드다 */
 if (Site.slug) {
   document.getElementById('drop-guild').hidden = true;
-  document.getElementById('guild-picker-row').hidden = true;
+  /* 곡 등록 폼의 소속 줄은 모달이 스스로 숨긴다 (Site.slug 가 있으면 고를 것이 없다) */
 }
 
 /* 태그는 한 곡에 하나. 고른 태그가 없으면 전체, 있으면 그중 하나에 걸리면 된다. */
@@ -64,10 +59,14 @@ function matchesGuild(song) {
 }
 
 /* 검색은 제목·아티스트·업로더 중 하나라도 부분 일치하면 된다. 대소문자는 가리지 않는다. */
+/* 곡으로도 사람으로도 찾는다. "눈보라" 를 치면 눈보라가 들어간 곡이 나온다.
+   닉네임과 시트 표기를 둘 다 본다. 화면에 "3개월뒤쯤의식빵" 이라 적혀 있어도
+   "식빵" 으로 걸리고, 표기가 "sikbbang" 이어도 닉네임 "식빵" 으로 걸린다. */
 function matchesQuery(song) {
   if (!query) return true;
-  return [song.title, song.artist, song.createdBy]
-    .some((v) => (v || '').toLowerCase().includes(query));
+  if ([song.title, song.artist, song.createdBy].some((v) => (v || '').toLowerCase().includes(query))) return true;
+  return song.sessions.some((s) => s.supports.some(
+    (sp) => (sp.nickname || '').toLowerCase().includes(query) || (sp.label || '').toLowerCase().includes(query)));
 }
 
 /* 지원 여부 — 내 닉네임이 그 곡의 어느 세션에든 들어 있으면 지원한 곡이다 */
@@ -152,11 +151,11 @@ function renderTools() {
       gcount[k] = (gcount[k] || 0) + 1;
     });
     const cur = guilds.find((g) => g.slug === guildFilter);
-    guildLabelEl.textContent = !guildFilter ? '길드' : guildFilter === 'none' ? '소속 없음' : (cur ? cur.name : guildFilter);
+    guildLabelEl.textContent = !guildFilter ? '길드' : guildFilter === 'none' ? SITE_NAME : (cur ? cur.name : guildFilter);
     document.getElementById('drop-guild').classList.toggle('is-set', !!guildFilter);
     menuGuildEl.innerHTML =
       `<button type="button" class="menu-item${guildFilter ? '' : ' is-on'}" data-pick-guild="">전체<i>${songs.length}</i></button>` +
-      `<button type="button" class="menu-item${guildFilter === 'none' ? ' is-on' : ''}" data-pick-guild="none">소속 없음<i>${gcount.none || ''}</i></button>` +
+      `<button type="button" class="menu-item${guildFilter === 'none' ? ' is-on' : ''}" data-pick-guild="none">${SITE_NAME}<i>${gcount.none || ''}</i></button>` +
       guilds.map((g) =>
         `<button type="button" class="menu-item${guildFilter === g.slug ? ' is-on' : ''}" data-pick-guild="${escapeHtml(g.slug)}">` +
         `${escapeHtml(g.name)}${gcount[g.slug] ? `<i>${gcount[g.slug]}</i>` : ''}</button>`).join('');
@@ -189,39 +188,71 @@ function renderTools() {
 /* 세션 칸. 라벨이 있으면 파트명 대신 라벨을 보여준다 (정렬은 여전히 파트 순). */
 function sessionCell(song, session) {
   const supports = session.supports;
-  const mine = supports.some((s) => s.nickname === Nick.get());
-  const names = supports.map(supportName);
+  const me = Nick.get();
+  const mine = supports.some((s) => s.nickname === me);
+  /* 내 것을 맨 앞으로. 칸이 좁아 잘려도 내가 먼저 보인다. */
+  const people = [...supports.filter((s) => s.nickname === me),
+                  ...supports.filter((s) => s.nickname !== me)];
+  /* 표기와 신원을 둘 다 들고 간다. 시트 표기(label)는 그 자체가 기록이자 농담이라
+     넉넉하면 그대로 쓰고, 칸이 모자라면 닉네임으로 내려간다. fitNames() 가 정한다. */
+  const names = people.map(supportName);
+  const nicks = people.map((s) => s.nickname);
   const editing = editingSongId === song.id;
-  const full = session.label || session.role;
-  const short = session.label || ROLE_SHORT[session.role] || session.role;
+  /* 칸 머리 두 벌. full 은 바꾼 이름(없으면 약칭), short 는 늘 약칭이다.
+     넓은 화면은 full, 좁은 화면은 short 를 쓴다 — 어느 쪽을 보일지는 CSS 가 정한다.
+     좁은 칸에서 '키보드(브…' 는 읽히지도 않으면서 여섯 칸을 화면 밖으로 밀어낸다. */
+  const abbr = ROLE_SHORT[session.role] || session.role;
+  const full = session.label || abbr;
+  const short = abbr;
+  /* 글로 읽히는 자리(쪽지·경고문)에는 약칭을 쓰지 않는다. '보컬' 이라고 적는다. */
+  const title = session.label || session.role;
 
-  let body;
-  if (!names.length) {
-    body = `<span class="empty">＋</span>`;
-  } else if (names.length === 1) {
-    body = `<span class="names" title="${escapeHtml(names[0])}">${escapeHtml(names[0])}</span>`;
-  } else {
-    // 등록순 고정. 넘치는 인원은 마지막 칩에 숫자로 모은다.
-    const shown = names.slice(0, CHIP_MAX);
-    const rest = names.length - shown.length;
-    body = `<span class="chips" title="${escapeHtml(names.join(', '))}">` +
-      shown.map((n) => avatarChip(n)).join('') +
-      (rest ? `<span class="avatar-chip more">+${rest}</span>` : '') +
-      `</span>`;
-  }
+  /* 일단 표기 전원을 쓴다. 넘치면 fitNames() 가 단계를 내린다. */
+  const joined = names.join(', ');
+  const body = names.length
+    ? `<span class="names" data-all="${escapeHtml(joined)}" data-nick="${escapeHtml(nicks.join(', '))}"` +
+      ` data-first="${escapeHtml(nicks[0])}" data-n="${names.length}">${escapeHtml(joined)}</span>`
+    : `<span class="empty">＋</span>`;
+
+  /* 쪽지에 담을 내용. 여기서는 만들어만 두고 켜지는 않는다.
+     켤지 말지는 사람 수가 아니라 실제로 잘렸는지가 정한다 — fitNames() 가 재서 켠다.
+     혼자여도 '쿠로(Echoess baa일 때만)' 처럼 길면 잘리고, 그때 볼 방법이 있어야 한다.
+     파트 이름을 바꾼 칸은 원래 파트명도 같이 담는다. */
+  const peek = names.length
+    ? `${title}${session.label ? ` (${session.role})` : ''} · ${names.join(', ')}`
+    : (session.label ? `${title} (${session.role})` : '');
+
+  /* 쓰지 않는 자리. 칸은 그대로 두고 꺼진 것만 보인다.
+     지우지 않으므로 여섯 칸의 자리가 곡마다 어긋나지 않는다. */
+  const off = session.active === false;
 
   const cls = ['session-cell'];
-  if (names.length) cls.push('filled');
+  if (off) cls.push('off');
+  else if (names.length) cls.push('filled');
   if (mine) cls.push('mine');
   if (editing) cls.push('editing');
   if (session.label) cls.push('labeled');
   return `
-    <div class="${cls.join(' ')}" data-session="${session.id}" data-song="${escapeHtml(song.title)}" data-role="${escapeHtml(session.role)}">
+    <div class="${cls.join(' ')}" data-session="${session.id}" data-song="${escapeHtml(song.title)}" data-role="${escapeHtml(session.role)}"${peek && !off ? ` data-peek-full="${escapeHtml(peek)}"${names.length ? '' : ` data-peek="${escapeHtml(peek)}"`}` : ''}>
       <span class="role short">${escapeHtml(short)}</span><span class="role full">${escapeHtml(full)}</span>
-      ${body}
+      ${off ? '<span class="names off-mark">안 씀</span>' : body}
       ${editing ? `<button type="button" class="session-label" data-label-session="${session.id}" data-role="${escapeHtml(session.role)}" data-label="${escapeHtml(session.label || '')}" title="파트 이름 바꾸기">✎</button>` : ''}
-      ${editing ? `<button type="button" class="session-del" data-del-session="${session.id}" data-role="${escapeHtml(full)}" data-supports="${names.length}" title="세션 삭제">✕</button>` : ''}
+      ${editing ? `<button type="button" class="session-toggle" data-toggle-session="${session.id}" data-active="${off ? '0' : '1'}" data-role="${escapeHtml(title)}" data-supports="${names.length}" title="${off ? '이 자리 쓰기' : '이 자리 안 쓰기'}">${off ? '켜기' : '끄기'}</button>` : ''}
     </div>`;
+}
+
+/* 자켓. 유튜브 섬네일을 우리 서버가 준다. 171장이 한꺼번에 뜨지 않도록 늦게 받는다.
+   자켓 자체가 유튜브로 가는 문이다. 줄마다 '▶ 유튜브' 글자를 반복하지 않는다. */
+function thumb(song) {
+  /* 섬네일이 없으면 홈과 같은 규칙으로 그린다 — 장르색 바탕에 글자 하나.
+     빈 회색 칸을 두면 그 줄만 곡이 아닌 것처럼 보인다. 20곡이 여기 해당한다. */
+  const inner = song.hasThumb
+    ? `<img src="/api/songs/${song.id}/thumb" alt="" loading="lazy" decoding="async" width="56" height="32">`
+    : `<span class="th-mark" aria-hidden="true">${escapeHtml(songLetter(song))}</span>`;
+  const cls = `song-thumb genre-${songTone(song)}${song.hasThumb ? '' : ' is-mark'}`;
+  if (!song.youtubeUrl) return `<span class="${cls}">${inner}</span>`;
+  return `<a class="${cls}" href="${escapeHtml(song.youtubeUrl)}" target="_blank" rel="noreferrer noopener"` +
+    ` aria-label="${escapeHtml(song.title)} 유튜브에서 보기" data-peek="유튜브에서 보기">${inner}</a>`;
 }
 
 /* 지원자가 1명 이상인 세션 수 */
@@ -229,14 +260,13 @@ function filledCount(song) {
   return song.sessions.filter((s) => s.supports.length > 0).length;
 }
 
+/* 몇 자리가 찼는가. 다 찬 곡과 빈 자리가 남은 곡을 숫자 하나로 가른다. */
 function fillBadge(song) {
   const total = song.sessions.length;
   if (!total) return '';
   const filled = filledCount(song);
   const done = filled === total;
-  /* 숫자 옆에 얇은 사선 게이지 — 몇 자리 남았는지 읽지 않고 본다 */
-  return `<span class="fill-badge${done ? ' full' : ''}">${filled}/${total}` +
-    `<span class="skew-gauge${done ? ' full' : ''}"><i style="width:${(filled / total) * 100}%"></i></span></span>`;
+  return `<span class="fill-badge${done ? ' full' : ''}" data-peek="${total}자리 중 ${filled}자리 참">${filled}<i>/${total}</i></span>`;
 }
 
 /* 아직 만들지 않은 프리셋 역할 */
@@ -250,15 +280,11 @@ function monthDay(iso) {
   return `${Number(m)}/${Number(d)}`;
 }
 
-/* 제목 아래 한 줄: 아티스트 · 충원현황 · 마지막 합주 · 유튜브 */
+/* 제목 아래 한 줄: 아티스트 · 마지막 합주.
+   유튜브는 자켓이 맡고, 충원 현황은 줄 오른쪽 끝으로 뺐다. */
 function metaLine(song) {
   const parts = [`<span class="song-artist">${escapeHtml(song.artist)}</span>`];
-  const badge = fillBadge(song);
-  if (badge) parts.push(badge);
-  if (song.lastPlayed) parts.push(`<span class="song-played" title="마지막 합주">${icon('history', 12)} ${monthDay(song.lastPlayed)}</span>`);
-  if (song.youtubeUrl) {
-    parts.push(`<a class="song-yt" href="${song.youtubeUrl}" target="_blank" rel="noreferrer">▶ 유튜브</a>`);
-  }
+  if (song.lastPlayed) parts.push(`<span class="song-played" data-peek="마지막 합주">${icon('history', 12)} ${monthDay(song.lastPlayed)}</span>`);
   return parts.join('<span class="meta-sep">·</span>');
 }
 
@@ -285,14 +311,12 @@ function bumpRemain() {
   return Math.max(0, Math.ceil((new Date(bump.expiresAt) - Date.now()) / 60000));
 }
 
+/* 파트는 여섯이 늘 있으므로 만들 것도, 고를 것도 없다. 하는 법만 알린다. */
 function rolePicker(song) {
   if (editingSongId !== song.id) return '';
-  const missing = missingRoles(song);
   return `
     <div class="session-picker">
-      ${missing.map((r) => `<button type="button" class="role-chip" data-new-role="${r}" data-song-id="${song.id}">${r}</button>`).join('')}
-      <button type="button" class="role-chip custom" data-new-role="" data-song-id="${song.id}">직접 입력</button>
-      <span class="session-picker-hint">✎ 이름 바꾸기 · ✕ 삭제</span>
+      <span class="session-picker-hint">✎ 자리 이름 바꾸기 · 끄기 / 켜기 로 안 쓰는 자리를 접습니다</span>
     </div>`;
 }
 
@@ -300,22 +324,22 @@ function songItem(song) {
   return `
     <div id="song-${song.id}" class="song-item${bump && bump.songId === song.id ? ' is-bumped' : ''}" data-song-id="${song.id}">
       <div class="song-item-head">
+        ${thumb(song)}
         <div class="song-item-info">
           <div class="song-title-row">
             <span class="song-title">${escapeHtml(song.title)}</span>
             ${!Site.slug ? guildBadge(song.guild) : ''}
-            <button type="button" class="song-tag${song.tags ? '' : ' none'}" data-tag-of="${song.id}" title="탭하여 태그 변경">
-              <span>${escapeHtml(song.tags || '태그 없음')}</span>
-            </button>
+            <span class="song-tag${song.tags ? '' : ' none'}"><span>${escapeHtml(song.tags || '태그 없음')}</span></span>
           </div>
           <div class="song-meta">${metaLine(song)}</div>
         </div>
+        ${fillBadge(song)}
         <div class="song-item-actions${moreId === song.id ? ' is-open' : ''}">
           ${song.createdBy ? `<span class="song-by">${icon('user', 13)} ${escapeHtml(song.createdBy)}</span>` : ''}
           <span class="row-more-set">
             ${bumpBtn(song)}
             ${sessionEditBtn(song)}
-            <button type="button" class="ghost" data-del="${song.id}">삭제</button>
+            <button type="button" class="session-edit" data-edit-song="${song.id}">수정</button>
           </span>
           <button type="button" class="row-more" data-more="${song.id}" aria-label="더보기">⋯</button>
         </div>
@@ -345,6 +369,66 @@ function renderBump() {
     </div>`;
 }
 
+/* 이름이 칸에 들어가는지 실제로 재서, 넘치면 한 단계씩 줄인다.
+
+   A  아카, 시엘   전원
+   B  아카 +1      첫 이름과 남은 수
+   C  2명          수만
+
+   글자 수로 어림하지 않는다. 브라우저가 그린 폭을 본다. 그래야 폰트가 바뀌든
+   닉네임에 ㅋㅋㅋ 이 붙든 창을 좁히든 규칙이 그대로 맞는다.
+
+   읽기를 전부 한 번에 하고 쓰기를 전부 한 번에 한다. 화면 계산이 칸마다
+   일어나지 않도록 하기 위함이다. 1,026칸이라 섞으면 그만큼 다시 그린다. */
+function fitNames() {
+  const all = [...listEl.querySelectorAll('.names[data-n]'),
+               ...bumpSlotEl.querySelectorAll('.names[data-n]')];
+  if (!all.length) return;
+  /* 혼자인 칸은 줄이지 않는다. 원문 그대로 두고 길면 CSS 가 … 로 자른다.
+     한 사람뿐이면 누구인지 헷갈릴 일이 없어서 표기를 바꿀 이유가 없다.
+     다만 재기는 같이 잰다 — 잘렸으면 쪽지가 있어야 하고, 그건 사람 수와 무관하다. */
+  const many = all.filter((el) => Number(el.dataset.n) > 1);
+
+  /* 쓰기 — A. 시트 표기 전원으로 되돌린다. 창을 넓히면 다시 원문이 나와야 한다. */
+  many.forEach((el) => { el.textContent = el.dataset.all; });
+
+  /* 읽기 — A 가 넘치는 칸 */
+  const overA = many.filter((el) => el.scrollWidth > el.clientWidth + 1);
+
+  /* 쓰기 — A′. 표기를 버리고 닉네임으로. 괄호 주석과 농담만 떨어지고 사람은 남는다. */
+  overA.forEach((el) => { el.textContent = el.dataset.nick; });
+
+  /* 읽기 — 닉네임으로도 넘치는 칸 */
+  const overB = overA.filter((el) => el.scrollWidth > el.clientWidth + 1);
+
+  /* 쓰기 — B. 첫 사람과 남은 수.
+     개수를 이름과 한 덩어리로 두면 넘칠 때 개수가 먼저 잘린다. 조각을 나눠
+     이름만 … 로 잘리게 하고 개수는 끝에 붙여 둔다. */
+  overB.forEach((el) => {
+    el.innerHTML = `<span class="nm">${escapeHtml(el.dataset.first)}</span>` +
+      `<span class="more">+${Number(el.dataset.n) - 1}</span>`;
+  });
+
+  /* 쪽지는 '잘렸으면 켜고 다 보이면 끈다'. 사람 수도 라벨 유무도 보지 않는다.
+     한 단계라도 내려간 칸은 이미 원문을 잃었으므로 잘리지 않았어도 켠다 —
+     농담 표기는 거기서 산다. 나머지는 지금 눈에 보이는 모양으로 다시 잰다. */
+  const lost = new Set(overA);
+  all.forEach((el) => {
+    const cell = el.closest('.session-cell');
+    if (!cell || !cell.dataset.peekFull) return;
+    const clipped = lost.has(el) || el.scrollWidth > el.clientWidth + 1;
+    if (clipped) cell.setAttribute('data-peek', cell.dataset.peekFull);
+    else cell.removeAttribute('data-peek');
+  });
+}
+
+/* 창 폭이 바뀌면 칸 폭도 바뀐다. 다시 잰다. 연달아 들어오는 동안은 마지막 것만 센다. */
+let fitTimer = null;
+addEventListener('resize', () => {
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(fitNames, 120);
+});
+
 function render() {
   renderTools();
   renderBump();
@@ -353,6 +437,10 @@ function render() {
     .filter((s) => !(bump && bump.songId === s.id))
     .filter((s) => matchesMine(s) && matchesGuild(s) && matchesTag(s) && matchesQuery(s))
     .sort(compareSongs);
+
+  /* 제목 옆 숫자. 필터를 걸면 몇 곡이 남았는지 바로 보인다. */
+  const countEl = document.getElementById('song-count');
+  if (countEl) countEl.textContent = songs.length ? visible.length + (bump ? 1 : 0) : '';
 
   if (songs.length === 0) {
     listEl.innerHTML = `<p class="muted song-empty">곡이 없습니다. 첫 곡을 추가해 보세요.</p>`;
@@ -369,6 +457,7 @@ function render() {
   }
 
   listEl.innerHTML = visible.map(songItem).join('');
+  fitNames();
   if (!songRouteHandled) {
     const id = Number(new URLSearchParams(location.search).get('song'));
     const target = document.getElementById(`song-${id}`);
@@ -435,94 +524,14 @@ document.addEventListener('click', (e) => {
   if (openDrop && !e.target.closest('.drop')) { openDrop = null; renderTools(); }
 });
 
-addBtn.addEventListener('click', () => {
-  addForm.hidden = false;
-  addBtn.hidden = true;
-  renderNewGuild();
-});
-
-document.getElementById('close-btn').addEventListener('click', () => {
-  addForm.hidden = true;
-  addBtn.hidden = false;
-  document.getElementById('in-title').value = '';
-  document.getElementById('in-artist').value = '';
-  document.getElementById('in-youtube').value = '';
-  selectedRoles = new Set(PRESET_ROLES);
-  newTag = '';
-  newGuild = Site.slug || '';
-  renderRoles();
-  renderNewTag();
-  renderNewGuild();
-});
-
-function renderNewTag() {
-  tagTogglesEl.innerHTML = TAGS.map((t) =>
-    `<button type="button" class="chip${t === newTag ? ' is-on' : ''}" data-newtag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
+/* 곡 등록·수정은 common/songedit.js 의 모달 하나가 맡는다.
+   등록과 수정이 고치는 항목이 같아서, 폼을 두 벌 두면 한쪽만 고쳐져 어긋난다. */
+async function openEditor(song) {
+  const result = await openSongEditor(song);
+  if (result) await refresh();
+  return result;
 }
-tagTogglesEl.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-newtag]');
-  if (!btn) return;
-  newTag = (btn.dataset.newtag === newTag) ? '' : btn.dataset.newtag;   /* 다시 누르면 해제 */
-  renderNewTag();
-});
-
-/* 소속 선택 — 길드 밖에서만. 안 고르면 전체(정기합주) 곡이다. */
-function renderNewGuild() {
-  if (Site.slug) return;
-  guildTogglesEl.innerHTML =
-    `<button type="button" class="chip${newGuild ? '' : ' is-on'}" data-newguild="">전체</button>` +
-    guilds.map((g) =>
-      `<button type="button" class="chip${g.slug === newGuild ? ' is-on' : ''}" data-newguild="${escapeHtml(g.slug)}">${escapeHtml(g.name)}</button>`).join('');
-}
-guildTogglesEl.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-newguild]');
-  if (!btn) return;
-  newGuild = btn.dataset.newguild;
-  renderNewGuild();
-});
-
-function renderRoles() {
-  roleTogglesEl.innerHTML = PRESET_ROLES.map((r) =>
-    `<button type="button" class="role-toggle${selectedRoles.has(r) ? ' active' : ''}" data-role="${r}">${r}</button>`).join('');
-}
-roleTogglesEl.addEventListener('click', (e) => {
-  const btn = e.target.closest('.role-toggle');
-  if (!btn) return;
-  const r = btn.dataset.role;
-  if (selectedRoles.has(r)) selectedRoles.delete(r);
-  else selectedRoles.add(r);
-  btn.classList.toggle('active');
-});
-
-document.getElementById('save-btn').addEventListener('click', async () => {
-  const title = document.getElementById('in-title').value.trim();
-  const artist = document.getElementById('in-artist').value.trim();
-  if (!title || !artist) return alert('곡명과 아티스트를 입력하세요.');
-  const name = await Nick.ensure();
-  if (!name) return;
-  const body = { title, artist, createdBy: name, youtubeUrl: document.getElementById('in-youtube').value.trim() || null, tags: newTag };
-  if (newGuild) body.guildSlug = newGuild;
-  const song = await api.post('/songs', body);
-  await Promise.all(PRESET_ROLES.filter((r) => selectedRoles.has(r)).map((r) => api.post('/sessions', { songId: song.id, role: r })));
-  document.getElementById('close-btn').click();
-  await refresh();
-});
-
-/* 태그 바꾸기 — 곡 줄의 태그를 누르면 그 자리에서 칩 줄이 펼쳐진다 */
-let tagEditId = null;
-
-function paintTagPicker() {
-  document.querySelectorAll('.song-tag-picker').forEach((el) => el.remove());
-  if (tagEditId === null) return;
-  const btn = document.querySelector(`[data-tag-of="${tagEditId}"]`);
-  if (!btn) return;
-  const song = songs.find((s) => s.id === tagEditId);
-  const box = document.createElement('div');
-  box.className = 'song-tag-picker chip-set';
-  box.innerHTML = TAGS.map((t) =>
-    `<button type="button" class="chip${song && song.tags === t ? ' is-on' : ''}" data-set-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
-  btn.closest('.song-item-info').appendChild(box);
-}
+addBtn.addEventListener('click', () => openEditor(null));
 
 async function onListClick(e) {
   const more = e.target.closest('[data-more]');
@@ -532,20 +541,10 @@ async function onListClick(e) {
     render();
     return;
   }
-  const tagBtn = e.target.closest('[data-tag-of]');
-  if (tagBtn) {
-    const id = Number(tagBtn.dataset.tagOf);
-    tagEditId = (tagEditId === id) ? null : id;   /* 다시 누르면 닫힌다 */
-    paintTagPicker();
-    return;
-  }
-  const setTag = e.target.closest('[data-set-tag]');
-  if (setTag && tagEditId !== null) {
-    const song = songs.find((s) => s.id === tagEditId);
-    const next = (song && song.tags === setTag.dataset.setTag) ? '' : setTag.dataset.setTag;
-    await api.put(`/songs/${tagEditId}`, { tags: next });
-    tagEditId = null;
-    await refresh();
+  const editBtn = e.target.closest('[data-edit-song]');
+  if (editBtn) {
+    moreId = null;
+    await openEditor(songs.find((s) => s.id === Number(editBtn.dataset.editSong)));
     return;
   }
   const bumpBtnEl = e.target.closest('[data-bump]');
@@ -576,13 +575,6 @@ async function onListClick(e) {
     await refresh();
     return;
   }
-  const del = e.target.closest('[data-del]');
-  if (del) {
-    if (!confirm('이 곡과 연결된 세션이 모두 삭제됩니다. 진행할까요?')) return;
-    await api.del(`/songs/${del.dataset.del}`);
-    await refresh();
-    return;
-  }
   const addSess = e.target.closest('[data-add-session]');
   if (addSess) {
     const id = Number(addSess.dataset.addSession);
@@ -599,34 +591,26 @@ async function onListClick(e) {
     await refresh();
     return;
   }
-  const delSess = e.target.closest('[data-del-session]');
-  if (delSess) {
-    const supports = Number(delSess.dataset.supports);
-    const msg = supports
-      ? `${delSess.dataset.role} 세션에 지원자 ${supports}명이 있습니다. 함께 삭제할까요?`
-      : `${delSess.dataset.role} 세션을 삭제할까요?`;
-    if (!confirm(msg)) return;
-    await api.del(`/sessions/${delSess.dataset.delSession}`);
-    await refresh();
-    return;
-  }
-  const newRole = e.target.closest('[data-new-role]');
-  if (newRole) {
-    const songId = Number(newRole.dataset.songId);
-    const song = songs.find((s) => s.id === songId);
-    let role = newRole.dataset.newRole;
-    if (!role) {
-      role = (prompt('추가할 세션 이름을 입력하세요.') || '').trim();
-      if (!role) return;
+  /* 자리를 끄고 켠다. 지우지 않으므로 지원 기록과 자리 번호가 그대로 남는다. */
+  const toggleSess = e.target.closest('[data-toggle-session]');
+  if (toggleSess) {
+    const on = toggleSess.dataset.active === '1';
+    const supports = Number(toggleSess.dataset.supports);
+    if (on && supports) {
+      alert(`${toggleSess.dataset.role} 자리에 지원자 ${supports}명이 있습니다.\n먼저 정리한 뒤에 끌 수 있습니다.`);
+      return;
     }
-    if (song.sessions.some((s) => s.role === role)) return alert('이미 있는 세션입니다.');
-    await api.post('/sessions', { songId, role });
-    editingSongId = null;
+    try {
+      await api.put(`/sessions/${toggleSess.dataset.toggleSession}`, { active: !on });
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
     await refresh();
     return;
   }
   const cell = e.target.closest('.session-cell');
-  if (cell) openSheet(Number(cell.dataset.session));
+  if (cell && !cell.classList.contains('off')) openSheet(Number(cell.dataset.session));
 }
 listEl.addEventListener('click', onListClick);
 bumpSlotEl.addEventListener('click', onListClick);
@@ -716,8 +700,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 mountChrome('songs');
-renderRoles();
-renderNewTag();
 startPolling(refresh);
 
 document.addEventListener('nickchange', refresh);
