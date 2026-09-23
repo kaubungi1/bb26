@@ -451,9 +451,10 @@
 
 /* ---------- 나눠 그리기(songs.js) ----------
    넓은 화면: 목록 아래 번호 줄. 번호는 공통 칩(.chip / .is-on) — 고른 것만 면이 찬다.
-   좁은 화면: 목록 끝의 보이지 않는 표지. 화면에 가까워지면 다음 묶음을 붙인다. */
-.pager { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 2px; padding: 22px 0 6px; }
+   좁은 화면: 목록 끝의 보이지 않는 표지. 화면에 가까워지면 다음 묶음을 붙인다.
+   목록은 넓으면 2열 격자다. 둘 다 한 칸이 아니라 전체 폭을 차지해야 가운데에 선다. */
+.pager { grid-column: 1 / -1; display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 2px; padding: 22px 0 6px; }
 .pager .chip { min-width: 32px; font-variant-numeric: tabular-nums; }
 .pager .chip:disabled { opacity: 0.3; cursor: default; }
 .pager-gap { padding: 0 4px; color: var(--ink-faint); font-size: 12px; }
-.song-more { height: 1px; }
+.song-more { grid-column: 1 / -1; height: 1px; }   /* 목록이 2열 격자라 전체 폭을 차지하게 한다 */
