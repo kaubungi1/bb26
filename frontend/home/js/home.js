@@ -289,10 +289,11 @@ $('#screen').addEventListener('click',e=>{const b=e.target.closest('#bump-btn');
 /* 위치 숫자(3 / 246)를 누르면 번호를 넣어 그 곡으로 곧바로 간다. 240곡을 ◀▶ 로 넘길 수는 없다.
    Enter·다른 곳 누르기면 가고, Esc 면 그대로. 멀리 뛰므로 스크롤 애니메이션 없이 앉힌다(edge 와 같은 이유). */
 function askPosition(btn){const a=list();if(!a.length||$('#position-input'))return;stop();
- const inp=document.createElement('input');inp.type='number';inp.id='position-input';inp.min=1;inp.max=a.length;inp.inputMode='numeric';
+ /* 글자 칸 + 숫자 자판. number 칸이면 브라우저가 위아래 화살표를 붙여 사이트 모양과 어긋난다. */
+ const inp=document.createElement('input');inp.type='text';inp.id='position-input';inp.inputMode='numeric';inp.autocomplete='off';
  inp.value=a.findIndex(s=>s.id===selected)+1;inp.setAttribute('aria-label',`몇 번째 곡 (1~${a.length})`);
  btn.hidden=true;btn.after(inp);inp.select();
- const done=go=>{if(!inp.isConnected)return;const n=Math.round(Number(inp.value));inp.remove();btn.hidden=false;
+ const done=go=>{if(!inp.isConnected)return;const n=Number(inp.value.replace(/\D/g,''));inp.remove();btn.hidden=false;
   if(go&&n>=1&&n<=a.length&&list()[n-1])choose(list()[n-1].id,false);btn.focus()};
  inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();done(true)}else if(e.key==='Escape'){e.preventDefault();done(false)}});
  inp.addEventListener('blur',()=>done(true))}
