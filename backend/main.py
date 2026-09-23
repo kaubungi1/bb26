@@ -6,10 +6,12 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+import metrics
 from db import init_db
 from guildtheme import theme_of
 from routers import (comments, drawings, events, guilds, histories, home, members, pairs,
                      sessions, sheets, songs)
+from routers import metrics as metrics_router
 
 BASE_DIR = os.path.dirname(__file__)
 FRONTEND_DIR = os.path.normpath(os.path.join(BASE_DIR, '..', 'frontend'))
@@ -31,6 +33,7 @@ ROUTERS = [
     (drawings, '/api/guilds', '길드 낙서'),
     (members, '/api/members', '멤버'),
     (home, '/api/home', '홈'),
+    (metrics_router, '/api/stats', '계측'),
 ]
 for module, prefix, tag in ROUTERS:
     app.include_router(module.router, prefix=prefix, tags=[tag])
@@ -120,5 +123,44 @@ async def static_cache_headers(request: Request, call_next):
         response.headers['Cache-Control'] = 'no-cache'
     return response
 
+
+# ---------- 전송량 계측 ----------
+def _route_name(scope):
+    """API 별로 묶을 이름. 실제 경로 대신 라우트 틀(/api/songs/{song_id}/thumb)을 쓴다.
+    실제 경로를 키로 쓰면 곡 id·닉네임마다 칸이 생겨 끝없이 늘어난다."""
+    route = scope.get('route')
+    if route is not None and getattr(route, 'path', None):
+        return f"{scope['method']} {route.path}"
+    return '(unmatched)' if scope['path'].startswith('/api/') else '(static)'
+
+
+class TrafficMeter:
+    """응답 본문 바이트와, 그 요청 동안 DB 에서 받은 바이트를 metrics 에 적는다.
+    다른 미들웨어보다 바깥에 둔다 — 나중에 압축을 넣으면 압축된 크기가 잡혀야 한다."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] != 'http':
+            await self.app(scope, receive, send)
+            return
+        tally = metrics.Tally()
+        token = metrics.begin(tally)
+
+        async def counting_send(message):
+            if message['type'] == 'http.response.body':
+                tally.out += len(message.get('body', b''))
+            await send(message)
+
+        try:
+            await self.app(scope, receive, counting_send)
+        finally:
+            metrics.end(token)
+            metrics.commit(_route_name(scope), tally)
+
+
+# add_middleware 는 나중에 붙인 것이 가장 바깥이 된다. 그래서 다른 미들웨어 뒤에 붙인다.
+app.add_middleware(TrafficMeter)
 
 app.mount('/', StaticFiles(directory=FRONTEND_DIR, html=True), name='frontend')

@@ -4,6 +4,8 @@ import psycopg
 from dotenv import load_dotenv
 from psycopg.rows import dict_row
 
+import metrics
+
 load_dotenv()
 
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
@@ -267,13 +269,29 @@ MIGRATIONS = [
 ]
 
 
+def _counting_dict_row(cursor):
+    """dict_row 그대로이되, 행을 만들 때마다 받은 크기를 metrics 에 더한다.
+    모든 DB 접근이 get_db() 를 거치므로 여기 한 곳에서 전부 잡힌다."""
+    make = dict_row(cursor)
+
+    def row(values):
+        metrics.add_db(metrics.row_size(values))
+        return make(values)
+    return row
+
+
 def get_db():
     if not DATABASE_URL:
         raise RuntimeError('DATABASE_URL 환경변수를 설정하세요 (예: postgres://...)')
-    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    return psycopg.connect(DATABASE_URL, row_factory=_counting_dict_row)
 
 
 def init_db():
+    with metrics.tagged('(boot)'):
+        _init_db()
+
+
+def _init_db():
     conn = get_db()
     conn.execute(SCHEMA)
     conn.commit()
