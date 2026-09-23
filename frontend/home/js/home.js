@@ -49,7 +49,7 @@ function jkBump(s){if(bumpLeft(s)<=0)return'';const pct=Math.round(bumpLeft(s)/(
 /* transport 줄의 끌올 버튼. 지금 보는 곡과 끌올 상태에 따라 글자가 바뀐다 — 곡 페이지 bumpBtn 과 같은 규칙. */
 function bumpCtl(id){const b=bumped(),me=Nick.get();
  if(b&&b.id===id)return b.bumpedBy===me?'<button type="button" id="bump-btn" data-unbump>끌올 내리기</button>':`<button type="button" id="bump-btn" disabled>↑ 끌올 중</button>`;
- if(b)return `<button type="button" id="bump-btn" disabled title="${esc(b.bumpedBy)}님이 끌올 중">↑ ${bumpMin(b)}분 뒤</button>`;
+ if(b)return `<button type="button" id="bump-btn" disabled title="${esc(b.bumpedBy)}님이 끌올 중">↑ ${bumpMin(b)}분<span class="bump-wait"> 뒤</span></button>`;
  return '<button type="button" id="bump-btn">↑ 끌올</button>'}
 /* 자켓. 위가 섬네일, 아래가 잉크 띠, 그 아래가 파트 여섯 칸이다.
    글자가 그림 위에 절대 올라가지 않으므로 섬네일이 밝든 어둡든 대비가 같다.
@@ -177,7 +177,7 @@ function controls(){const active=prefs.genres.length+prefs.guilds.length+(!!pref
    지금은 ◀▶ 의 번호만 순환한다(step). */
 function trackWrap(s){return `<div class="track-wrap${bumpLeft(s)>0?' is-bumped':''}" data-track="${s.id}"><button class="track ${s.id===selected?'chosen':''}" data-track="${s.id}" aria-label="${esc(s.title)}" aria-pressed="${s.id===selected}">${jacket(s)}</button>${s.youtubeUrl?`<a class="yt" href="${esc(s.youtubeUrl)}" target="_blank" rel="noreferrer noopener" aria-label="${esc(s.title)} 유튜브에서 보기" title="유튜브에서 보기"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="body" d="M21.6 7.2a2.6 2.6 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.6 2.6 0 0 0 2.4 7.2 27 27 0 0 0 2 12a27 27 0 0 0 .4 4.8 2.6 2.6 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.6 2.6 0 0 0 1.8-1.8A27 27 0 0 0 22 12a27 27 0 0 0-.4-4.8z"/><path class="play" d="M10 15.2V8.8L15.5 12z"/></svg></a>`:''}</div>`}
 function loop(a){return a.map(trackWrap).join('')}
-function results(){cleanupCarousel();bumpShown=bumped()?.id||null;const a=list();const count=$('.selector-head h1 small');if(count)count.textContent=a.length;if(!a.some(s=>s.id===selected))selected=a[0]?.id;$('#results').innerHTML=a.length?`<div class="carousel" tabindex="0" aria-label="곡 선택. 좌우 방향키로 이동">${loop(a)}</div><div class="transport"><button id="first" aria-label="맨 앞으로">⏮</button><button id="prev" aria-label="이전 곡">◀</button><span id="position"></span><button id="next" aria-label="다음 곡">▶</button><button id="last" aria-label="맨 뒤로">⏭</button><button id="auto" aria-pressed="${auto}">${auto?'Ⅱ 정지':'▷ 자동'}</button>${bumpCtl(selected)}<a id="song-link" href="${Site.base}/songs/">곡 정보 ↗</a><a href="${Site.base}/songs/">목록 ↗</a></div><div id="selected-detail"></div>`:ghost();if(a.length){choose(selected,false);bindCarousel();}persist();}
+function results(){cleanupCarousel();bumpShown=bumped()?.id||null;const a=list();const count=$('.selector-head h1 small');if(count)count.textContent=a.length;if(!a.some(s=>s.id===selected))selected=a[0]?.id;$('#results').innerHTML=a.length?`<div class="carousel" tabindex="0" aria-label="곡 선택. 좌우 방향키로 이동">${loop(a)}</div><div class="transport"><button id="first" aria-label="맨 앞으로">⏮</button><button id="prev" aria-label="이전 곡">◀</button><button type="button" id="position" title="몇 번째 곡으로 갈지 입력"></button><button id="next" aria-label="다음 곡">▶</button><button id="last" aria-label="맨 뒤로">⏭</button><button id="auto" aria-pressed="${auto}">${auto?'Ⅱ 정지':'▷ 자동'}</button>${bumpCtl(selected)}<a id="song-link" href="${Site.base}/songs/">곡 정보 ↗</a><a href="${Site.base}/songs/">목록 ↗</a></div><div id="selected-detail"></div>`:ghost();if(a.length){choose(selected,false);bindCarousel();}persist();}
 function choose(id,smooth=true){if(!$('#selected-detail')||!songs.some(s=>s.id===id)||!list().some(s=>s.id===id))return;selected=id;const s=songs.find(s=>s.id===id);document.querySelectorAll('.track').forEach(b=>{b.classList.toggle('chosen',+b.dataset.track===id);b.setAttribute('aria-pressed',+b.dataset.track===id)});center($(`[data-track="${id}"]`),smooth);tickOpen=false;tickIdx=0;clearInterval(ticker);ticker=null;$('#selected-detail').innerHTML=detail(s);$('#position').textContent=`${list().findIndex(s=>s.id===id)+1} / ${list().length}`;markEdges();const sl=$('#song-link');if(sl)sl.href=`${Site.base}/songs/?song=${id}`;const bb=$('#bump-btn');if(bb)bb.outerHTML=bumpCtl(id);preloadThumbs(id);loadComments(id);persist();}
 /* 칸 하나를 캐러셀 한가운데로. choose 와 step 이 같이 쓴다. */
 function center(el,smooth=true){const c=$('.carousel');if(!el||!c)return;const er=el.getBoundingClientRect(),cr=c.getBoundingClientRect();c.scrollTo({left:c.scrollLeft+(er.left+er.width/2)-(cr.left+cr.width/2),behavior:smooth&&!reducedMotion?'smooth':'instant'})}
@@ -286,6 +286,17 @@ async function onBump(btn){const id=selected,s=songs.find(x=>x.id===id);if(!s||b
  /* 시각은 서버 것으로 맞춘다. 기기 시계가 틀려도 남은 시간이 서버와 같게. */
  Writes.run('bump',()=>api.post(`/songs/${id}/bump`,{nickname:me,note})).then(r=>{if(r&&r.bumpedAt){s.bumpedAt=r.bumpedAt;seenBump=r.bumpedAt;persist()}}).catch(undo)}
 $('#screen').addEventListener('click',e=>{const b=e.target.closest('#bump-btn');if(b)onBump(b)});
+/* 위치 숫자(3 / 246)를 누르면 번호를 넣어 그 곡으로 곧바로 간다. 240곡을 ◀▶ 로 넘길 수는 없다.
+   Enter·다른 곳 누르기면 가고, Esc 면 그대로. 멀리 뛰므로 스크롤 애니메이션 없이 앉힌다(edge 와 같은 이유). */
+function askPosition(btn){const a=list();if(!a.length||$('#position-input'))return;stop();
+ const inp=document.createElement('input');inp.type='number';inp.id='position-input';inp.min=1;inp.max=a.length;inp.inputMode='numeric';
+ inp.value=a.findIndex(s=>s.id===selected)+1;inp.setAttribute('aria-label',`몇 번째 곡 (1~${a.length})`);
+ btn.hidden=true;btn.after(inp);inp.select();
+ const done=go=>{if(!inp.isConnected)return;const n=Math.round(Number(inp.value));inp.remove();btn.hidden=false;
+  if(go&&n>=1&&n<=a.length&&list()[n-1])choose(list()[n-1].id,false);btn.focus()};
+ inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();done(true)}else if(e.key==='Escape'){e.preventDefault();done(false)}});
+ inp.addEventListener('blur',()=>done(true))}
+$('#screen').addEventListener('click',e=>{const b=e.target.closest('#position');if(b)askPosition(b)});
 /* 남은 시간은 분 단위라 30초마다 글자만 고친다. 끝나면 목록을 다시 세운다(끌올 곡이 제자리로 돌아간다). */
 setInterval(()=>{if(document.hidden||!songs.length)return;const b=bumped();
  if((b?.id||null)!==bumpShown){if($('.carousel'))results();else bumpShown=b?.id||null;return}

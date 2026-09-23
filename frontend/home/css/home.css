@@ -362,3 +362,22 @@
 .home .transport #bump-btn{margin-left:auto;color:var(--pink)}
 .home .transport #bump-btn:disabled{color:var(--ink-muted);opacity:1}   /* 'n분 뒤' 는 읽혀야 하는 정보다. 기본 disabled 의 .3 을 쓰지 않는다 */
 .home .transport #bump-btn~#song-link{margin-left:0}
+
+/* ---------- transport 줄 한 줄 지키기 ----------
+   끌올 버튼이 들어와 폰에서 칸이 넘쳤고, nowrap 이 없어 '9분 / 뒤' 처럼 글자가 접혔다.
+   390px 폰의 쓸 수 있는 폭 약 366px 에 필요 폭 약 408px(추정). 600px 아래에서는
+   맨 앞·맨 뒤(⏮⏭)를 빼고(폰은 밀어 넘기기가 있다) 끌올 대기 글자에서 '뒤' 를 뗀다 → 약 336px.
+   380px 아래는 '목록 ↗' 도 뺀다 — '곡 정보 ↗' 가 같은 곡 목록 페이지로 간다. */
+.home .transport button,.home .transport a{white-space:nowrap}
+/* 위치 숫자는 누르면 번호를 넣는 칸이 된다. 버튼 공통 여백(0 10px)을 받지 않게 한다 — 폭이 그대로여야 줄이 안 밀린다. */
+.home .transport #position{padding:0;border:0;background:none;box-shadow:none;cursor:pointer}
+.home .transport #position:hover{color:var(--teal-deep)}
+.home .transport #position-input{width:70px;min-height:30px;padding:0 4px;border:0;border-bottom:1.5px solid var(--teal);border-radius:0;background:transparent;box-shadow:none;text-align:center;font:inherit;font-size:13px;font-weight:800;color:var(--ink)}
+@media(max-width:600px){
+  .home .transport #first,.home .transport #last{display:none}
+  .home .transport .bump-wait{display:none}
+  .home .transport #position-input{width:58px}
+}
+@media(max-width:380px){
+  .home .transport #song-link~a{display:none}
+}
