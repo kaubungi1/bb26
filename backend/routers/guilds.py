@@ -1,11 +1,12 @@
 """길드. 이름·색·엠블럼·슬로건은 팀장이 정하고, 명단은 누구나 고친다."""
-import hashlib
 import re
 
-from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from psycopg.types.json import Json
 
 from db import get_db
+import imageserve
+import listcache
 from images import MAX_UPLOAD, square_webp
 from guildtheme import THEMES, cache_clear
 
@@ -81,7 +82,7 @@ def _members_for(conn, guilds):
 # 문장 사진은 최대 200KB 라 목록에 실으면 열세 길드에 2.6MB 가 된다. 있는지만 알린다.
 # 화면은 /api/guilds/{slug}/image 주소로 따로 받는다 — 멤버 사진과 같은 방식이다.
 COLS = ('"id","slug","name","leader","slogan","recruitNote","color","emblem",'
-        '"createdBy","createdAt","updatedAt","style",("image" IS NOT NULL) AS "hasImage"')
+        '"createdBy","createdAt","updatedAt","style",("image" IS NOT NULL) AS "hasImage","imageUpdatedAt"')
 
 
 def _get(conn, slug):
@@ -89,18 +90,20 @@ def _get(conn, slug):
     if not row:
         conn.close()
         raise HTTPException(404, '길드를 찾을 수 없습니다.')
-    g = dict(row)
+    g = imageserve.with_crest(dict(row))
     _members_for(conn, [g])
     return g
 
 
 @router.get('')
-def list_guilds():
-    conn = get_db()
-    guilds = [dict(r) for r in conn.execute(f'SELECT {COLS} FROM guilds ORDER BY "createdAt"').fetchall()]
-    _members_for(conn, guilds)
-    conn.close()
-    return guilds
+def list_guilds(request: Request):
+    """15초마다 폴링된다. 바뀐 게 없으면 DB 를 다시 읽지 않는다(listcache.py)."""
+    def build(conn):
+        guilds = [imageserve.with_crest(dict(r))
+                  for r in conn.execute(f'SELECT {COLS} FROM guilds ORDER BY "createdAt"').fetchall()]
+        _members_for(conn, guilds)
+        return guilds
+    return listcache.serve(request, 'guilds', listcache.GUILDS, build)
 
 
 @router.post('')
@@ -179,6 +182,7 @@ def delete_guild(slug: str):
     """길드를 지워도 곡과 일정은 남고 소속만 풀린다 (ON DELETE SET NULL)."""
     conn = get_db()
     cur = conn.execute('DELETE FROM guilds WHERE "slug"=%s', (slug,))
+    imageserve.forget('crest', slug)
     conn.commit()
     conn.close()
     if cur.rowcount == 0:
@@ -198,6 +202,23 @@ def add_member(slug: str, body: dict):
         'INSERT INTO guildMembers ("guildId","nickname","role") VALUES (%s,%s,%s) ON CONFLICT DO NOTHING',
         (g['id'], nickname, role),
     )
+    conn.commit()
+    g = _get(conn, slug)
+    conn.close()
+    return g
+
+
+@router.delete('/{slug}/members')
+def remove_member_by_name(slug: str, nickname: str = '', role: str = ''):
+    """닉네임과 파트로 명단에서 뺀다. 없어도 성공으로 본다 — 같은 요청을 두 번 보내도 결과가 같다.
+    화면은 누르는 즉시 칸을 비우므로, 방금 합류해 아직 id 를 모를 때도 뺄 수 있어야 한다."""
+    who, part = nickname.strip(), role.strip()
+    if not who or not part:
+        raise HTTPException(400, 'nickname과 role은 필수입니다.')
+    conn = get_db()
+    g = _get(conn, slug)
+    conn.execute('DELETE FROM guildMembers WHERE "guildId"=%s AND "nickname"=%s AND "role"=%s',
+                 (g['id'], who, part))
     conn.commit()
     g = _get(conn, slug)
     conn.close()
@@ -236,10 +257,11 @@ async def upload_crest(slug: str, nickname: str = '', file: UploadFile = File(..
         if not row:
             raise HTTPException(404, '길드를 찾을 수 없습니다.')
         _require_member(conn, row['id'], nickname)
-        conn.execute('UPDATE guilds SET "image"=%s, "imageUpdatedAt"=now(), "updatedAt"=now() '
-                     'WHERE "id"=%s', (webp, row['id']))
+        ts = conn.execute('UPDATE guilds SET "image"=%s, "imageUpdatedAt"=now(), "updatedAt"=now() '
+                          'WHERE "id"=%s RETURNING "imageUpdatedAt"', (webp, row['id'])).fetchone()['imageUpdatedAt']
         conn.commit()
-        return {'hasImage': True}
+        imageserve.forget('crest', slug)
+        return {'hasImage': True, 'imageUrl': imageserve.crest_url(slug, ts)}
     finally:
         if not conn.closed:
             conn.close()
@@ -247,18 +269,17 @@ async def upload_crest(slug: str, nickname: str = '', file: UploadFile = File(..
 
 @router.get('/{slug}/image')
 def crest_image(slug: str, request: Request):
-    conn = get_db()
-    row = conn.execute('SELECT "image" FROM guilds WHERE "slug"=%s', (slug,)).fetchone()
-    conn.close()
-    if not row or not row['image']:
-        raise HTTPException(404, '문장 그림이 없습니다.')
-    data = bytes(row['image'])
-    etag = '"' + hashlib.sha1(data).hexdigest()[:20] + '"'
-    cache = 'public, max-age=3600'
-    if request.headers.get('if-none-match') == etag:
-        return Response(status_code=304, headers={'ETag': etag, 'Cache-Control': cache})
-    return Response(content=data, media_type='image/webp',
-                    headers={'ETag': etag, 'Cache-Control': cache, 'Content-Length': str(len(data))})
+    """주소·캐시 규칙은 imageserve.py. 버전은 imageUpdatedAt 이다."""
+    def version_of(conn):
+        row = conn.execute('SELECT ("image" IS NOT NULL) has, "imageUpdatedAt" ts FROM guilds '
+                           'WHERE "slug"=%s', (slug,)).fetchone()
+        return imageserve.stamp_or_legacy(row and row['has'], row and row['ts'])
+
+    def load(conn):
+        row = conn.execute('SELECT "image" FROM guilds WHERE "slug"=%s', (slug,)).fetchone()
+        return row and row['image']
+
+    return imageserve.serve(request, 'crest', slug, version_of, load, 'image/webp', '문장 그림이 없습니다.')
 
 
 @router.delete('/{slug}/image')
@@ -272,7 +293,8 @@ def delete_crest(slug: str, nickname: str = ''):
         conn.execute('UPDATE guilds SET "image"=NULL, "imageUpdatedAt"=NULL, "updatedAt"=now() '
                      'WHERE "id"=%s', (row['id'],))
         conn.commit()
-        return {'hasImage': False}
+        imageserve.forget('crest', slug)
+        return {'hasImage': False, 'imageUrl': None}
     finally:
         if not conn.closed:
             conn.close()

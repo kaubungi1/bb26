@@ -30,7 +30,7 @@ function eventSymbol(e) {
     return `<span class="event-symbol is-crest" aria-hidden="true">${crest}</span>`;
   }
   const body = g.hasImage
-    ? `<img src="/api/guilds/${encodeURIComponent(g.slug)}/image" alt="" />`
+    ? `<img src="${g.imageUrl || `/api/guilds/${encodeURIComponent(g.slug)}/image`}" alt="" />`
     : escapeHtml([...(g.name || '')][0] || '♫');
   return `<span class="event-symbol" style="${style}" aria-hidden="true">${body}</span>`;
 }

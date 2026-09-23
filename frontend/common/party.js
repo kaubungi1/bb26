@@ -97,7 +97,10 @@ function fitParty(root = document) {
    엉뚱한 칸에 서고 그 파트는 영영 '모집 중' 으로 남았다. 고를 것이 여섯뿐이라
    글자로 받을 이유가 없다 — 칸이 곧 선택이다.
 
-   guilds 는 화면이 들고 있는 길드 배열이다. 바뀐 뒤 다시 그리는 건 부르는 쪽이 한다. */
+   guilds 는 화면이 들고 있는 길드 배열이다. 바뀐 뒤 다시 그리는 건 부르는 쪽이 한다.
+   되묻는 창에서 확인하면 명단을 즉시 바꾸고 서버에는 뒤에서 보낸다(common.js Writes).
+   전에는 서버 응답과 길드 목록 전체를 다시 받은 뒤에야 칸이 바뀌었다.
+   실패하면 알리고, 쓰기가 끝날 때 서버의 실제 명단으로 돌아간다. */
 async function partyClick(e, guilds) {
   const btn = e.target.closest('[data-party-slot]');
   if (!btn) return false;
@@ -117,7 +120,10 @@ async function partyClick(e, guilds) {
       confirm: '탈퇴',
     });
     if (!ok) return false;
-    await api.del(`/guilds/${encodeURIComponent(slug)}/members/${mine.id}`);
+    guild.members = guild.members.filter((m) => !(m.nickname === me && m.role === role));
+    Writes.run(`party:${slug}:${role}:${me}`, () => api.del(
+      `/guilds/${encodeURIComponent(slug)}/members?nickname=${encodeURIComponent(me)}&role=${encodeURIComponent(role)}`))
+      .catch(partyFail);
     return true;
   }
 
@@ -127,8 +133,16 @@ async function partyClick(e, guilds) {
     confirm: '합류',
   });
   if (!ok) return false;
-  await api.post(`/guilds/${encodeURIComponent(slug)}/members`, { nickname: me, role });
+  guild.members.push({ id: null, guildId: guild.id, nickname: me, role, label: null });
+  Writes.run(`party:${slug}:${role}:${me}`,
+    () => api.post(`/guilds/${encodeURIComponent(slug)}/members`, { nickname: me, role }))
+    .catch(partyFail);
   return true;
+}
+
+function partyFail(err) {
+  api.forgetPolls();
+  alert(err.message);
 }
 
 

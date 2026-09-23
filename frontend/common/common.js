@@ -189,7 +189,30 @@ function clearGuildColor() {
     .forEach((k) => root.removeProperty(k));
 }
 
+/* 폴링으로 받은 목록의 마지막 버전(ETag)과 값. 주소마다 하나. */
+const pollCache = new Map();
+
 const api = {
+  /* 폴링 전용. 서버는 목록마다 버전(ETag)을 주고, 같은 버전이면 본문 없이 304 로 답한다
+     (backend/listcache.py). { changed, data } 를 돌려준다 — changed 가 false 면 다시 그릴 필요가 없다.
+     브라우저의 HTTP 캐시는 끈다(no-store). 켜 두면 브라우저가 304 를 200 으로 바꿔 넘겨서
+     바뀌었는지 알 수 없다. 버전은 여기서 직접 들고 다닌다. */
+  async poll(url) {
+    const prev = pollCache.get(url);
+    const res = await fetch('/api' + url, {
+      cache: 'no-store',
+      headers: prev ? { 'If-None-Match': prev.etag } : {},
+    });
+    if (res.status === 304 && prev) return { changed: false, data: prev.data };
+    if (!res.ok) throw new Error(await apiError(res));
+    const data = await res.json();
+    const etag = res.headers.get('ETag');
+    if (etag) pollCache.set(url, { etag, data });
+    else pollCache.delete(url);
+    return { changed: true, data };
+  },
+  /* 폴링 버전을 잊는다. 다음 poll 은 무조건 새로 받는다 — 쓰기가 실패해 화면을 서버에 다시 맞춰야 할 때. */
+  forgetPolls() { pollCache.clear(); },
   async get(url) {
     const res = await fetch('/api' + url);
     if (!res.ok) throw new Error(await apiError(res));
@@ -201,12 +224,13 @@ const api = {
       method: 'POST',
       headers: isForm ? undefined : { 'Content-Type': 'application/json' },
       body: isForm ? body : JSON.stringify(body),
+      keepalive: !isForm,   /* 요청 도중 탭을 닫아도 전송을 마친다. 64KB 제한이 있어 사진에는 걸지 않는다 */
     });
     if (!res.ok) throw new Error(await apiError(res));
     return res.status === 204 ? undefined : res.json();
   },
   async del(url) {
-    const res = await fetch('/api' + url, { method: 'DELETE' });
+    const res = await fetch('/api' + url, { method: 'DELETE', keepalive: true });
     if (!res.ok) throw new Error(await apiError(res));
   },
   async put(url, body) {
@@ -214,6 +238,7 @@ const api = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      keepalive: true,
     });
     if (!res.ok) throw new Error(await apiError(res));
     return res.json();
@@ -242,10 +267,16 @@ const Nick = {
 
 /* 등록된 닉네임 명단. 한 번 받아 두고 재사용한다. */
 let ROSTER = null;
+let rosterLoading = null;      /* 받는 중인 요청. 창을 열 때 미리 받으므로 확인을 누르면 같은 요청을 기다린다 */
 async function roster() {
   if (ROSTER) return ROSTER;
-  try { ROSTER = await api.get('/members/roster'); } catch { ROSTER = []; }
-  return ROSTER;
+  if (!rosterLoading) {
+    rosterLoading = api.get('/members/roster')
+      .then((r) => { ROSTER = r; return r; })
+      .catch(() => [])          /* 못 받아도 막지 않는다. 오타 확인만 건너뛴다 */
+      .finally(() => { rosterLoading = null; });
+  }
+  return rosterLoading;
 }
 
 /* 오타를 잡기 위한 비슷한 이름 찾기. 인증이 아니라 실수 방지다. */
@@ -268,6 +299,7 @@ function similarNames(input, names) {
 }
 
 function promptName() {
+  roster();   /* 창을 여는 순간 명단을 받기 시작한다. 확인을 누를 때쯤이면 와 있다(전에는 누른 뒤에 받았다) */
   return new Promise((resolve) => {
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
@@ -399,15 +431,80 @@ async function nameModal() {
   return changed;
 }
 
+/* ---------- 누르는 즉시 반영 ----------
+   화면을 먼저 바꾸고 서버에 보낸다. 전에는 쓰기 응답과 목록 전체를 다시 받을 때까지 기다려서
+   누른 뒤 3초쯤 지나야 칸이 바뀌었다.
+     run(lane, send)  같은 칸(lane)의 요청은 줄을 세워 앞의 것이 끝난 뒤 보낸다.
+                      다른 칸은 서로 기다리지 않는다. send 가 돌려준 약속을 그대로 돌려준다.
+     pending          보내는 중인 쓰기 수. 이것이 남아 있는 동안 폴링은 쉰다 — 늦게 온 옛 목록이
+                      방금 누른 칸을 되돌려 놓지 않게.
+     seq              쓰기를 시작할 때마다 오르는 번호. 폴링은 출발할 때만 쉬므로, 누르기 전에 출발한
+                      폴링이 누른 뒤에 옛 목록을 들고 도착할 수 있다(지원하자마자 이름이 사라졌다 돌아오던 것).
+                      화면은 출발할 때 seq 를 기억해 두고, 도착했을 때 달라졌으면 그 응답을 버린다(Writes.stale).
+   쓰기가 모두 끝나면 document 에 'writes-idle' 이 뜬다. 화면은 그때 서버 상태로 맞춘다.
+   실패하면 각 화면이 알리고 api.forgetPolls() 를 부른다 — 그러면 맞출 때 서버의 실제 상태를 새로 받는다.
+   서버 쪽 쓰기는 모두 "이 상태로" 방식이라(같은 요청을 두 번 보내도 같다) 줄 순서만 지키면 된다. */
+const Writes = {
+  pending: 0,
+  seq: 0,
+  lanes: new Map(),
+  run(lane, send) {
+    const prev = this.lanes.get(lane) || Promise.resolve();
+    this.pending++;
+    this.seq++;
+    const p = prev.catch(() => {}).then(send);
+    this.lanes.set(lane, p);
+    const done = () => {
+      if (this.lanes.get(lane) === p) this.lanes.delete(lane);
+      if (--this.pending === 0) document.dispatchEvent(new Event('writes-idle'));
+    };
+    p.then(done, done);
+    return p;
+  },
+  /* 확인이 필요한 쓰기(만들기·확정·삭제·수정). 즉시 반영하지 않고 결과를 받아 그린다.
+     그래도 Writes 로 보내므로 기다리는 동안 늦게 온 폴링이 화면을 덮지 않고, 끝나면 writes-idle 로 맞춘다.
+     전에는 쓰기 뒤에 목록 전체를 다시 받을 때까지 기다렸다 — 이제는 돌려받은 결과로 바로 그린다.
+     누른 버튼은 끝날 때까지 잠근다(두 번 눌러 두 번 가지 않게). 실패하면 알리고 null 을 돌려준다. */
+  async commit(btn, lane, send, fail = (err) => alert(err.message)) {
+    if (btn) btn.disabled = true;
+    try {
+      return await this.run(lane, send);
+    } catch (err) {
+      api.forgetPolls();
+      fail(err);
+      return null;
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+  /* 출발할 때의 seq 로 받은 응답이 이미 낡았는가. 낡았으면 폴링 버전도 잊는다 —
+     버린 응답에 다른 사람의 변경이 들어 있었어도 다음 폴링이 304 로 넘기지 않고 새로 받게. */
+  stale(seq) {
+    if (!this.pending && seq === this.seq) return false;
+    api.forgetPolls();
+    return true;
+  },
+};
+/* 보내는 중인 쓰기가 있으면 닫기 전에 묻는다. 폰 브라우저는 대부분 이 창을 띄우지 않는다. */
+window.addEventListener('beforeunload', (e) => {
+  if (!Writes.pending) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+/* 숨겨진 탭은 폴링하지 않는다. 다시 보이면 곧바로 한 번 새로 받는다.
+   열어 두기만 한 탭이 밤새 서버와 DB 를 깨워 두던 것을 막는다.
+   보내는 중인 쓰기가 있을 때도 쉰다(Writes). 끝나면 writes-idle 로 각 화면이 맞춘다. */
 function startPolling(fn, ms = 5000) {
   let running = false;
   const run = async () => {
-    if (running) return;
+    if (running || document.hidden || Writes.pending) return;
     running = true;
     try { await fn(); } catch (err) { console.error(err); }
     finally { running = false; }
   };
   run();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) run(); });
   return setInterval(run, ms);
 }
 
@@ -530,10 +627,6 @@ function mountChrome(activeKey) {
   }
 }
 
-function fmtDate(iso) {
-  return new Date(iso).toLocaleDateString();
-}
-
 /* 닉네임 → 항상 같은 색. 사람마다 색이 고정돼야 색만으로 구분이 된다. */
 const AVATAR_COLORS = [
   ['#00b8ad', '#e7faf8'],
@@ -624,8 +717,10 @@ const Profiles = {
   },
 };
 
+/* 그림 주소는 서버가 버전을 붙여 준다(backend/imageserve.py). 사진이 바뀌면 주소가 바뀐다.
+   imageUrl 이 없는 옛 캐시 데이터는 버전 없는 주소로 받는다 — 서버가 매번 확인하게 하므로 틀리지 않는다. */
 function imageUrl(m) {
-  return `/api/members/${encodeURIComponent(m.nickname)}/image?v=${encodeURIComponent(m.updatedAt || '')}`;
+  return m.imageUrl || `/api/members/${encodeURIComponent(m.nickname)}/image`;
 }
 
 /* 지원자를 화면에 뭐라고 쓸 것인가.

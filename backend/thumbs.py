@@ -12,6 +12,8 @@ import urllib.request
 
 from PIL import Image
 
+import imageserve
+
 # 큰 것부터 시도한다. maxres 가 없는 영상이 많아 순서대로 떨어진다.
 SIZES = ('maxresdefault.jpg', 'sddefault.jpg', 'hqdefault.jpg')
 UA = {'User-Agent': 'Mozilla/5.0 (compatible; bulbeobiryuk/1.0)'}
@@ -64,6 +66,7 @@ def remember(conn, song_id: int, url: str | None, previous: str | None = None) -
     vid = video_id(url)
     if vid == previous:
         return
+    imageserve.forget('thumb', song_id)      # 서버 메모리의 옛 자켓을 버린다
     conn.execute(
         'UPDATE songs SET "thumbVideoId"=%s, thumb=NULL, "thumbUpdatedAt"=NULL WHERE "id"=%s',
         (vid, song_id),

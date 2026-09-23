@@ -2,10 +2,11 @@
 from datetime import date as _date
 from datetime import timedelta
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from db import get_db
-from helpers import attach_guilds, guild_brief, guild_where, resolve_guild_id
+import listcache
+from helpers import attach_guilds, guild_where, resolve_guild_id
 
 router = APIRouter()
 
@@ -84,13 +85,13 @@ def _load(conn, event_id):
 
 # ---------- 목록·생성·삭제 ----------
 @router.get('')
-def list_events(guild: str | None = None):
-    conn = get_db()
-    clause, params = guild_where(conn, guild)
-    rows = conn.execute(f'SELECT * FROM events{clause} ORDER BY "createdAt" DESC', params).fetchall()
-    result = serialize_events(conn, rows)
-    conn.close()
-    return result
+def list_events(request: Request, guild: str | None = None):
+    """5초마다 폴링된다. 바뀐 게 없으면 DB 를 다시 읽지 않는다(listcache.py)."""
+    def build(conn):
+        clause, params = guild_where(conn, guild)
+        rows = conn.execute(f'SELECT * FROM events{clause} ORDER BY "createdAt" DESC', params).fetchall()
+        return serialize_events(conn, rows)
+    return listcache.serve(request, 'events', listcache.EVENTS, build)
 
 
 @router.post('')
@@ -151,15 +152,6 @@ def create_event(body: dict):
     return result
 
 
-@router.get('/{event_id}')
-def get_event(event_id: int):
-    conn = get_db()
-    event = _load(conn, event_id)
-    result = serialize_event(conn, event)
-    conn.close()
-    return result
-
-
 @router.delete('/{event_id}')
 def delete_event(event_id: int):
     conn = get_db()
@@ -200,6 +192,9 @@ def toggle_date(event_id: int, day: str):
 # ---------- 참석 토글 ----------
 @router.post('/{event_id}/avail/toggle')
 def toggle_avail(event_id: int, body: dict):
+    """참석 표시. checked(true/false)를 보내면 그 상태로 맞춘다 — 같은 요청을 두 번 보내도 결과가 같다.
+    화면이 누르는 즉시 칸을 바꾸고 요청을 보내므로, 폰·PC 에서 동시에 눌러도, 응답을 못 받아
+    다시 보내도 어긋나지 않아야 한다. checked 가 없으면 예전처럼 뒤집는다(배포 직후의 옛 화면용)."""
     day = (body.get('date') or '').strip()
     nickname = (body.get('nickname') or '').strip()
     if not day or not nickname:
@@ -217,6 +212,19 @@ def toggle_avail(event_id: int, body: dict):
     if not date_row:
         conn.close()
         raise HTTPException(400, '후보에 없거나 꺼 둔 날짜입니다.')
+    want = body.get('checked')
+    if isinstance(want, bool):
+        if want:
+            conn.execute(
+                'INSERT INTO eventAvails ("eventId", "date", nickname) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING',
+                (event_id, day, nickname),
+            )
+        else:
+            conn.execute('DELETE FROM eventAvails WHERE "eventId"=%s AND "date"=%s AND nickname=%s',
+                         (event_id, day, nickname))
+        conn.commit()
+        conn.close()
+        return {'checked': want}
     existing = conn.execute(
         'SELECT "id" FROM eventAvails WHERE "eventId"=%s AND "date"=%s AND nickname=%s',
         (event_id, day, nickname),
@@ -414,7 +422,9 @@ def set_songs(event_id: int, body: dict):
 
 @router.post('/{event_id}/songs/{song_id}/lineup')
 def toggle_lineup(event_id: int, song_id: int, body: dict):
-    """라인업 한 칸 토글. 지원 여부와 상관없이 그날 실제로 친 사람을 적는다."""
+    """라인업 한 칸. 지원 여부와 상관없이 그날 실제로 친 사람을 적는다.
+    on(true/false)을 보내면 그 상태로 맞춘다 — 같은 요청을 두 번 보내도 결과가 같다(화면이 누르는 즉시
+    칸을 바꾸고 보내기 때문). on 이 없으면 예전처럼 뒤집는다(배포 직후의 옛 화면용)."""
     role = (body.get('role') or '').strip()
     nickname = (body.get('nickname') or '').strip()
     if not role or not nickname:
@@ -426,11 +436,12 @@ def toggle_lineup(event_id: int, song_id: int, body: dict):
     ).fetchone():
         conn.close()
         raise HTTPException(400, '셋리스트에 없는 곡입니다.')
+    want = body.get('on')
     cur = conn.execute(
         'DELETE FROM eventLineups WHERE "eventId"=%s AND "songId"=%s AND "role"=%s AND "nickname"=%s',
         (event_id, song_id, role, nickname),
     )
-    on = cur.rowcount == 0
+    on = want if isinstance(want, bool) else cur.rowcount == 0
     if on:
         conn.execute(
             'INSERT INTO eventLineups ("eventId","songId","role","nickname") VALUES (%s,%s,%s,%s)',

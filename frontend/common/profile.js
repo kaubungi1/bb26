@@ -4,17 +4,14 @@
 const PROFILE_COLORS = ['#00b8ad', '#ec4899', '#6366f1', '#f59e0b', '#22b8e6', '#8b5cf6', '#2f9e54', '#ef4444'];
 
 async function openProfileEditor(nickname, opts = {}) {
-  // 캐시가 아직 도착하지 않았거나 다른 화면에서 바뀐 값으로 기존 소개를 덮지 않는다.
-  try {
-    const res = await fetch(`/api/members/${encodeURIComponent(nickname)}`);
-    if (res.ok) Profiles.put(await res.json());
-    else if (res.status !== 404) throw new Error(await apiError(res));
-  } catch (err) {
-    alert(`프로필을 불러오지 못했습니다. ${err.message}`);
-    return null;
-  }
+  /* 창은 캐시로 바로 연다. 전에는 서버의 최신 프로필을 받을 때까지 창이 열리지 않아서
+     프로필 열기와 로그아웃(이 창 안에 있다)이 느렸다. 최신값은 뒤에서 받아, 창에서 아직 아무것도
+     만지지 않았을 때만 채운다 — 입력하던 것을 덮지 않는다. 못 받으면 캐시 그대로 쓴다. */
+  const fresh = fetch(`/api/members/${encodeURIComponent(nickname)}`)
+    .then((res) => (res.ok ? res.json() : null))
+    .catch(() => null);
   return new Promise((resolve) => {
-    const cur = Profiles.get(nickname) || { nickname };
+    let cur = Profiles.get(nickname) || { nickname };
     let color = cur.color || '';
     let role = cur.mainRoles || '';
     let imageFile = null;          /* 새로 고른 파일 */
@@ -101,6 +98,30 @@ async function openProfileEditor(nickname, opts = {}) {
     };
     paintPreview(); paintColors(); paintRoles();
 
+    /* 뒤에서 받은 최신값. 창에서 무언가 만졌으면 폼은 그대로 두고 캐시만 고친다. */
+    let edited = false;
+    backdrop.querySelector('.profile-form').addEventListener('input', () => { edited = true; });
+    backdrop.querySelector('.profile-form').addEventListener('click', (e) => {
+      if (e.target.closest('button, input, label')) edited = true;
+    });
+    fresh.then((m) => {
+      if (!m) return;
+      Profiles.put(m);
+      if (edited || !backdrop.isConnected) return;
+      cur = m;
+      color = m.color || '';
+      role = m.mainRoles || '';
+      previewUrl = m.hasImage ? imageUrl(m) : '';
+      const set = (sel, v) => { const el = backdrop.querySelector(sel); if (el) el.value = v || ''; };
+      set('#pf-title', m.title);
+      set('#pf-status', m.status);
+      set('#pf-avail', m.availability);
+      set('#pf-intro', m.intro);
+      backdrop.querySelectorAll('.pf-line').forEach((el, i) => { el.value = (m.lines || [])[i] || ''; });
+      backdrop.querySelector('#pf-clear').classList.toggle('is-off', !m.hasImage);
+      paintPreview(); markColors(); paintRoles();
+    });
+
     const close = (v) => {
       if (busy) return;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -175,29 +196,31 @@ async function openProfileEditor(nickname, opts = {}) {
         /* 빈 줄은 서버가 버린다. 순서는 적은 대로 둔다. */
         lines: [...backdrop.querySelectorAll('.pf-line')].map((el) => el.value.trim()),
       };
-      busy = true;
-      const submit = backdrop.querySelector('[type=submit]');
-      submit.disabled = true;
-      try {
+      /* 누르는 즉시 닫고 저장은 뒤에서 한다(common.js Writes). 사진은 올라가는 동안
+         방금 자른 그림을 먼저 보여 준다. 창이 닫히며 미리보기 주소는 해제되므로 따로 만든다.
+         실패하면 알리고 원래 프로필로 되돌린다. */
+      const file = imageFile;
+      const remove = removeImage && cur.hasImage;
+      const shown = { ...cur, ...body, nickname };
+      if (file) Object.assign(shown, { hasImage: true, imageUrl: URL.createObjectURL(file) });
+      else if (remove) Object.assign(shown, { hasImage: false, imageUrl: null });
+      Profiles.put(shown);
+      Writes.run('profile:' + nickname, async () => {
         let saved = await api.put(`/members/${encodeURIComponent(nickname)}`, body);
-        Profiles.put(saved);
-        if (imageFile) {
+        if (file) {
           const fd = new FormData();
-          fd.append('file', imageFile);
+          fd.append('file', file);
           saved = await api.post(`/members/${encodeURIComponent(nickname)}/image`, fd);
-        } else if (removeImage && cur.hasImage) {
+        } else if (remove) {
           await api.del(`/members/${encodeURIComponent(nickname)}/image`);
-          saved = { ...saved, hasImage: false };
+          saved = { ...saved, hasImage: false, imageUrl: null };
         }
         Profiles.put(saved);
-        busy = false;
-        close(saved);
-      } catch (err) {
-        alert(err.message);
-      } finally {
-        busy = false;
-        submit.disabled = false;
-      }
+      }).catch((err) => {
+        Profiles.put(cur);
+        alert(`프로필을 저장하지 못했습니다. ${err.message}`);
+      });
+      close(shown);
     });
     document.body.appendChild(backdrop);
   });

@@ -132,18 +132,3 @@ def save_drawing(slug: str, body: dict):
     finally:
         if not conn.closed:
             conn.close()
-
-
-@router.delete('/{slug}/drawings/{nickname}')
-def delete_drawing(slug: str, nickname: str):
-    """내 그림을 통째로 지운다. 화면은 자기 것에만 이 버튼을 내준다."""
-    conn = get_db()
-    try:
-        gid = _guild_id(conn, slug)
-        cur = conn.execute('DELETE FROM guildDrawings WHERE "guildId"=%s AND "nickname"=%s',
-                           (gid, nickname.strip()))
-        conn.commit()
-        return {'deleted': cur.rowcount}
-    finally:
-        if not conn.closed:
-            conn.close()

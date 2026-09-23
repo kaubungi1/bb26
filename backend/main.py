@@ -10,8 +10,7 @@ from fastapi.staticfiles import StaticFiles
 import metrics
 from db import init_db
 from guildtheme import theme_of
-from routers import (comments, drawings, events, guilds, histories, home, members, pairs,
-                     sessions, sheets, songs)
+from routers import comments, drawings, events, guilds, members, pairs, sessions, sheets, songs
 from routers import metrics as metrics_router
 
 BASE_DIR = os.path.dirname(__file__)
@@ -27,14 +26,12 @@ ROUTERS = [
     (songs, '/api/songs', '곡'),
     (comments, '/api/songs', '곡 한마디'),
     (sessions, '/api/sessions', '세션'),
-    (histories, '/api/histories', '합주 이력'),
     (sheets, '/api/sheets', '악보'),
     (pairs, '', '페어링'),
     (events, '/api/events', '일정'),
     (guilds, '/api/guilds', '길드'),
     (drawings, '/api/guilds', '길드 낙서'),
     (members, '/api/members', '멤버'),
-    (home, '/api/home', '홈'),
     (metrics_router, '/api/stats', '계측'),
 ]
 for module, prefix, tag in ROUTERS:

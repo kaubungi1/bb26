@@ -210,7 +210,7 @@ function slotWho(names) {
       const parts = ordered(s);
       return `<li class="g-song genre-${songTone(s)}">
         <span class="g-song-thumb">${s.hasThumb
-          ? `<img src="/api/songs/${s.id}/thumb" alt="" loading="lazy" decoding="async" />`
+          ? `<img src="${s.thumbUrl || `/api/songs/${s.id}/thumb`}" alt="" loading="lazy" decoding="async" />`
           : `<span class="g-song-mark" aria-hidden="true">${esc(songLetter(s))}</span>`}</span>
         <span class="g-song-info">
           <a class="g-song-title" href="${Site.base}/songs/?song=${s.id}">${esc(s.title)}</a>
@@ -284,12 +284,15 @@ function playEnter() {
 let drawMounted = false;
 
 async function refresh() {
+  if (Writes.pending) return;        /* 보내는 중인 쓰기가 끝나면 writes-idle 로 다시 온다 */
+  const seq = Writes.seq;
   try {
     const [gs, sg, ev] = await Promise.all([
       api.get(`/guilds/${encodeURIComponent(Site.slug)}`),
       api.get(Site.q('/songs')),
       api.get(Site.q('/events')),
     ]);
+    if (Writes.stale(seq)) return;   /* 기다리는 동안 누른 것이 있으면 이 응답은 낡았다 */
     guild = gs; songs = sg; events = ev;
     $('#guild-error').hidden = true;
     render();
@@ -324,34 +327,49 @@ $('#screen').addEventListener('click', async (e) => {
   if (b.hasAttribute('data-edit-guild')) {
     const saved = await openGuildEditor(guild);
     liveStyle = null;          /* 저장했든 취소했든 미리보기 값은 여기서 끝난다 */
-    if (saved) await refresh(); else render();
+    if (saved) { guild = saved; render(); refresh(); } else render();   /* 돌려받은 길드로 바로 그리고, 나머지는 뒤에서 */
+    return;
+  }
+  /* 참석·지원은 누르는 즉시 칸을 바꾸고 서버에 보낸다(common.js Writes). 기다리지 않으므로
+     busy 로 다른 버튼을 막지 않는다. 같은 칸을 연달아 누르면 Writes 가 순서대로 보낸다. */
+  if (b.dataset.avail || b.dataset.support) {
+    const me = await Nick.ensure();
+    if (!me) return;
+    const fail = (err) => {
+      api.forgetPolls();
+      $('#guild-error').textContent = err.message;
+      $('#guild-error').hidden = false;
+    };
+    if (b.dataset.avail) {
+      const ev = events.find((x) => x.id === Number(b.closest('[data-event]').dataset.event));
+      const day = b.dataset.avail;
+      const on = !ev.avails.some((a) => a.date === day && a.nickname === me);
+      ev.avails = ev.avails.filter((a) => !(a.date === day && a.nickname === me));
+      if (on) ev.avails.push({ eventId: ev.id, date: day, nickname: me });
+      render();
+      Writes.run(`avail:${ev.id}:${day}:${me}`,
+        () => api.post(`/events/${ev.id}/avail/toggle`, { date: day, nickname: me, checked: on })).catch(fail);
+    } else {
+      /* 칸을 누르면 즉시 지원·취소. 메인 홈과 같은 규칙이다 — 여기도 고르는 화면이다.
+         곡 페이지는 파트 상세를 먼저 연다. 어긋난 게 아니라 화면 성격이 달라서다. */
+      const sid = Number(b.dataset.support);
+      const session = songs.flatMap((s) => s.sessions).find((p) => p.id === sid);
+      const on = !session.supports.some((a) => a.nickname === me);
+      session.supports = session.supports.filter((a) => a.nickname !== me);
+      if (on) session.supports.push({ id: null, sessionId: sid, nickname: me, label: null });
+      render();
+      $(`[data-support="${sid}"]`)?.focus();
+      Writes.run(`sup:${sid}:${me}`, () => (on
+        ? api.post(`/sessions/${sid}/support`, { nickname: me })
+        : api.del(`/sessions/${sid}/support?nickname=${encodeURIComponent(me)}`))).catch(fail);
+    }
     return;
   }
   if (busy) return;
   busy = true; b.disabled = true;
   try {
     if (b.hasAttribute('data-party-slot')) {
-      if (await partyClick(e, [guild])) await refresh();
-    } else if (b.dataset.avail) {
-      const me = await Nick.ensure();
-      if (!me) return;
-      await api.post(`/events/${b.closest('[data-event]').dataset.event}/avail/toggle`,
-        { date: b.dataset.avail, nickname: me });
-      events = await api.get(Site.q('/events'));
-      render();
-    } else if (b.dataset.support) {
-      /* 칸을 누르면 즉시 지원·취소. 메인 홈과 같은 규칙이다 — 여기도 고르는 화면이다.
-         곡 페이지는 파트 상세를 먼저 연다. 어긋난 게 아니라 화면 성격이 달라서다. */
-      const me = await Nick.ensure();
-      if (!me) return;
-      const sid = Number(b.dataset.support);
-      const session = songs.flatMap((s) => s.sessions).find((p) => p.id === sid);
-      const mine = session.supports.find((a) => a.nickname === me);
-      if (mine) await api.del(`/sessions/${sid}/support/${mine.id}`);
-      else await api.post(`/sessions/${sid}/support`, { nickname: me });
-      songs = await api.get(Site.q('/songs'));
-      render();
-      $(`[data-support="${sid}"]`)?.focus();
+      if (await partyClick(e, [guild])) render();   /* 명단은 이미 바뀌었다. 서버는 뒤에서 맞춘다 */
     }
   } catch (err) {
     $('#guild-error').textContent = err.message;
@@ -375,4 +393,5 @@ addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = setTimeout
 
 mountChrome('home');
 refresh();
+document.addEventListener('writes-idle', () => refresh());   /* 누른 것이 다 저장되면 서버 상태로 맞춘다 */
 })();

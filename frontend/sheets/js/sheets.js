@@ -415,7 +415,7 @@ $('upload-btn').addEventListener('click', async () => {
     fileInput.value = '';
     fileFake.textContent = FILE_PICK_LABEL;
     paintPreview();
-    await refresh();
+    refresh().catch(console.error);   /* 목록은 기다리지 않는다 */
   } catch (err) {
     statusEl.textContent = '실패: ' + (err.message || '');
   } finally {
@@ -439,18 +439,36 @@ $('select-all').addEventListener('click', () => {
 
 $('bulk-close').addEventListener('click', () => { selected.clear(); paint(); });
 
+/* 돌려받은 악보로 바로 고친다. 검색 조건과 태그 개수는 뒤에서 목록을 다시 받아 맞춘다
+   (전에는 그 목록을 받을 때까지 기다렸다). */
+function putSheets(rows) {
+  rows.forEach((r) => {
+    const at = sheets.findIndex((x) => x.id === r.id);
+    if (at >= 0) sheets[at] = r;
+  });
+  paint();
+  refresh().catch(console.error);
+}
+function dropSheets(ids) {
+  sheets = sheets.filter((x) => !ids.includes(x.id));
+  ids.forEach((id) => selected.delete(id));
+  paint();
+  refresh().catch(console.error);
+}
+
 async function applyBulk(patch) {
   if (!selected.size) return;
-  await api.post('/sheets/bulk', { ids: [...selected], ...patch });
-  await refresh();
+  const rows = await Writes.commit(null, 'sheets:bulk',
+    () => api.post('/sheets/bulk', { ids: [...selected], ...patch }));
+  if (rows) putSheets(rows);
 }
 
 $('bulk-delete').addEventListener('click', async () => {
   if (!selected.size) return;
   if (!confirm(selected.size + '개를 삭제할까요?')) return;
-  await api.post('/sheets/bulk-delete', { ids: [...selected] });
-  selected.clear();
-  await refresh();
+  const ids = [...selected];
+  const ok = await Writes.commit($('bulk-delete'), 'sheets:bulk', () => api.post('/sheets/bulk-delete', { ids }));
+  if (ok) dropSheets(ids);
 });
 
 listEl.addEventListener('click', async (e) => {
@@ -489,17 +507,21 @@ listEl.addEventListener('click', async (e) => {
     row.querySelectorAll('[data-f]').forEach((i) => {
       body[i.dataset.f] = i.dataset.f === 'bpm' ? (Number(i.value) || null) : i.value.trim();
     });
-    await api.put('/sheets/' + save.dataset.save, body);
+    const saved = await Writes.commit(save, `sheet:${save.dataset.save}`,
+      () => api.put('/sheets/' + save.dataset.save, body));
+    if (!saved) return;
     editingId = null;
-    await refresh();
+    putSheets([saved]);
     return;
   }
   const del = e.target.closest('[data-del]');
   if (del) {
     if (!confirm('이 악보를 삭제할까요?')) return;
-    await api.del('/sheets/' + del.dataset.del);
+    const id = Number(del.dataset.del);
+    const ok = await Writes.commit(del, `sheet:${id}`, () => api.del('/sheets/' + id).then(() => true));
+    if (!ok) return;
     editingId = null;
-    await refresh();
+    dropSheets([id]);
     return;
   }
 

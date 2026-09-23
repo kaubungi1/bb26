@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException
 
 from db import get_db
-from helpers import SONG_COLS
+
 
 router = APIRouter()
 
@@ -24,52 +24,6 @@ def _supports_for(conn, sessions):
         by_sess.setdefault(sp['sessionId'], []).append(dict(sp))
     for s in sessions:
         s['supports'] = by_sess.get(s['id'], [])
-
-
-@router.get('')
-def list_sessions(songId: int | None = None):
-    conn = get_db()
-    if songId is not None:
-        rows = conn.execute('SELECT * FROM sessions WHERE "songId"=%s ORDER BY "createdAt" DESC', (songId,)).fetchall()
-    else:
-        rows = conn.execute('SELECT * FROM sessions ORDER BY "createdAt" DESC').fetchall()
-    sessions = [dict(r) for r in rows]
-    _supports_for(conn, sessions)
-    song_ids = list({s['songId'] for s in sessions})
-    songs = {}
-    if song_ids:
-        ph = ','.join('%s' for _ in song_ids)
-        for r in conn.execute(f'{SONG_COLS} WHERE "id" IN ({ph})', song_ids).fetchall():
-            songs[r['id']] = dict(r)
-    for s in sessions:
-        s['song'] = songs.get(s['songId'])
-    conn.close()
-    return sessions
-
-
-@router.post('')
-def create_session(body: dict):
-    song_id = body.get('songId')
-    role = (body.get('role') or '').strip()
-    if not song_id or not role:
-        raise HTTPException(400, 'songId와 role은 필수입니다.')
-    conn = get_db()
-    song = conn.execute(f'{SONG_COLS} WHERE "id"=%s', (song_id,)).fetchone()
-    if not song:
-        conn.close()
-        raise HTTPException(404, '곡을 찾을 수 없습니다.')
-    label = (body.get('label') or '').strip()[:LABEL_MAX] or None
-    cur = conn.execute(
-        'INSERT INTO sessions ("songId", role, label, note) VALUES (%s,%s,%s,%s) RETURNING "id"',
-        (song_id, role, label, body.get('note')),
-    )
-    session_id = cur.fetchone()['id']
-    conn.commit()
-    row = conn.execute('SELECT * FROM sessions WHERE "id"=%s', (session_id,)).fetchone()
-    s = dict(row)
-    s['supports'] = []
-    conn.close()
-    return s
 
 
 @router.put('/{session_id}')
@@ -127,17 +81,16 @@ def support_session(session_id: int, body: dict):
     if session.get('active') is False:
         conn.close()
         raise HTTPException(409, '쓰지 않는 자리입니다.')
-    try:
-        cur = conn.execute(
-            'INSERT INTO sessionSupports ("sessionId", nickname) VALUES (%s,%s) RETURNING "id"',
-            (session_id, nickname),
-        )
-        support_id = cur.fetchone()['id']
-        conn.commit()
-    except Exception:
-        conn.close()
-        raise HTTPException(400, '이미 지원한 세션입니다.')
-    row = conn.execute('SELECT * FROM sessionSupports WHERE "id"=%s', (support_id,)).fetchone()
+    # 이미 지원했으면 그 기록을 그대로 돌려준다 — 같은 요청을 두 번 보내도 결과가 같다.
+    # 화면이 누르는 즉시 칸을 바꾸고 보내므로, 다시 보내거나 두 기기에서 눌러도 오류가 나면 안 된다.
+    conn.execute(
+        'INSERT INTO sessionSupports ("sessionId", nickname) VALUES (%s,%s) '
+        'ON CONFLICT ("sessionId", nickname) DO NOTHING',
+        (session_id, nickname),
+    )
+    conn.commit()
+    row = conn.execute('SELECT * FROM sessionSupports WHERE "sessionId"=%s AND nickname=%s',
+                       (session_id, nickname)).fetchone()
     conn.close()
     return dict(row)
 
@@ -171,6 +124,20 @@ def update_support(session_id: int, support_id: int, body: dict):
     return dict(row)
 
 
+@router.delete('/{session_id}/support')
+def unsupport_by_nickname(session_id: int, nickname: str = ''):
+    """닉네임으로 지원을 뺀다. 없어도 성공으로 본다 — 같은 요청을 두 번 보내도 결과가 같다.
+    화면은 누르는 즉시 칸을 비우므로, 방금 한 지원의 id 를 아직 모를 때도 뺄 수 있어야 한다."""
+    who = nickname.strip()
+    if not who:
+        raise HTTPException(400, 'nickname은 필수입니다.')
+    conn = get_db()
+    cur = conn.execute('DELETE FROM sessionSupports WHERE "sessionId"=%s AND nickname=%s', (session_id, who))
+    conn.commit()
+    conn.close()
+    return {'ok': True, 'removed': cur.rowcount}
+
+
 @router.delete('/{session_id}/support/{support_id}')
 def unsupport_session(session_id: int, support_id: int):
     conn = get_db()
@@ -179,15 +146,4 @@ def unsupport_session(session_id: int, support_id: int):
     conn.close()
     if cur.rowcount == 0:
         raise HTTPException(404, '지원을 찾을 수 없습니다.')
-    return {'ok': True}
-
-
-@router.delete('/{session_id}')
-def delete_session(session_id: int):
-    conn = get_db()
-    cur = conn.execute('DELETE FROM sessions WHERE "id"=%s', (session_id,))
-    conn.commit()
-    conn.close()
-    if cur.rowcount == 0:
-        raise HTTPException(404, '세션을 찾을 수 없습니다.')
     return {'ok': True}

@@ -79,10 +79,15 @@ function renderMembers() {
 }
 
 async function refreshMembers() {
+  if (Writes.pending) return;        /* 보내는 중인 쓰기가 끝나면 writes-idle 로 다시 온다 */
+  const seq = Writes.seq;
   try {
-    members = await api.get('/members');
-    members.forEach((m) => { Profiles.map[m.nickname] = m; });
+    const res = await api.poll('/members');
+    if (Writes.stale(seq)) return;   /* 기다리는 동안 저장한 것이 있으면 이 응답은 낡았다 */
     memberErrorEl.hidden = true;
+    if (!res.changed) return;          /* 바뀐 게 없으면 다시 그리지 않는다 */
+    members = res.data;
+    members.forEach((m) => { Profiles.map[m.nickname] = m; });
     renderMembers();
     document.dispatchEvent(new Event('profiles'));
   } catch (err) {
@@ -112,3 +117,4 @@ document.addEventListener('profiles', renderMembers);
 showLoading(memberListEl);
 mountChrome('members');
 startPolling(refreshMembers, 15000);
+document.addEventListener('writes-idle', () => refreshMembers());

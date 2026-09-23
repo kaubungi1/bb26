@@ -1,13 +1,14 @@
 """멤버 프로필. 닉네임이 열쇠이고, 본인이 자기 캐릭터를 꾸민다. 권한 확인은 없다."""
-import hashlib
 import io
 
-from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from PIL import Image, ImageOps
 
 from psycopg.types.json import Json
 
 from db import get_db
+import imageserve
+import listcache
 from images import MAX_UPLOAD, square_webp
 
 router = APIRouter()
@@ -17,7 +18,7 @@ TEXT_MAX = {'mainRoles': 60, 'availability': 80, 'intro': 200, 'color': 20, 'ava
 NICK_MAX = 20
 # 사진을 줄이는 규칙은 images.py 한 곳에 있다. 길드 문장도 같은 규칙을 쓴다.
 COLS = '"nickname", "mainRoles", "availability", "intro", "color", "avatar", "title", "status", ' \
-       '"lines", "createdAt", "updatedAt", ("image" IS NOT NULL) AS "hasImage"'
+       '"lines", "createdAt", "updatedAt", ("image" IS NOT NULL) AS "hasImage", "imageUpdatedAt"'
 
 
 LINES_MAX = 3          # 대사 줄 수
@@ -49,7 +50,7 @@ def _clean(key, value):
 
 def _row(conn, nickname):
     row = conn.execute(f'SELECT {COLS} FROM members WHERE "nickname"=%s', (nickname,)).fetchone()
-    return dict(row) if row else None
+    return imageserve.with_member_image(dict(row)) if row else None
 
 
 @router.get('/roster')
@@ -80,9 +81,14 @@ def register(body: dict):
 
 
 @router.get('')
-def list_members():
-    conn = get_db()
-    rows = [dict(r) for r in conn.execute(f'SELECT {COLS} FROM members ORDER BY "nickname"').fetchall()]
+def list_members(request: Request):
+    """15초마다 폴링된다. 바뀐 게 없으면 DB 를 다시 읽지 않는다(listcache.py)."""
+    return listcache.serve(request, 'members', listcache.MEMBERS, _build_members)
+
+
+def _build_members(conn):
+    rows = [imageserve.with_member_image(dict(r))
+            for r in conn.execute(f'SELECT {COLS} FROM members ORDER BY "nickname"').fetchall()]
     # 길드 소속도 같이 내려준다 — 카드에 소속 배지를 달기 위해
     by_nick = {}
     for m in conn.execute(
@@ -128,8 +134,6 @@ def list_members():
         r['supportCount'] = counts.get(nick, 0)
         r['songCount'] = len(seen.get(nick, ()))
         r['recentSongs'] = recent.get(nick, [])
-
-    conn.close()
     return rows
 
 
@@ -174,6 +178,7 @@ def upsert_member(nickname: str, body: dict):
 def delete_member(nickname: str):
     conn = get_db()
     cur = conn.execute('DELETE FROM members WHERE "nickname"=%s', (nickname,))
+    imageserve.forget('member', nickname)
     conn.commit()
     conn.close()
     if cur.rowcount == 0:
@@ -200,6 +205,7 @@ async def upload_image(nickname: str, file: UploadFile = File(...)):
         (nickname, webp),
     )
     conn.commit()
+    imageserve.forget('member', nickname)
     row = _row(conn, nickname)
     conn.close()
     return row
@@ -207,18 +213,18 @@ async def upload_image(nickname: str, file: UploadFile = File(...)):
 
 @router.get('/{nickname}/image')
 def get_image(nickname: str, request: Request):
-    conn = get_db()
-    row = conn.execute('SELECT "image" FROM members WHERE "nickname"=%s', (nickname,)).fetchone()
-    conn.close()
-    if not row or not row['image']:
-        raise HTTPException(404, '이미지가 없습니다.')
-    data = bytes(row['image'])
-    etag = '"' + hashlib.sha1(data).hexdigest()[:20] + '"'
-    cache = 'private, max-age=3600'
-    if request.headers.get('if-none-match') == etag:
-        return Response(status_code=304, headers={'ETag': etag, 'Cache-Control': cache})
-    return Response(content=data, media_type='image/webp',
-                    headers={'ETag': etag, 'Cache-Control': cache, 'Content-Length': str(len(data))})
+    """주소·캐시 규칙은 imageserve.py. 버전은 imageUpdatedAt 이다."""
+    def version_of(conn):
+        row = conn.execute('SELECT ("image" IS NOT NULL) has, "imageUpdatedAt" ts FROM members '
+                           'WHERE "nickname"=%s', (nickname,)).fetchone()
+        return imageserve.stamp_or_legacy(row and row['has'], row and row['ts'])
+
+    def load(conn):
+        row = conn.execute('SELECT "image" FROM members WHERE "nickname"=%s', (nickname,)).fetchone()
+        return row and row['image']
+
+    return imageserve.serve(request, 'member', nickname, version_of, load, 'image/webp',
+                            '이미지가 없습니다.', private=True)
 
 
 @router.delete('/{nickname}/image')
@@ -229,6 +235,7 @@ def delete_image(nickname: str):
         (nickname,),
     )
     conn.commit()
+    imageserve.forget('member', nickname)
     conn.close()
     if cur.rowcount == 0:
         raise HTTPException(404, '이미지가 없습니다.')

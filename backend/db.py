@@ -195,9 +195,14 @@ CREATE TABLE IF NOT EXISTS songComments (
 
 
 # 이미 만들어진 DB를 새 구조로 맞춘다. 전부 멱등이라 매 기동마다 돌려도 무해하다.
+# 변경 번호를 남기는 테이블. 폴링되는 목록이 읽는 테이블은 모두 여기 있어야 한다(listcache.py).
+# pairs 는 뺀다 — 악보 넘길 때마다 써서 잦고, 어느 목록도 읽지 않는다.
+CHANGE_TRACKED = ('songs', 'sessions', 'sessionSupports', 'songComments', 'sheets', 'events', 'eventDates',
+                  'eventAvails', 'eventSongs', 'eventLineups', 'guilds', 'guildMembers', 'guildDrawings',
+                  'members')
+
 MIGRATIONS = [
     'CREATE INDEX IF NOT EXISTS idx_songcomments_song ON songComments ("songId", "id")',
-    'CREATE INDEX IF NOT EXISTS idx_songs_guild ON songs ("guildId")',
     # 길드 꾸미기: 테마 이름과 문장(육각 틀 + 문양 + 색 둘)을 한 칸에 담는다.
     # {"theme":"miku","crest":{"shape":"wing","bg":"#00b8ad","fg":"#ffffff"}}
     # 값이 늘어도(글씨색·버튼·배경) 키만 붙으므로 마이그레이션이 다시 필요 없다.
@@ -267,6 +272,23 @@ MIGRATIONS = [
     # 2단계: 멤버 캐릭터 이미지 (256px 정사각형 WebP)
     'ALTER TABLE members ADD COLUMN IF NOT EXISTS "image" BYTEA',
     'ALTER TABLE members ADD COLUMN IF NOT EXISTS "imageUpdatedAt" TIMESTAMPTZ',
+
+    # 변경 번호. 폴링되는 목록을 "바뀌었을 때만" 다시 만들기 위해 쓴다(listcache.py).
+    # 쓰기가 일어나면 테이블 이름을 한 줄 더한다. 앱의 쓰기든 손으로 친 SQL 이든 경로를 가리지 않는다.
+    # 한 줄을 고치는 대신 더하는 이유: 동시에 쓸 때 같은 줄을 잠그다 교착되는 일이 없다.
+    'CREATE TABLE IF NOT EXISTS "changeLog" ("id" BIGSERIAL PRIMARY KEY, "tableName" TEXT NOT NULL, '
+    '"at" TIMESTAMPTZ NOT NULL DEFAULT now())',
+    'CREATE INDEX IF NOT EXISTS idx_changelog_table ON "changeLog" ("tableName", "id")',
+    """CREATE OR REPLACE FUNCTION note_change() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO "changeLog" ("tableName") VALUES (TG_TABLE_NAME);
+  RETURN NULL;
+END $$""",
+    *[f'CREATE OR REPLACE TRIGGER trg_note_change AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON {t} '
+      f'FOR EACH STATEMENT EXECUTE FUNCTION note_change()' for t in CHANGE_TRACKED],
+    # 기동할 때마다 테이블마다 마지막 줄만 남긴다. 번호가 바뀌어 목록이 한 번씩 다시 만들어질 뿐이다.
+    'DELETE FROM "changeLog" c WHERE c."id" < '
+    '(SELECT max(m."id") FROM "changeLog" m WHERE m."tableName" = c."tableName")',
 ]
 
 

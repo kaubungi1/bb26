@@ -127,9 +127,9 @@ async function openGuildEditor(guild = null) {
       const error = form.querySelector('.form-error');
       error.hidden = true;
       try {
-        const saved = guild
-          ? await api.put(`/guilds/${encodeURIComponent(g.slug)}`, body)
-          : await api.post('/guilds', body);
+        const saved = await Writes.run(`guild:${guild ? g.slug : 'new'}`, () => (guild
+          ? api.put(`/guilds/${encodeURIComponent(g.slug)}`, body)
+          : api.post('/guilds', body)));
         busy = false;
         close(saved);
       } catch (err) {
@@ -158,7 +158,7 @@ async function openGuildEditor(guild = null) {
       };
       const paintCrest = () => {
         const c = style.crest;
-        $$('#gs-preview').innerHTML = hasPhoto ? crestFor({ slug: g.slug, hasImage: true }, 64)
+        $$('#gs-preview').innerHTML = hasPhoto ? crestFor({ slug: g.slug, hasImage: true, imageUrl: photoUrl }, 64)
           : c ? crestSvg(c, 64)
           : '<span class="gs-none-mark">없음</span>';
         /* 사진이 있으면 문양 고르기는 잠근다. 무엇이 나올지 헷갈리지 않게 한다. */
@@ -171,6 +171,8 @@ async function openGuildEditor(guild = null) {
       /* 사진 올리기·빼기. 저장 버튼을 기다리지 않고 그 자리에서 서버에 반영한다 —
          사진은 바이트라 style 처럼 폼에 담아 보낼 수 없다. */
       let hasPhoto = !!guild?.hasImage;
+      /* 올린 직후에도 새 그림이 보이도록 서버가 돌려준 새 주소(버전 포함)를 쓴다. */
+      let photoUrl = guild?.imageUrl || null;
       const photoNote = $$('.gs-photo-note');
       const photoDel = $$('#gs-photo-del');
       const setPhoto = (on) => {
@@ -186,20 +188,29 @@ async function openGuildEditor(guild = null) {
         if (!f) return;
         const cut = await openCropper(f, 'hex');
         if (!cut) return;
-        photoNote.textContent = '올리는 중';
+        /* 올라가는 동안 방금 자른 그림을 먼저 보여 준다. 실패하면 원래대로 돌린다. */
+        const before = { url: photoUrl, has: hasPhoto };
+        photoUrl = URL.createObjectURL(cut);
+        setPhoto(true);
         const fd = new FormData();
         fd.append('file', cut, 'crest.png');
         try {
-          await api.post(`/guilds/${encodeURIComponent(g.slug)}/image?nickname=${encodeURIComponent(nickname)}`, fd);
-          if (guild) guild.hasImage = true;
+          const up = await api.post(`/guilds/${encodeURIComponent(g.slug)}/image?nickname=${encodeURIComponent(nickname)}`, fd);
+          photoUrl = up.imageUrl || null;
+          if (guild) { guild.hasImage = true; guild.imageUrl = photoUrl; }
           setPhoto(true);
-        } catch (err) { photoNote.textContent = err.message; }
+        } catch (err) {
+          photoUrl = before.url;
+          setPhoto(before.has);
+          photoNote.textContent = err.message;
+        }
       };
       photoDel.onclick = async () => {
         photoNote.textContent = '빼는 중';
         try {
           await api.del(`/guilds/${encodeURIComponent(g.slug)}/image?nickname=${encodeURIComponent(nickname)}`);
-          if (guild) guild.hasImage = false;
+          photoUrl = null;
+          if (guild) { guild.hasImage = false; guild.imageUrl = null; }
           setPhoto(false);
         } catch (err) { photoNote.textContent = err.message; }
       };

@@ -93,9 +93,15 @@ function todayStr() { return toDateStr(new Date()); }
 function badge(ev) { return Site.slug ? '' : guildBadge(ev.guild); }
 
 async function refresh() {
+  if (Writes.pending) return;        /* 보내는 중인 쓰기가 끝나면 writes-idle 로 다시 온다 */
   if (events.length === 0 && pollListEl.innerHTML.trim() === '') showLoading(pollListEl);
+  const seq = Writes.seq;
   try {
-    events = await api.get(Site.q('/events'));
+    const res = await api.poll(Site.q('/events'));
+    if (Writes.stale(seq)) return;   /* 기다리는 동안 누른 것이 있으면 이 응답은 낡았다 */
+    /* 바뀐 게 없으면 다시 그리지 않는다. 처음 한 번은 늘 바뀐 것으로 온다. */
+    if (!res.changed) return;
+    events = res.data;
   } catch (err) {
     console.error('일정 로드 실패:', err);
     if (!events.length) pollListEl.textContent = '일정을 불러오지 못했습니다. 잠시 후 다시 시도합니다.';
@@ -288,19 +294,29 @@ addForm.addEventListener('submit', async (e) => {
   if (!title || !from || !to) return;
   const name = await Nick.ensure();
   if (!name) return;
-  await api.post('/events', Site.body({
+  const made = await Writes.commit(addForm.querySelector('[type=submit]'), 'event:new', () => api.post('/events', Site.body({
     title,
     note: inNote.value.trim() || null,
     createdBy: name,
     dateFrom: from,
     dateTo: to,
     weekdays: [...pickedDows],
-  }));
+  })));
+  if (!made) return;
   inTitle.value = '';
   inNote.value = '';
   closeAddModal();
-  await refresh();
+  putEvent(made);        /* 돌려받은 일정으로 바로 그린다. 목록 전체는 뒤에서 맞춘다 */
+  renderPolls();
+  renderPast();
 });
+
+/* 서버가 돌려준 일정 하나를 목록에 반영한다(만들기·확정·해제·셋리스트). */
+function putEvent(ev) {
+  const at = events.findIndex((x) => x.id === ev.id);
+  if (at >= 0) events[at] = ev; else events.unshift(ev);
+  if (pollEvent && pollEvent.id === ev.id) pollEvent = ev;
+}
 
 /* ---------- 조율 매트릭스 ---------- */
 function matrixMembers() {
@@ -606,10 +622,12 @@ playableListEl.addEventListener('click', async (e) => {
   const id = Number(btn.dataset.setSong);
   const ids = pollEvent.songs.map((s) => s.songId);
   const next = ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
-  pollEvent = await api.put(`/events/${pollEvent.id}/songs`, { songIds: next });
+  const saved = await Writes.commit(btn, `setlist:${pollEvent.id}`,
+    () => api.put(`/events/${pollEvent.id}/songs`, { songIds: next }));
+  if (!saved) return;
+  putEvent(saved);
   renderSetlist();
   renderPlayable();
-  refresh();
 });
 
 /* ---------- 셋리스트 · 라인업 ---------- */
@@ -647,10 +665,12 @@ setlistEl.addEventListener('click', async (e) => {
   const rm = e.target.closest('[data-set-song]');
   if (rm) {
     const id = Number(rm.dataset.setSong);
-    pollEvent = await api.put(`/events/${ev.id}/songs`, { songIds: ev.songs.map((s) => s.songId).filter((x) => x !== id) });
+    const saved = await Writes.commit(rm, `setlist:${ev.id}`,
+      () => api.put(`/events/${ev.id}/songs`, { songIds: ev.songs.map((s) => s.songId).filter((x) => x !== id) }));
+    if (!saved) return;
+    putEvent(saved);
     renderSetlist();
     renderPlayable();
-    refresh();
     return;
   }
   const nick = e.target.closest('[data-lineup-nick]');
@@ -658,8 +678,7 @@ setlistEl.addEventListener('click', async (e) => {
     const roleEl = nick.closest('[data-lineup-role]');
     const name = nick.dataset.lineupNick;
     if (!confirm(`${name}님을 ${roleEl.dataset.lineupRole}에서 뺄까요?`)) return;
-    await api.post(`/events/${ev.id}/songs/${roleEl.dataset.lineupSong}/lineup`, { role: roleEl.dataset.lineupRole, nickname: name });
-    await refresh();
+    setLineup(ev, Number(roleEl.dataset.lineupSong), roleEl.dataset.lineupRole, name, false);
     return;
   }
   const add = e.target.closest('[data-lineup-add]');
@@ -668,10 +687,22 @@ setlistEl.addEventListener('click', async (e) => {
     if (!role) return;
     const name = (prompt('닉네임', Nick.get()) || '').trim();
     if (!name) return;
-    await api.post(`/events/${ev.id}/songs/${add.dataset.lineupAdd}/lineup`, { role, nickname: name });
-    await refresh();
+    setLineup(ev, Number(add.dataset.lineupAdd), role, name, true);
   }
 });
+
+/* 라인업 한 칸. 누르는 즉시 바꾸고 서버에 보낸다(common.js Writes).
+   실패하면 알리고, 쓰기가 끝날 때 서버의 실제 상태로 되돌아간다. */
+function setLineup(ev, songId, role, nickname, on) {
+  const item = ev.songs.find((x) => x.songId === songId);
+  if (!item) return;
+  item.lineup = item.lineup.filter((l) => !(l.role === role && l.nickname === nickname));
+  if (on) item.lineup.push({ role, nickname });
+  renderSetlist();
+  Writes.run(`lineup:${ev.id}:${songId}:${role}:${nickname}`,
+    () => api.post(`/events/${ev.id}/songs/${songId}/lineup`, { role, nickname, on }))
+    .catch((err) => { api.forgetPolls(); alert(err.message); });
+}
 
 function openPoll(id) {
   const ev = events.find((e) => e.id === id);
@@ -732,9 +763,14 @@ pastListEl.addEventListener('keydown', onOpenKey);
 document.getElementById('poll-delete').addEventListener('click', async () => {
   if (!pollEvent) return;
   if (!confirm(`${pollEvent.title} 조율을 삭제할까요?`)) return;
-  await api.del(`/events/${pollEvent.id}`);
+  const id = pollEvent.id;
+  const ok = await Writes.commit(document.getElementById('poll-delete'), `event:${id}`,
+    () => api.del(`/events/${id}`).then(() => true));
+  if (!ok) return;
   closePoll();
-  await refresh();
+  events = events.filter((x) => x.id !== id);   /* 목록 전체를 다시 받지 않고 바로 뺀다 */
+  renderPolls();
+  renderPast();
 });
 
 weekendOnlyEl.addEventListener('change', () => {
@@ -758,14 +794,14 @@ matrixEl.addEventListener('click', async (e) => {
         : `${monthDay(day)} 를 후보에서 뺄까요?`;
       if (!confirm(msg)) return;
     }
-    try {
-      await api.post(`/events/${pollEvent.id}/dates/${day}/toggle`, {});
-    } catch (err) {
-      alert(err.message);
-      return;
-    }
+    const ev = pollEvent;
+    const res = await Writes.commit(offBtn || onBtn, `date:${ev.id}:${day}`,
+      () => api.post(`/events/${ev.id}/dates/${day}/toggle`, {}));
+    if (!res) return;
+    const dr = ev.dates.find((x) => x.date === res.date);   /* 돌려받은 상태로 바로 그린다 */
+    if (dr) dr.active = res.active;
     playableKey = '';
-    await refresh();
+    renderPollView();
     return;
   }
   const pick = e.target.closest('[data-pick-date]');
@@ -778,23 +814,32 @@ matrixEl.addEventListener('click', async (e) => {
   }
   const td = e.target.closest('[data-toggle]');
   if (!td) return;
-  const target = td.dataset.member || '';
-  if (target && target !== currentUser) {
-    const on = td.classList.contains('on');
-    const msg = on ? `${target}님을 참석자에서 뺄까요?` : `${target}님을 참석자에 넣을까요?`;
+  const on = td.classList.contains('on');
+  let who = td.dataset.member || '';
+  if (who && who !== currentUser) {
+    const msg = on ? `${who}님을 참석자에서 뺄까요?` : `${who}님을 참석자에 넣을까요?`;
     if (!confirm(msg)) return;
-    await api.post(`/events/${pollEvent.id}/avail/toggle`, { date: td.dataset.toggle, nickname: target });
-    await refresh();
-    return;
+  } else {
+    if (!currentUser) {
+      const name = await Nick.ensure();
+      if (!name) return;
+      currentUser = name;
+    }
+    who = currentUser;
   }
-  if (!currentUser) {
-    const name = await Nick.ensure();
-    if (!name) return;
-    currentUser = name;
-  }
-  await api.post(`/events/${pollEvent.id}/avail/toggle`, { date: td.dataset.toggle, nickname: currentUser });
-  await refresh();
+  setAvail(pollEvent, td.dataset.toggle, who, !on);
 });
+
+/* 참석 칸. 누르는 즉시 칸을 바꾸고 서버에 보낸다(common.js Writes). 전에는 응답과 일정 전체를
+   다시 받은 뒤에야 칸이 바뀌었다. 실패하면 알리고, 쓰기가 끝날 때 서버의 실제 상태로 되돌아간다. */
+function setAvail(ev, day, who, on) {
+  ev.avails = ev.avails.filter((a) => !(a.date === day && a.nickname === who));
+  if (on) ev.avails.push({ eventId: ev.id, date: day, nickname: who });
+  renderPollView();
+  Writes.run(`avail:${ev.id}:${day}:${who}`,
+    () => api.post(`/events/${ev.id}/avail/toggle`, { date: day, nickname: who, checked: on }))
+    .catch((err) => { api.forgetPolls(); alert(err.message); });
+}
 
 confirmBtn.addEventListener('click', async () => {
   const day = confirmDateEl.value;
@@ -804,8 +849,13 @@ confirmBtn.addEventListener('click', async () => {
   const place = confirmPlaceEl.value.trim() || null;
   const d = parseDate(day);
   if (!confirm(`${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]})로 확정할까요?`)) return;
-  await api.post(`/events/${pollEvent.id}/confirm`, { date: day, startTime: start, endTime: end, place });
-  await refresh();
+  const ev = await Writes.commit(confirmBtn, `event:${pollEvent.id}`,
+    () => api.post(`/events/${pollEvent.id}/confirm`, { date: day, startTime: start, endTime: end, place }));
+  if (!ev) return;
+  putEvent(ev);          /* 돌려받은 일정으로 바로 그린다 */
+  renderPolls();
+  renderPast();
+  renderPollView();
 });
 
 addMemberBtn.addEventListener('click', async () => {
@@ -823,19 +873,24 @@ addMemberBtn.addEventListener('click', async () => {
     alert(`${name}님은 이미 참석 중입니다.`);
     return;
   }
-  await api.post(`/events/${ev.id}/avail/toggle`, { date: ev.date, nickname: name });
-  await refresh();
+  setAvail(ev, ev.date, name, true);
 });
 
 unconfirmBtn.addEventListener('click', async () => {
   if (!pollEvent) return;
   if (!confirm(`${pollEvent.title} 확정을 해제하고 다시 조율할까요?`)) return;
-  await api.post(`/events/${pollEvent.id}/unconfirm`, {});
-  await refresh();
+  const ev = await Writes.commit(unconfirmBtn, `event:${pollEvent.id}`,
+    () => api.post(`/events/${pollEvent.id}/unconfirm`, {}));
+  if (!ev) return;
+  putEvent(ev);          /* 돌려받은 일정으로 바로 그린다 */
+  renderPolls();
+  renderPast();
+  renderPollView();
 });
 
 mountChrome('schedule');
 startPolling(refresh);
+document.addEventListener('writes-idle', () => refresh());   /* 누른 것이 다 저장되면 서버 상태로 맞춘다 */
 
 document.addEventListener('nickchange', () => {
   currentUser = Nick.get();

@@ -186,19 +186,15 @@ const GuildDraw = (() => {
     paintBar();
   }
 
-  async function save(btn) {
-    btn.disabled = true;
-    note('저장하는 중');
-    try {
-      await api.put(`/guilds/${encodeURIComponent(slug)}/drawings`,
-        { nickname: me, strokes: mine });
-      saved = JSON.stringify(mine);
-      close();
-    } catch (err) {
-      note(err.message);
-    } finally {
-      btn.disabled = false;
-    }
+  /* 그림은 이미 벽에 있다. 누르는 즉시 닫고 저장은 뒤에서 한다(common.js Writes).
+     전에는 서버 응답을 기다린 뒤에야 닫혔다. 실패하면 알린다 — 그린 것은 이 화면에 남아 있다. */
+  async function save() {
+    saved = JSON.stringify(mine);
+    const strokes = JSON.parse(saved);   /* 닫은 뒤 다시 그려도 보낼 값은 누른 순간의 것 */
+    close();
+    Writes.run(`draw:${slug}:${me}`, () => api.put(`/guilds/${encodeURIComponent(slug)}/drawings`,
+      { nickname: me, strokes }))
+      .catch((err) => alert(`낙서를 저장하지 못했습니다. ${err.message}`));
   }
 
   function onKey(e) {

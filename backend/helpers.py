@@ -1,12 +1,17 @@
 """라우터들이 같이 쓰는 작은 도구. 곡 묶기, 태그 정규화, 길드 해석."""
 from fastapi import HTTPException
 
+import imageserve
 import thumbs
 
 # 곡·일정에 딸려 나가는 길드 요약. 목록 화면의 소속 배지가 이걸로 그려진다.
 # emblem(이모지 하나) 대신 style 을 보낸다 — 배지에 문장을 그리기 때문이다.
 # 이모지는 기기마다 그림이 달라 길드 표식으로 약했고, 쓰는 길드도 없었다.
 GUILD_BRIEF = ('id', 'slug', 'name', 'color', 'style')
+# 요약에 필요한 것만 읽는다. SELECT * 는 문장 사진 원본(BYTEA)까지 끌고 와서, 5초 폴링마다
+# 일정 목록 한 번에 DB 에서 192KB 를 읽게 했다(보내는 것은 49KB). 사진은 있는지와 버전만 본다.
+GUILD_BRIEF_SQL = ('"id","slug","name","color","style",'
+                   '("image" IS NOT NULL) AS "hasImage","imageUpdatedAt"')
 
 # 밴드 한 팀의 자리. 곡마다 이 여섯이 늘 있고, 쓰지 않는 자리는 지우는 게 아니라 끈다.
 # 순서도 여기서 정해진다. 화면의 여섯 칸이 곡마다 같은 자리에 오도록 하기 위함이다.
@@ -43,7 +48,8 @@ def guild_brief(row):
         return None
     g = {k: row[k] for k in GUILD_BRIEF}
     # 문장 사진이 있으면 화면이 문양 대신 그 그림을 그린다. 바이트는 싣지 않는다.
-    g['hasImage'] = row['image'] is not None
+    g['hasImage'] = bool(row['hasImage'])
+    g['imageUrl'] = imageserve.crest_url(row['slug'], row['imageUpdatedAt']) if g['hasImage'] else None
     return g
 
 
@@ -82,7 +88,7 @@ def attach_guilds(conn, rows):
     found = {}
     if ids:
         ph = ','.join('%s' for _ in ids)
-        for g in conn.execute(f'SELECT * FROM guilds WHERE "id" IN ({ph})', ids).fetchall():
+        for g in conn.execute(f'SELECT {GUILD_BRIEF_SQL} FROM guilds WHERE "id" IN ({ph})', ids).fetchall():
             found[g['id']] = guild_brief(g)
     for r in rows:
         r['guild'] = found.get(r.get('guildId'))
@@ -110,8 +116,10 @@ def build_songs(conn, song_rows):
         # thumbs.ensure() 가 주소에서 직접 뽑아 받아 저장하기 때문이다.
         # 옛 DB 에서 옮겨 온 곡은 thumbVideoId 가 없어서 화면이 /thumb 을 아예 요청하지 않았고,
         # 그래서 자켓이 영영 안 나왔다. 여기서 막지 않으면 요청 한 번으로 스스로 채워진다.
-        s['hasThumb'] = (bool(s.pop('hasThumbBlob', None)) or bool(s.get('thumbVideoId'))
-                         or bool(thumbs.video_id(s.get('youtubeUrl'))))
+        vid = s.get('thumbVideoId') or thumbs.video_id(s.get('youtubeUrl'))
+        s['hasThumb'] = bool(s.pop('hasThumbBlob', None)) or bool(vid)
+        # 주소 규칙(버전)은 imageserve.py 한 곳에 있다. 화면은 이 주소를 그대로 쓴다.
+        s['thumbUrl'] = imageserve.thumb_url(s['id'], vid) if s['hasThumb'] else None
         s.pop('thumb', None)
         s.pop('thumbUpdatedAt', None)
         s['isCandidate'] = bool(s['isCandidate'])

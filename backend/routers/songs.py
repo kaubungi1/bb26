@@ -1,9 +1,10 @@
 """곡. 풀은 하나이고 길드는 꼬리표다. 끌올은 전체에서 한 곡만 30분 독점."""
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from db import get_db
-import hashlib
 
+import imageserve
+import listcache
 import thumbs
 from helpers import PART_ROLES, SONG_COLS, build_songs, guild_where, norm_tag, resolve_guild_id
 
@@ -34,13 +35,13 @@ def _current_bump(conn):
 
 
 @router.get('')
-def list_songs(guild: str | None = None):
-    conn = get_db()
-    clause, params = guild_where(conn, guild)
-    rows = conn.execute(f'{SONG_COLS}{clause} ORDER BY "createdAt" DESC', params).fetchall()
-    result = build_songs(conn, rows)
-    conn.close()
-    return result
+def list_songs(request: Request, guild: str | None = None):
+    """5초마다 폴링된다. 바뀐 게 없으면 DB 를 다시 읽지 않는다(listcache.py)."""
+    def build(conn):
+        clause, params = guild_where(conn, guild)
+        rows = conn.execute(f'{SONG_COLS}{clause} ORDER BY "createdAt" DESC', params).fetchall()
+        return build_songs(conn, rows)
+    return listcache.serve(request, 'songs', listcache.SONGS, build)
 
 
 @router.get('/bump')
@@ -145,6 +146,7 @@ def update_song(song_id: int, body: dict, background: BackgroundTasks):
 def delete_song(song_id: int):
     conn = get_db()
     cur = conn.execute('DELETE FROM songs WHERE "id"=%s', (song_id,))
+    imageserve.forget('thumb', song_id)
     conn.commit()
     conn.close()
     if cur.rowcount == 0:
@@ -196,18 +198,20 @@ def release_bump(song_id: int, nickname: str):
 
 @router.get('/{song_id}/thumb')
 def song_thumb(song_id: int, request: Request):
-    """자켓 그림. 저장돼 있으면 바로 주고, 없으면 그 자리에서 받아 저장한 뒤 준다.
-       같은 그림을 다시 안 받도록 ETag 를 붙인다."""
-    conn = get_db()
-    try:
-        data = thumbs.ensure(conn, song_id)
-    finally:
-        conn.close()
-    if not data:
-        raise HTTPException(404, '자켓 그림이 없습니다.')
-    etag = '"%s"' % hashlib.md5(data).hexdigest()
-    cache = 'public, max-age=604800'
-    if request.headers.get('if-none-match') == etag:
-        return Response(status_code=304, headers={'ETag': etag, 'Cache-Control': cache})
-    return Response(content=data, media_type='image/jpeg',
-                    headers={'ETag': etag, 'Cache-Control': cache})
+    """자켓 그림. 저장돼 있으면 주고, 없으면 그 자리에서 받아 저장한 뒤 준다(thumbs.ensure).
+       버전은 유튜브 영상 id 다 — 주소가 바뀌어야 그림이 바뀐다. 주소·캐시 규칙은 imageserve.py."""
+    def version_of(conn):
+        row = conn.execute(
+            'SELECT "thumbVideoId" vid, "youtubeUrl" url, (thumb IS NOT NULL) has FROM songs WHERE "id"=%s',
+            (song_id,),
+        ).fetchone()
+        if not row:
+            return None
+        vid = row['vid'] or thumbs.video_id(row['url'])
+        if not vid and not row['has']:
+            return None
+        return imageserve.thumb_version(vid)
+
+    return imageserve.serve(request, 'thumb', song_id, version_of,
+                            lambda conn: thumbs.ensure(conn, song_id),
+                            'image/jpeg', '자켓 그림이 없습니다.')

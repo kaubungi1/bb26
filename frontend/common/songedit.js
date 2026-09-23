@@ -109,7 +109,7 @@ function openSongEditor(song, opts = {}) {
       if (!confirm('이 곡과 연결된 파트·지원이 모두 삭제됩니다. 진행할까요?')) return;
       busy = true;
       try {
-        await api.del(`/songs/${song.id}`);
+        await Writes.run(`song:${song.id}`, () => api.del(`/songs/${song.id}`));
         close('deleted');
       } catch (err) {
         busy = false;
@@ -138,7 +138,7 @@ function openSongEditor(song, opts = {}) {
       try {
         let saved;
         if (editing) {
-          saved = await api.put(`/songs/${song.id}`, body);
+          saved = await Writes.run(`song:${song.id}`, () => api.put(`/songs/${song.id}`, body));
         } else {
           body.createdBy = me;
           if (Array.isArray(opts.roles)) body.roles = opts.roles;
@@ -146,7 +146,7 @@ function openSongEditor(song, opts = {}) {
              길드 페이지에서 넣으면 그 길드 곡, 메인에서 넣으면 불법이륙 전체 곡이다.
              Site.slug 가 이미 답을 알고 있으므로 묻지 않는다. */
           if (Site.slug) body.guildSlug = Site.slug;
-          saved = await api.post('/songs', body);
+          saved = await Writes.run('song:new', () => api.post('/songs', body));
         }
         close(saved);
       } catch (err) {

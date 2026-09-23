@@ -118,15 +118,21 @@ function sortSessions(sessions) {
 }
 
 async function refresh() {
+  if (Writes.pending) return;        /* 보내는 중인 쓰기가 끝나면 writes-idle 로 다시 온다 */
   if (songs.length === 0) showLoading(listEl);
+  const seq = Writes.seq;
+  const same = { changed: false, data: guilds };
   const [s, b, g] = await Promise.all([
-    api.get(Site.q('/songs')),
+    api.poll(Site.q('/songs')),
     api.get('/songs/bump').catch(() => null),
-    Site.slug ? Promise.resolve(guilds) : api.get('/guilds').catch(() => guilds),
+    Site.slug ? Promise.resolve(same) : api.poll('/guilds').catch(() => same),
   ]);
-  songs = s;
+  if (Writes.stale(seq)) return;     /* 기다리는 동안 누른 것이 있으면 이 응답은 낡았다 */
+  /* 바뀐 게 없으면 다시 그리지 않는다. 곡 목록을 전부 다시 그리는 데 휴대폰에서 1초가 넘게 걸린다. */
+  if (!s.changed && !g.changed && JSON.stringify(b) === JSON.stringify(bump)) return;
+  songs = s.data;
   bump = b;
-  guilds = g;
+  guilds = g.data;
   render();
   if (!sheetEl.hidden) renderSheet();
 }
@@ -247,7 +253,7 @@ function thumb(song) {
   /* 섬네일이 없으면 홈과 같은 규칙으로 그린다 — 장르색 바탕에 글자 하나.
      빈 회색 칸을 두면 그 줄만 곡이 아닌 것처럼 보인다. 20곡이 여기 해당한다. */
   const inner = song.hasThumb
-    ? `<img src="/api/songs/${song.id}/thumb" alt="" loading="lazy" decoding="async" width="56" height="32">`
+    ? `<img src="${song.thumbUrl || `/api/songs/${song.id}/thumb`}" alt="" loading="lazy" decoding="async" width="56" height="32">`
     : `<span class="th-mark" aria-hidden="true">${escapeHtml(songLetter(song))}</span>`;
   const cls = `song-thumb genre-${songTone(song)}${song.hasThumb ? '' : ' is-mark'}`;
   if (!song.youtubeUrl) return `<span class="${cls}">${inner}</span>`;
@@ -267,12 +273,6 @@ function fillBadge(song) {
   const filled = filledCount(song);
   const done = filled === total;
   return `<span class="fill-badge${done ? ' full' : ''}" data-peek="${total}자리 중 ${filled}자리 참">${filled}<i>/${total}</i></span>`;
-}
-
-/* 아직 만들지 않은 프리셋 역할 */
-function missingRoles(song) {
-  const have = new Set(song.sessions.map((s) => s.role));
-  return PRESET_ROLES.filter((r) => !have.has(r));
 }
 
 function monthDay(iso) {
@@ -562,7 +562,18 @@ document.addEventListener('click', (e) => {
    등록과 수정이 고치는 항목이 같아서, 폼을 두 벌 두면 한쪽만 고쳐져 어긋난다. */
 async function openEditor(song) {
   const result = await openSongEditor(song);
-  if (result) await refresh();
+  /* 서버가 돌려준 곡 하나만 목록에 넣는다. 목록 전체(수백 KB)를 다시 받을 때까지 기다리지 않는다.
+     나머지는 뒤에서 폴링이 맞춘다. */
+  if (result && typeof result === 'object') {
+    const at = songs.findIndex((s) => s.id === result.id);
+    if (at >= 0) songs[at] = result; else songs.unshift(result);
+    render();
+    refresh();
+  } else if (result === 'deleted' && song) {
+    songs = songs.filter((s) => s.id !== song.id);   /* 목록 전체를 다시 받지 않고 바로 뺀다 */
+    render();
+    refresh();
+  }
   return result;
 }
 addBtn.addEventListener('click', () => openEditor(null));
@@ -587,26 +598,29 @@ async function onListClick(e) {
     if (!name) return;
     const note = prompt('한마디 (선택, 60자)') ;
     if (note === null) return;
-    try {
-      await api.post(`/songs/${bumpBtnEl.dataset.bump}/bump`, { nickname: name, note: note.trim() });
-    } catch (err) {
-      alert(err.message);
-    }
+    /* 누르는 즉시 끌올로 보이게 하고 서버에 보낸다. 다른 곡이 먼저 잡았으면(409) 되돌리고 알린다. */
+    const song = songs.find((s) => s.id === Number(bumpBtnEl.dataset.bump));
+    const before = bump;
+    bump = { songId: song.id, title: song.title, artist: song.artist, bumpedBy: name,
+             bumpNote: note.trim() || null, bumpedAt: new Date().toISOString(),
+             expiresAt: new Date(Date.now() + 30 * 60000).toISOString() };
     moreId = null;
-    await refresh();
+    render();
+    Writes.run('bump', () => api.post(`/songs/${song.id}/bump`, { nickname: name, note: note.trim() }))
+      .then((cur) => { bump = cur; render(); },
+            (err) => { bump = before; render(); api.forgetPolls(); alert(err.message); });
     return;
   }
   const unbump = e.target.closest('[data-unbump]');
   if (unbump) {
     const name = Nick.get();
     if (!name) return;
-    try {
-      await api.del(`/songs/${unbump.dataset.unbump}/bump?nickname=${encodeURIComponent(name)}`);
-    } catch (err) {
-      alert(err.message);
-    }
+    const before = bump;
+    bump = null;
     moreId = null;
-    await refresh();
+    render();
+    Writes.run('bump', () => api.del(`/songs/${unbump.dataset.unbump}/bump?nickname=${encodeURIComponent(name)}`))
+      .catch((err) => { bump = before; render(); api.forgetPolls(); alert(err.message); });
     return;
   }
   const addSess = e.target.closest('[data-add-session]');
@@ -621,8 +635,13 @@ async function onListClick(e) {
     const cur = labelBtn.dataset.label;
     const input = prompt(`${labelBtn.dataset.role} 자리에 보일 이름 (비우면 원래대로)`, cur);
     if (input === null) return;
-    await api.put(`/sessions/${labelBtn.dataset.labelSession}`, { label: input.trim() });
-    await refresh();
+    const sid = Number(labelBtn.dataset.labelSession);
+    const saved = await Writes.commit(labelBtn, `label:${sid}`,
+      () => api.put(`/sessions/${sid}`, { label: input.trim() }));
+    if (!saved) return;
+    const sess = findSession(sid)?.sess;      /* 돌려받은 이름으로 바로 그린다 */
+    if (sess) sess.label = saved.label;
+    render();
     return;
   }
   /* 자리를 끄고 켠다. 지우지 않으므로 지원 기록과 자리 번호가 그대로 남는다. */
@@ -634,13 +653,13 @@ async function onListClick(e) {
       alert(`${toggleSess.dataset.role} 자리에 지원자 ${supports}명이 있습니다.\n먼저 정리한 뒤에 끌 수 있습니다.`);
       return;
     }
-    try {
-      await api.put(`/sessions/${toggleSess.dataset.toggleSession}`, { active: !on });
-    } catch (err) {
-      alert(err.message);
-      return;
-    }
-    await refresh();
+    /* 누르는 즉시 켜고 끈다(common.js Writes). 실패하면 알리고 서버 상태로 되돌아간다. */
+    const sid = Number(toggleSess.dataset.toggleSession);
+    const sess = findSession(sid)?.sess;
+    if (sess) sess.active = !on;
+    render();
+    Writes.run(`active:${sid}`, () => api.put(`/sessions/${sid}`, { active: !on }))
+      .catch((err) => { api.forgetPolls(); alert(err.message); });
     return;
   }
   /* 칸을 누르면 지원되는 게 아니라 파트 상세가 열린다. 홈(home.js)은 같은 칸을 누르면
@@ -712,27 +731,47 @@ sheetEl.addEventListener('click', async (e) => {
   const id = sheetSessionId;
   if (id === null) return;
 
-  const cancel = e.target.closest('[data-sheet-cancel]');
-  if (cancel) {
-    await api.del(`/sessions/${id}/support/${cancel.dataset.sheetCancel}`);
-    await refresh();
+  if (e.target.closest('[data-sheet-cancel]')) {
+    setSupport(id, Nick.get(), false);
     return;
   }
   const editLabel = e.target.closest('[data-sheet-label]');
   if (editLabel) {
+    /* 방금 지원해서 아직 서버 id 를 모르면 저장이 끝날 때까지 기다린다(한순간이다). */
+    if (!Number(editLabel.dataset.sheetLabel)) return;
     const input = prompt('이 곡에서 보일 내 이름 (비우면 닉네임 그대로, 20자)', editLabel.dataset.label);
     if (input === null) return;
-    await api.put(`/sessions/${id}/support/${editLabel.dataset.sheetLabel}`, { label: input.trim() });
-    await refresh();
+    const spId = Number(editLabel.dataset.sheetLabel);
+    const saved = await Writes.commit(editLabel, `suplabel:${spId}`,
+      () => api.put(`/sessions/${id}/support/${spId}`, { label: input.trim() }));
+    if (!saved) return;
+    const sp = findSession(id)?.sess.supports.find((x) => x.id === spId);   /* 돌려받은 이름으로 바로 그린다 */
+    if (sp) sp.label = saved.label;
+    render();
+    renderSheet();
     return;
   }
   if (e.target.closest('[data-sheet-support]')) {
     const name = await Nick.ensure();
     if (!name) return;
-    await api.post(`/sessions/${id}/support`, { nickname: name });
-    await refresh();
+    setSupport(id, name, true);
   }
 });
+
+/* 지원·취소. 누르는 즉시 칸을 바꾸고 서버에 보낸다(common.js Writes).
+   실패하면 알리고, 쓰기가 끝날 때 서버의 실제 상태로 되돌아간다. */
+function setSupport(sid, me, on) {
+  const session = songs.flatMap((s) => s.sessions).find((p) => p.id === sid);
+  if (!session || !me) return;
+  session.supports = session.supports.filter((a) => a.nickname !== me);
+  if (on) session.supports.push({ id: null, sessionId: sid, nickname: me, label: null });
+  render();
+  if (!sheetEl.hidden) renderSheet();
+  Writes.run(`sup:${sid}:${me}`, () => (on
+    ? api.post(`/sessions/${sid}/support`, { nickname: me })
+    : api.del(`/sessions/${sid}/support?nickname=${encodeURIComponent(me)}`)))
+    .catch((err) => { api.forgetPolls(); alert(err.message); });
+}
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
@@ -742,8 +781,10 @@ document.addEventListener('keydown', (e) => {
 
 mountChrome('songs');
 startPolling(refresh);
+document.addEventListener('writes-idle', () => refresh());   /* 누른 것이 다 저장되면 서버 상태로 맞춘다 */
 
-document.addEventListener('nickchange', refresh);
+/* 닉네임이 바뀌어도 목록은 그대로다. "내 것" 표시만 다시 그린다(전에는 목록 전체를 다시 받았다). */
+document.addEventListener('nickchange', () => { render(); if (!sheetEl.hidden) renderSheet(); });
 /* 끌올 남은 시간은 1분마다 다시 그린다 (5초 폴링과 별개로 시계만 맞춘다) */
 setInterval(() => { if (bump) render(); }, 60000);
 document.addEventListener('profiles', () => render());

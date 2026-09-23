@@ -158,7 +158,7 @@ function crestFor(guild, size = 76) {
   if (!guild) return '';
   if (guild.hasImage) {
     const id = 'crest-clip-' + (++crestSeq);
-    const url = `/api/guilds/${encodeURIComponent(guild.slug)}/image`;
+    const url = guild.imageUrl || `/api/guilds/${encodeURIComponent(guild.slug)}/image`;
     return `<svg class="crest-svg" viewBox="0 0 100 100" width="${size}" height="${size}" aria-hidden="true">`
       + `<defs><clipPath id="${id}"><polygon points="${CREST_HEX}" /></clipPath></defs>`
       + `<image href="${url}" x="0" y="0" width="100" height="100"`
