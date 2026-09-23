@@ -450,6 +450,54 @@ function confirmModal({ title, body, confirm = '확인', cancel = '취소', dang
   });
 }
 
+/* ---------- 크게 보기 ----------
+   data-zoom="이름" 을 단 요소를 누르면 그 안의 사진(img)이나 문장(svg)을 크게 띄운다.
+   데이터를 다시 찾지 않고 이미 그려진 그림을 복제한다 — 멤버 사진·길드 문장·일정 카드가 같은 창을 쓴다.
+   그림이 없는 칩(이모지·첫 글자)은 누를 거리가 없으니 가로채지 않는다.
+   사진은 서버에 256px 로 저장돼 있어(backend/images.py) 그보다 크게 키우지 않는다. */
+function openZoom(el) {
+  const pic = el.querySelector('img, svg');
+  if (!pic) return false;
+  /* 문장 svg 는 clipPath id 를 갖는다. 같은 id 가 둘이 되지 않게 새 이름을 붙인다. */
+  const picHtml = pic.outerHTML.replace(/crest-clip-\d+/g, 'crest-clip-zoom');
+  const badge = el.querySelector('.chip-badge.is-blue') ? 'blue' : el.querySelector('.chip-badge.is-pink') ? 'pink' : '';
+  const title = el.dataset.zoom || '';
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop zoom-backdrop';
+  backdrop.innerHTML = `
+    <figure class="zoom-view" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}" tabindex="-1">
+      <div class="zoom-pic">${picHtml}</div>
+      ${title ? `<figcaption>${badge ? `<i class="zoom-crown is-${badge}" aria-hidden="true"></i>` : ''}${escapeHtml(title)}</figcaption>` : ''}
+    </figure>`;
+  const previousFocus = document.activeElement;
+  const close = () => {
+    document.removeEventListener('keydown', onKey);
+    backdrop.remove();
+    previousFocus?.focus?.();
+  };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  backdrop.addEventListener('click', close);          /* 어디를 눌러도 닫힌다 */
+  document.body.appendChild(backdrop);
+  backdrop.querySelector('.zoom-view').focus();
+  return true;
+}
+/* 붙잡기 단계에서 받는다. 일정 카드처럼 줄 전체가 버튼인 곳에서도 문장만 누르면 확대가 먼저다. */
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-zoom]');
+  if (!el || !el.querySelector('img, svg')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openZoom(el);
+}, true);
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target.closest?.('[data-zoom][tabindex]');
+  if (!el || !el.querySelector('img, svg')) return;
+  e.preventDefault();
+  openZoom(el);
+});
+
 const ICONS = {
   music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',

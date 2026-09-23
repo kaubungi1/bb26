@@ -57,6 +57,12 @@ let playableKey = '';
 let playableAll = false;
 let playableDate = null;      /* 조율 중에 고른 후보 날짜. 확정 후엔 확정일 */
 let stageSongId = null;       /* 합주실에 올린 곡 */
+/* 되는 곡의 범위. 길드 일정이면 'guild'(그 길드 곡만)가 기본이다.
+   공용 곡을 섞지 않는 이유: 공용이 200곡이라 길드 곡이 묻힌다(사용자 결정, 2026-09-23). */
+let playableScope = 'guild';
+const psScopeEl = document.getElementById('ps-scope');
+/* 상세 안의 입력 칸을 쓰는 동안 미뤄 둔 새로 그리기가 있는가 */
+let refreshDeferred = false;
 /* 무대 접기. 길드 홈의 파티창 접기와 같은 방식이다 — localStorage 한 칸.
    기본은 펼침이고, 접어도 머리글 한 줄은 남는다. 통째로 사라지면 다시 펼 자리가 없다.
    곡마다 따로 기억하지 않는다. "무대를 볼 것인가" 는 곡이 아니라 사람의 취향이다. */
@@ -92,8 +98,17 @@ function todayStr() { return toDateStr(new Date()); }
 /* 길드 밖(메인)에서만 배지를 단다. 길드 안에서는 전부 그 길드 것이다. */
 function badge(ev) { return Site.slug ? '' : guildBadge(ev.guild); }
 
+/* 상세 안의 글자·시간·날짜 칸에 커서가 있는가. 체크박스(주말만)는 누르고 끝이라 뺀다. */
+function editingDetail() {
+  const el = document.activeElement;
+  return !!el && pollDetail.contains(el) && el.matches('input:not([type=checkbox]), select, textarea');
+}
+
 async function refresh() {
   if (Writes.pending) return;        /* 보내는 중인 쓰기가 끝나면 writes-idle 로 다시 온다 */
+  /* 입력하는 동안에는 다시 그리지 않는다. 다시 그리면 열어 둔 시간 고르기가 닫히고 칸에서 커서가 빠졌다
+     (쿠로 제보, 2026-09-16). 칸에서 나가면 그때 한 번 받는다(아래 focusout). */
+  if (editingDetail()) { refreshDeferred = true; return; }
   if (events.length === 0 && pollListEl.innerHTML.trim() === '') showLoading(pollListEl);
   const seq = Writes.seq;
   try {
@@ -491,19 +506,34 @@ function inSetlist(songId) {
 function renderPlayable() {
   if (!playable) { showLoading(playableListEl); return; }
   const all = playable.songs;
-  if (!playable.attendees.length) {
+  const locked = pollEvent.status === 'confirmed';
+  /* 길드 일정이면 범위 칩을 세운다. 길드 곡만 / 전체. */
+  const g = pollEvent.guild;
+  psScopeEl.hidden = !g;
+  psScopeEl.querySelectorAll('[data-scope]').forEach((b) => {
+    const on = b.dataset.scope === playableScope;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-pressed', on);
+  });
+  const pool = g && playableScope === 'guild' ? all.filter((s) => s.guildId === g.id) : all;
+  /* 참석자가 없으면 충족도가 전부 0 이다. 조율 중이면 볼 것이 없지만, 확정 뒤에는 셋리스트를
+     먼저 짜야 할 수 있다 — 전에는 표가 아예 안 떠서 ＋ 를 누를 곳이 없었다(쿠로 제보, 2026-09-16).
+     그래서 확정된 일정이면 곡 전체를 ＋ 와 함께 보여 준다. */
+  const nobody = !playable.attendees.length;
+  if (nobody && !locked) {
     playableListEl.innerHTML = `<p class="muted empty-msg">이 날짜에 가능한 사람이 아직 없습니다.</p>`;
     playableStageEl.innerHTML = '';
     psToggleBtn.hidden = true;
     return;
   }
-  const shown = playableAll ? all : all.filter((s) => s.filled >= MIN_FILLED);
-  const hidden = all.length - shown.length;
-  psToggleBtn.hidden = playableAll ? all.length === 0 : hidden <= 0;
+  const shown = playableAll || nobody ? pool : pool.filter((s) => s.filled >= MIN_FILLED);
+  const hidden = pool.length - shown.length;
+  psToggleBtn.hidden = nobody || (playableAll ? pool.length === 0 : hidden <= 0);
   psToggleBtn.textContent = playableAll ? `${MIN_FILLED}개 이상만 보기` : `전체 보기 (+${hidden}곡)`;
 
   if (!shown.length) {
-    playableListEl.innerHTML = `<p class="muted empty-msg">${MIN_FILLED}개 세션 이상 채워지는 곡이 없습니다.</p>`;
+    const what = g && playableScope === 'guild' ? '이 길드 곡 중 ' : '';
+    playableListEl.innerHTML = `<p class="muted empty-msg">${nobody ? `${what}곡이 없습니다.` : `${what}${MIN_FILLED}개 세션 이상 채워지는 곡이 없습니다.`}</p>`;
     playableStageEl.innerHTML = '';
     return;
   }
@@ -512,7 +542,6 @@ function renderPlayable() {
      홈이 첫 자켓을 자동으로 고르는 것과 같은 규칙이다. */
   if (!shown.some((x) => x.songId === stageSongId)) stageSongId = shown[0].songId;
 
-  const locked = pollEvent.status === 'confirmed';
   const cols = roleColumns(all);
   let html = `<table class="ps-table"><thead><tr>`;
   html += `<th class="ps-score-head">충족</th><th class="ps-song-head">곡</th>`;
@@ -598,6 +627,12 @@ function renderStage() {
 }
 
 /* 옆 칸(900px 이상)의 무대에는 여태 처리기가 없었다. 접기 단추가 생겼으니 붙인다. */
+psScopeEl.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-scope]');
+  if (!b || b.dataset.scope === playableScope) return;
+  playableScope = b.dataset.scope;
+  renderPlayable();
+});
 playableStageEl.addEventListener('click', (e) => {
   if (e.target.closest('[data-stage-fold]')) toggleStage(playableStageEl);
 });
@@ -722,6 +757,7 @@ function openPoll(id) {
   playableKey = '';
   playableDate = null;
   stageSongId = null;
+  playableScope = 'guild';
   renderPolls();
   renderPast();
   renderPollView();
@@ -889,6 +925,11 @@ unconfirmBtn.addEventListener('click', async () => {
 });
 
 mountChrome('schedule');
+pollDetail.addEventListener('focusout', (e) => {
+  if (!refreshDeferred || (e.relatedTarget && pollDetail.contains(e.relatedTarget) && e.relatedTarget.matches('input, select, textarea'))) return;
+  refreshDeferred = false;
+  refresh();
+});
 startPolling(refresh);
 document.addEventListener('writes-idle', () => refresh());   /* 누른 것이 다 저장되면 서버 상태로 맞춘다 */
 

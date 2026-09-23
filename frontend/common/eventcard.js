@@ -27,7 +27,8 @@ function eventSymbol(e) {
      내려주지 않으므로 보지 않는다. 문장이 없으면 이름 첫 글자로 떨어진다. */
   const crest = typeof crestFor === 'function' && crestFor(g, 64);
   if (crest) {
-    return `<span class="event-symbol is-crest" aria-hidden="true">${crest}</span>`;
+    /* 줄 전체가 일정 펼치기 버튼이지만 문장만 누르면 크게 본다(common.js openZoom 이 먼저 받는다). */
+    return `<span class="event-symbol is-crest" data-zoom="${escapeHtml(g.name || '')}" aria-hidden="true">${crest}</span>`;
   }
   const body = g.hasImage
     ? `<img src="${g.imageUrl || `/api/guilds/${encodeURIComponent(g.slug)}/image`}" alt="" />`

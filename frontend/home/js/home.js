@@ -13,7 +13,9 @@ const key='bb26-home-v4:'+Site.base;
 let saved={};try{saved=JSON.parse(sessionStorage.getItem(key)||'{}')}catch{}
 let prefs={query:'',genres:[],guilds:[],part:'',period:'all',sort:'recommend',dir:1,...saved.prefs};
 let scores={},randomScores={},reasons={};selected=saved.selected;
-function persist(){try{sessionStorage.setItem(key,JSON.stringify({prefs,selected,scores,randomScores,reasons}))}catch{}}
+/* 마지막으로 본 끌올(bumpedAt). 새 끌올이면 한 번만 그 곡으로 데려간다 — 볼 때마다 끌려가면 목록을 둘러볼 수 없다. */
+let seenBump=saved.seenBump||null,bumpShown=null;   /* bumpShown: 목록을 마지막으로 세울 때의 끌올 곡 */
+function persist(){try{sessionStorage.setItem(key,JSON.stringify({prefs,selected,scores,randomScores,reasons,seenBump}))}catch{}}
 const genre=songGenre;   /* common.js — 곡의 얼굴은 모든 화면이 같은 규칙을 쓴다 */
 const ORDER=['보컬','일렉1','일렉2','베이스','키보드','드럼'],ABBR=ROLE_SHORT;/* 약어는 common.js 한 곳에서만 정한다 */
 const baseRole=r=>ORDER.find(k=>r.startsWith(k))||(r.startsWith('기타')||r.startsWith('일렉')?'일렉1':r.startsWith('보')?'보컬':'');
@@ -30,7 +32,25 @@ function hit(s,q){return [s.title,s.artist,s.createdBy].some(t=>(t||'').toLowerC
 const DIRECTED=['name','new'];   /* 방향을 뒤집을 수 있는 정렬 */
 function list(){const a=songs.filter(s=>(!prefs.query||hit(s,prefs.query.toLowerCase()))&&(!prefs.genres.length||prefs.genres.includes(s.genre))&&(!prefs.guilds.length||prefs.guilds.includes(s.guild?.slug||'none'))&&(!prefs.part||s.empty.includes(prefs.part))&&(prefs.period==='all'||s.age!==null&&s.age<=Number(prefs.period)));/* 방향은 곡명순·최근 등록에만 있다. 추천·무작위는 뒤집을 순서 자체가 없다. */
  const dir=DIRECTED.includes(prefs.sort)?(prefs.dir<0?-1:1):1;
- return a.sort(prefs.sort==='name'?(a,b)=>dir*a.title.localeCompare(b.title,'ko'):prefs.sort==='new'?(a,b)=>dir*((a.age??Infinity)-(b.age??Infinity))||a.id-b.id:(a,b)=>(prefs.sort==='random'?randomScores[a.id]-randomScores[b.id]:scores[a.id]-scores[b.id])||a.id-b.id)}
+ a.sort(prefs.sort==='name'?(a,b)=>dir*a.title.localeCompare(b.title,'ko'):prefs.sort==='new'?(a,b)=>dir*((a.age??Infinity)-(b.age??Infinity))||a.id-b.id:(a,b)=>(prefs.sort==='random'?randomScores[a.id]-randomScores[b.id]:scores[a.id]-scores[b.id])||a.id-b.id);
+ /* 끌올 곡은 어느 정렬에서든 맨 앞이다. 필터에 걸러진 곡은 끼우지 않는다 — 필터가 거짓말을 하게 된다. */
+ const b=bumped(),i=b?a.indexOf(b):-1;if(i>0){a.splice(i,1);a.unshift(b)}
+ return a}
+/* ---------- 끌올 ----------
+   곡 목록에 bumpedBy·bumpedAt·bumpNote 가 이미 실려 온다. 따로 묻지 않는다(요청이 늘지 않는다).
+   살아 있는 시간은 서버와 같아야 한다 — backend/routers/songs.py BUMP_MINUTES. */
+const BUMP_MINUTES=30;
+const bumpLeft=s=>s&&s.bumpedAt?new Date(s.bumpedAt).getTime()+BUMP_MINUTES*60000-Date.now():0;
+function bumped(){return songs.find(s=>bumpLeft(s)>0)||null}
+const bumpMin=s=>Math.max(1,Math.ceil(bumpLeft(s)/60000));
+/* 자켓 섬네일 아래쪽의 끌올 띠. 장르 꼬리표처럼 자기 바탕을 가져 그림이 밝든 어둡든 읽힌다. */
+function jkBump(s){if(bumpLeft(s)<=0)return'';const pct=Math.round(bumpLeft(s)/(BUMP_MINUTES*600));
+ return `<span class="jk-bump" title="${esc(s.bumpedBy+(s.bumpNote?': '+s.bumpNote:''))}"><span class="jk-bump-line"><b>↑ 끌올</b><span>${esc(s.bumpedBy||'')}</span>${s.bumpNote?`<q>${esc(s.bumpNote)}</q>`:''}<em>${bumpMin(s)}분</em></span><i style="width:${pct}%"></i></span>`}
+/* transport 줄의 끌올 버튼. 지금 보는 곡과 끌올 상태에 따라 글자가 바뀐다 — 곡 페이지 bumpBtn 과 같은 규칙. */
+function bumpCtl(id){const b=bumped(),me=Nick.get();
+ if(b&&b.id===id)return b.bumpedBy===me?'<button type="button" id="bump-btn" data-unbump>끌올 내리기</button>':`<button type="button" id="bump-btn" disabled>↑ 끌올 중</button>`;
+ if(b)return `<button type="button" id="bump-btn" disabled title="${esc(b.bumpedBy)}님이 끌올 중">↑ ${bumpMin(b)}분 뒤</button>`;
+ return '<button type="button" id="bump-btn">↑ 끌올</button>'}
 /* 자켓. 위가 섬네일, 아래가 잉크 띠, 그 아래가 파트 여섯 칸이다.
    글자가 그림 위에 절대 올라가지 않으므로 섬네일이 밝든 어둡든 대비가 같다.
    섬네일이 없으면 그 자리에 제목 첫 글자를 깐다. 한글은 건너뛰고 아티스트에서 뽑는다. */
@@ -38,7 +58,7 @@ function jacket(s){const parts=ordered(s),me=Nick.get();
  const shot=s.hasThumb
   ? `<img class="jk-img" src="${s.thumbUrl||`/api/songs/${s.id}/thumb`}" alt="" loading="lazy" decoding="async">`
   : `<span class="jk-mark" aria-hidden="true">${esc(bigLetter(s))}</span>`;
- return `<div class="jacket genre-${tone(s)}"><div class="jk-shot"><span class="jk-genre"><span>${esc(shortGenre(s.genre))}</span></span>${!Site.slug&&s.guild?`<span class="jk-guild">${guildBadge(s.guild)}</span>`:''}${shot}</div><div class="jk-band"><b>${esc(s.title)}</b><small>${esc(s.artist||'')}</small></div><div class="slots" aria-hidden="true">${parts.map(p=>`<i class="slot ${me&&p.supports.some(x=>x.nickname===me)?'mine':p.supports.length?'on':'off'}"><em>${esc(abbr(p.role))}</em><u>${p.supports.length}</u></i>`).join('')}</div></div>`}
+ return `<div class="jacket genre-${tone(s)}"><div class="jk-shot"><span class="jk-genre"><span>${esc(shortGenre(s.genre))}</span></span>${!Site.slug&&s.guild?`<span class="jk-guild">${guildBadge(s.guild)}</span>`:''}${shot}${jkBump(s)}</div><div class="jk-band"><b>${esc(s.title)}</b><small>${esc(s.artist||'')}</small></div><div class="slots" aria-hidden="true">${parts.map(p=>`<i class="slot ${me&&p.supports.some(x=>x.nickname===me)?'mine':p.supports.length?'on':'off'}"><em>${esc(abbr(p.role))}</em><u>${p.supports.length}</u></i>`).join('')}</div></div>`}
 /* 섬네일이 없을 때 깔 글자. 가나·한자·영숫자만 쓴다. 한글은 건너뛴다. */
 const bigLetter=songLetter;
 function detail(s){const me=Nick.get(),parts=ordered(s);return `<section class="now"><div class="now-slots">${parts.map(p=>slot(p,me)).join('')||'<span class="muted">등록된 파트 없음</span>'}</div>${murmur(s)}</section>`}
@@ -154,10 +174,10 @@ function controls(){const active=prefs.genres.length+prefs.guilds.length+(!!pref
    자리가 없다) 옮겨 앉는 순간 그만큼 화면이 튀었다. 제대로 하려면 화면 폭에서 장수를
    계산하고 스크롤 도중에 옮겨야 하는데, 드래그 기준점까지 같이 밀어야 해서 무겁다.
    지금은 ◀▶ 의 번호만 순환한다(step). */
-function trackWrap(s){return `<div class="track-wrap" data-track="${s.id}"><button class="track ${s.id===selected?'chosen':''}" data-track="${s.id}" aria-label="${esc(s.title)}" aria-pressed="${s.id===selected}">${jacket(s)}</button>${s.youtubeUrl?`<a class="yt" href="${esc(s.youtubeUrl)}" target="_blank" rel="noreferrer noopener" aria-label="${esc(s.title)} 유튜브에서 보기" title="유튜브에서 보기"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="body" d="M21.6 7.2a2.6 2.6 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.6 2.6 0 0 0 2.4 7.2 27 27 0 0 0 2 12a27 27 0 0 0 .4 4.8 2.6 2.6 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.6 2.6 0 0 0 1.8-1.8A27 27 0 0 0 22 12a27 27 0 0 0-.4-4.8z"/><path class="play" d="M10 15.2V8.8L15.5 12z"/></svg></a>`:''}</div>`}
+function trackWrap(s){return `<div class="track-wrap${bumpLeft(s)>0?' is-bumped':''}" data-track="${s.id}"><button class="track ${s.id===selected?'chosen':''}" data-track="${s.id}" aria-label="${esc(s.title)}" aria-pressed="${s.id===selected}">${jacket(s)}</button>${s.youtubeUrl?`<a class="yt" href="${esc(s.youtubeUrl)}" target="_blank" rel="noreferrer noopener" aria-label="${esc(s.title)} 유튜브에서 보기" title="유튜브에서 보기"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="body" d="M21.6 7.2a2.6 2.6 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.6 2.6 0 0 0 2.4 7.2 27 27 0 0 0 2 12a27 27 0 0 0 .4 4.8 2.6 2.6 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.6 2.6 0 0 0 1.8-1.8A27 27 0 0 0 22 12a27 27 0 0 0-.4-4.8z"/><path class="play" d="M10 15.2V8.8L15.5 12z"/></svg></a>`:''}</div>`}
 function loop(a){return a.map(trackWrap).join('')}
-function results(){cleanupCarousel();const a=list();const count=$('.selector-head h1 small');if(count)count.textContent=a.length;if(!a.some(s=>s.id===selected))selected=a[0]?.id;$('#results').innerHTML=a.length?`<div class="carousel" tabindex="0" aria-label="곡 선택. 좌우 방향키로 이동">${loop(a)}</div><div class="transport"><button id="first" aria-label="맨 앞으로">⏮</button><button id="prev" aria-label="이전 곡">◀</button><span id="position"></span><button id="next" aria-label="다음 곡">▶</button><button id="last" aria-label="맨 뒤로">⏭</button><button id="auto" aria-pressed="${auto}">${auto?'Ⅱ 정지':'▷ 자동'}</button><a id="song-link" href="${Site.base}/songs/">곡 정보 ↗</a><a href="${Site.base}/songs/">목록 ↗</a></div><div id="selected-detail"></div>`:ghost();if(a.length){choose(selected,false);bindCarousel();}persist();}
-function choose(id,smooth=true){if(!$('#selected-detail')||!songs.some(s=>s.id===id)||!list().some(s=>s.id===id))return;selected=id;const s=songs.find(s=>s.id===id);document.querySelectorAll('.track').forEach(b=>{b.classList.toggle('chosen',+b.dataset.track===id);b.setAttribute('aria-pressed',+b.dataset.track===id)});center($(`[data-track="${id}"]`),smooth);tickOpen=false;tickIdx=0;clearInterval(ticker);ticker=null;$('#selected-detail').innerHTML=detail(s);$('#position').textContent=`${list().findIndex(s=>s.id===id)+1} / ${list().length}`;markEdges();const sl=$('#song-link');if(sl)sl.href=`${Site.base}/songs/?song=${id}`;preloadThumbs(id);loadComments(id);persist();}
+function results(){cleanupCarousel();bumpShown=bumped()?.id||null;const a=list();const count=$('.selector-head h1 small');if(count)count.textContent=a.length;if(!a.some(s=>s.id===selected))selected=a[0]?.id;$('#results').innerHTML=a.length?`<div class="carousel" tabindex="0" aria-label="곡 선택. 좌우 방향키로 이동">${loop(a)}</div><div class="transport"><button id="first" aria-label="맨 앞으로">⏮</button><button id="prev" aria-label="이전 곡">◀</button><span id="position"></span><button id="next" aria-label="다음 곡">▶</button><button id="last" aria-label="맨 뒤로">⏭</button><button id="auto" aria-pressed="${auto}">${auto?'Ⅱ 정지':'▷ 자동'}</button>${bumpCtl(selected)}<a id="song-link" href="${Site.base}/songs/">곡 정보 ↗</a><a href="${Site.base}/songs/">목록 ↗</a></div><div id="selected-detail"></div>`:ghost();if(a.length){choose(selected,false);bindCarousel();}persist();}
+function choose(id,smooth=true){if(!$('#selected-detail')||!songs.some(s=>s.id===id)||!list().some(s=>s.id===id))return;selected=id;const s=songs.find(s=>s.id===id);document.querySelectorAll('.track').forEach(b=>{b.classList.toggle('chosen',+b.dataset.track===id);b.setAttribute('aria-pressed',+b.dataset.track===id)});center($(`[data-track="${id}"]`),smooth);tickOpen=false;tickIdx=0;clearInterval(ticker);ticker=null;$('#selected-detail').innerHTML=detail(s);$('#position').textContent=`${list().findIndex(s=>s.id===id)+1} / ${list().length}`;markEdges();const sl=$('#song-link');if(sl)sl.href=`${Site.base}/songs/?song=${id}`;const bb=$('#bump-btn');if(bb)bb.outerHTML=bumpCtl(id);preloadThumbs(id);loadComments(id);persist();}
 /* 칸 하나를 캐러셀 한가운데로. choose 와 step 이 같이 쓴다. */
 function center(el,smooth=true){const c=$('.carousel');if(!el||!c)return;const er=el.getBoundingClientRect(),cr=c.getBoundingClientRect();c.scrollTo({left:c.scrollLeft+(er.left+er.width/2)-(cr.left+cr.width/2),behavior:smooth&&!reducedMotion?'smooth':'instant'})}
 function stop(){auto=false;clearInterval(timer);if($('#auto')){$('#auto').textContent='▷ 자동';$('#auto').setAttribute('aria-pressed','false')}}
@@ -209,7 +229,7 @@ function bindControls(){
   dg.querySelectorAll('[data-guild]').forEach(el=>el.onclick=()=>{
    const v=el.dataset.guild;prefs.guilds=v?[v]:[];guildOpen=false;rerender();});
  }}
-async function refresh(){const v=++version;try{const requests=await Promise.allSettled([api.get(Site.q('/songs')),api.get(Site.q('/events')),api.get('/guilds')]);if(v!==version)return;const failure=requests.find(r=>r.status==='rejected');if(failure)throw failure.reason;const [raw,ev,gs]=requests.map(r=>r.value);songs=raw.map(s=>({...s,genre:genre(s),age:s.createdBy==='시트 가져오기'?null:Math.max(0,(Date.now()-new Date(s.createdAt))/86400000),empty:s.sessions.filter(p=>!p.supports.length).map(p=>p.role)}));events=ev;guilds=gs;guild=Site.slug?guilds.find(g=>g.slug===Site.slug):null;if(Site.slug&&!guild)throw Error('길드를 찾을 수 없습니다.');parts=[...new Set(songs.flatMap(s=>s.sessions.map(p=>p.role)))];genreList=[...new Set(songs.map(s=>s.genre))].sort((a,b)=>songs.filter(s=>s.genre===b).length-songs.filter(s=>s.genre===a).length);guildList=guilds.map(g=>({slug:g.slug,name:g.name,style:g.style,color:g.color}));try{localStorage.setItem(LISTS,JSON.stringify({genres:genreList,guilds:guildList}))}catch{}if(!Object.keys(scores).length){const returning=performance.getEntriesByType('navigation')[0]?.type==='back_forward'||document.referrer.startsWith(location.origin+'/');if(returning&&saved.scores&&songs.every(s=>s.id in saved.scores)){scores=saved.scores;randomScores=saved.randomScores||{};reasons=saved.reasons||{}}else mix()}else if(songs.some(s=>!(s.id in scores)))mix();$('#home-error').hidden=true;render()}catch(e){$('#home-error').textContent='불러오기 실패: '+e.message;$('#home-error').hidden=false;$('#screen').removeAttribute('aria-busy');if(!songs.length)$('#screen').innerHTML=skeleton().replace('불러오는 중','불러오지 못했습니다')+'<p class="retry-line"><button type="button" data-retry>다시 불러오기</button></p>'}}
+async function refresh(){const v=++version;try{const requests=await Promise.allSettled([api.get(Site.q('/songs')),api.get(Site.q('/events')),api.get('/guilds')]);if(v!==version)return;const failure=requests.find(r=>r.status==='rejected');if(failure)throw failure.reason;const [raw,ev,gs]=requests.map(r=>r.value);songs=raw.map(s=>({...s,genre:genre(s),age:s.createdBy==='시트 가져오기'?null:Math.max(0,(Date.now()-new Date(s.createdAt))/86400000),empty:s.sessions.filter(p=>!p.supports.length).map(p=>p.role)}));events=ev;guilds=gs;guild=Site.slug?guilds.find(g=>g.slug===Site.slug):null;if(Site.slug&&!guild)throw Error('길드를 찾을 수 없습니다.');parts=[...new Set(songs.flatMap(s=>s.sessions.map(p=>p.role)))];genreList=[...new Set(songs.map(s=>s.genre))].sort((a,b)=>songs.filter(s=>s.genre===b).length-songs.filter(s=>s.genre===a).length);guildList=guilds.map(g=>({slug:g.slug,name:g.name,style:g.style,color:g.color}));try{localStorage.setItem(LISTS,JSON.stringify({genres:genreList,guilds:guildList}))}catch{}if(!Object.keys(scores).length){const returning=performance.getEntriesByType('navigation')[0]?.type==='back_forward'||document.referrer.startsWith(location.origin+'/');if(returning&&saved.scores&&songs.every(s=>s.id in saved.scores)){scores=saved.scores;randomScores=saved.randomScores||{};reasons=saved.reasons||{}}else mix()}else if(songs.some(s=>!(s.id in scores)))mix();const nb=bumped();if(nb&&nb.bumpedAt!==seenBump){selected=nb.id;seenBump=nb.bumpedAt}$('#home-error').hidden=true;render()}catch(e){$('#home-error').textContent='불러오기 실패: '+e.message;$('#home-error').hidden=false;$('#screen').removeAttribute('aria-busy');if(!songs.length)$('#screen').innerHTML=skeleton().replace('불러오는 중','불러오지 못했습니다')+'<p class="retry-line"><button type="button" data-retry>다시 불러오기</button></p>'}}
 /* 지원 칸을 바꾼 곡 하나를 다시 그린다. 저장이 다 끝나면(writes-idle) 건드린 곡만 서버에서 다시 받아 맞춘다 —
    실패했으면 그때 서버의 실제 상태로 돌아간다. 목록 전체를 다시 받지 않는다. */
 const touched=new Set();
@@ -242,6 +262,34 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('nickchange',()=>{if(songs.length)render()});
 window.addEventListener('pageshow',e=>{if(e.persisted)refresh()});
 window.addEventListener('pagehide',()=>{persist();stop();cleanupCarousel();clearInterval(ticker);ticker=null});
+/* ---------- 끌올 누르기 ----------
+   켜고 끄는 동작이라 누르는 즉시 1번으로 올린다(Writes.run). 서버가 거절하면(다른 곡이 먼저 잡았다 등) 되돌린다. */
+function bumpFail(err){$('#home-error').textContent=err.message;$('#home-error').hidden=false}
+/* 한마디. 브라우저 기본 입력창 대신 사이트 창으로 받는다. 취소면 null, 비우면 ''. */
+function askBumpNote(){return new Promise(resolve=>{const bd=document.createElement('div');bd.className='modal-backdrop';
+ bd.innerHTML=`<div class="modal" role="dialog" aria-modal="true" aria-labelledby="bump-title"><h3 class="modal-title" id="bump-title">${icon('up')} 끌올</h3><p class="modal-desc">30분 동안 모든 목록의 맨 앞에 섭니다.</p><form class="modal-form"><input name="note" maxlength="60" placeholder="한마디 (선택)" autocomplete="off"><button type="submit" class="pink">끌올</button><button type="button" class="ghost" data-cancel>취소</button></form></div>`;
+ const close=v=>{bd.remove();resolve(v)};
+ bd.addEventListener('click',e=>{if(e.target===bd||e.target.closest('[data-cancel]'))close(null)});
+ bd.addEventListener('keydown',e=>{if(e.key==='Escape')close(null)});
+ bd.querySelector('form').addEventListener('submit',e=>{e.preventDefault();close(e.target.elements.note.value.trim())});
+ document.body.appendChild(bd);setTimeout(()=>bd.querySelector('input').focus(),0)})}
+async function onBump(btn){const id=selected,s=songs.find(x=>x.id===id);if(!s||btn.disabled)return;
+ const me=await Nick.ensure();if(!me||selected!==id)return;stop();
+ const prev={bumpedBy:s.bumpedBy,bumpedAt:s.bumpedAt,bumpNote:s.bumpNote};
+ const undo=err=>{Object.assign(s,prev);results();bumpFail(err)};
+ if(btn.hasAttribute('data-unbump')){s.bumpedAt=null;s.bumpNote=null;results();
+  Writes.run('bump',()=>api.del(`/songs/${id}/bump?nickname=${encodeURIComponent(me)}`)).catch(undo);return}
+ if(bumped())return;
+ const note=await askBumpNote();if(note===null)return;
+ Object.assign(s,{bumpedBy:me,bumpedAt:new Date().toISOString(),bumpNote:note||null});seenBump=s.bumpedAt;selected=id;results();
+ /* 시각은 서버 것으로 맞춘다. 기기 시계가 틀려도 남은 시간이 서버와 같게. */
+ Writes.run('bump',()=>api.post(`/songs/${id}/bump`,{nickname:me,note})).then(r=>{if(r&&r.bumpedAt){s.bumpedAt=r.bumpedAt;seenBump=r.bumpedAt;persist()}}).catch(undo)}
+$('#screen').addEventListener('click',e=>{const b=e.target.closest('#bump-btn');if(b)onBump(b)});
+/* 남은 시간은 분 단위라 30초마다 글자만 고친다. 끝나면 목록을 다시 세운다(끌올 곡이 제자리로 돌아간다). */
+setInterval(()=>{if(document.hidden||!songs.length)return;const b=bumped();
+ if((b?.id||null)!==bumpShown){if($('.carousel'))results();else bumpShown=b?.id||null;return}
+ if(!b)return;document.querySelectorAll(`.track-wrap[data-track="${b.id}"] .jk-bump`).forEach(el=>el.outerHTML=jkBump(b));
+ const bb=$('#bump-btn');if(bb)bb.outerHTML=bumpCtl(selected)},30000);
 mountChrome('home');$('#screen').innerHTML=skeleton();$('#screen').querySelectorAll('.tools input,.tools select,.tools button,.chips button,.chips select,.suggest-button').forEach(el=>{el.disabled=true;el.setAttribute('aria-disabled','true')});refresh();
 })();
 

@@ -130,6 +130,8 @@
   color: #fff;
 }
 .bcard .avatar-chip img { width: 100%; height: 100%; object-fit: contain; }
+/* 사진을 누르면 크게 본다(common.js openZoom). 감싼 틀이 줄 높이로 틈을 만들지 않게 flex 로 둔다. */
+.bc-face { display: flex; flex: none; }
 
 /* 칭호는 30자까지라 두 줄이 되면 면 높이가 또 어긋난다. 한 줄로 자른다. */
 .bc-over {

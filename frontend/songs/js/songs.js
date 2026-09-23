@@ -578,6 +578,15 @@ async function openEditor(song) {
 }
 addBtn.addEventListener('click', () => openEditor(null));
 
+/* ⋯ 메뉴는 밖을 누르거나 Esc 로 닫는다. 열림 표시만 떼고 목록은 다시 그리지 않는다. */
+function closeMore() {
+  if (moreId === null) return;
+  moreId = null;
+  document.querySelectorAll('.song-item-actions.is-open').forEach((el) => el.classList.remove('is-open'));
+}
+document.addEventListener('click', (e) => { if (!e.target.closest('.song-item-actions')) closeMore(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMore(); });
+
 async function onListClick(e) {
   const more = e.target.closest('[data-more]');
   if (more) {

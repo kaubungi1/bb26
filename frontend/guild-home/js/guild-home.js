@@ -85,7 +85,9 @@ function head() {
     : '<span class="g-open is-full"><span>정원 마감</span></span>';
   return `<section class="g-plate">
     <div class="g-plate-top">
-      <span class="g-crest">${crest()}</span>
+      ${(() => { const c = crest(); return c.includes('<svg')
+        ? `<span class="g-crest" data-zoom="${esc(guild.name)}" role="button" tabindex="0" aria-label="문장 크게 보기">${c}</span>`
+        : `<span class="g-crest">${c}</span>`; })()}
       <div class="g-title">
         <span class="overline"><span>GUILD</span></span>
         <h1>${esc(guild.name)}</h1>

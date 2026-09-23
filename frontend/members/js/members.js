@@ -42,7 +42,7 @@ function memberCard(m) {
     <div class="bc-head">
       <div class="bc-top">
         <img class="bc-logo" src="/assets/logo.png" alt="불법이륙" />
-        ${avatarChip(m.nickname)}
+        <span class="bc-face" data-zoom="${escapeHtml(m.nickname)}"${m.hasImage ? ' role="button" tabindex="0" aria-label="사진 크게 보기"' : ''}>${avatarChip(m.nickname)}</span>
       </div>
       ${m.title ? `<span class="bc-over">${escapeHtml(m.title)}</span>` : ''}
       <span class="bc-name">${escapeHtml(m.nickname)}${m.status ? ` <i>(${escapeHtml(m.status)})</i>` : ''}</span>

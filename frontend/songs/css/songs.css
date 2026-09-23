@@ -21,14 +21,45 @@
 .song-tag:hover { filter: brightness(0.97); }
 
 .song-item-actions {
+  position: relative;          /* ⋯ 메뉴가 이 칸을 기준으로 뜬다 */
   display: flex;
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
 }
-/* 평소엔 ⋯ 하나만. 눌렀을 때만 세션·삭제가 나온다 */
-.row-more-set { display: none; align-items: center; gap: 12px; }
-.song-item-actions.is-open .row-more-set { display: flex; }
+/* 평소엔 ⋯ 하나만. 누르면 ⋯ 아래에 메뉴로 뜬다.
+   전에는 같은 줄 안에서 펼쳐져, 폰에서는 제목 칸이 0 까지 밀려 곡 이름이 사라졌다(쿠로 제보, 2026-09-17).
+   모양은 공통 .drop-menu · .menu-item(common.css)에서 옮겨 왔다. */
+.row-more-set { display: none; }
+.song-item-actions.is-open .row-more-set {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 150px;
+  padding: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  box-shadow: var(--shadow-md);
+}
+.song-item-actions .row-more-set > .session-edit,
+.song-item-actions .row-more-set > .song-by {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 14px;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+}
+.song-item-actions .row-more-set > .session-edit:hover { background: var(--teal-soft); }
+.song-item-actions .row-more-set > .song-by { color: var(--ink-muted); cursor: default; }   /* 'n분 뒤' 는 누를 수 없는 알림이다 */
 .row-more {
   flex: none;
   width: 28px;

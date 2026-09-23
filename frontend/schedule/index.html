@@ -85,6 +85,19 @@
       </div>
       <div id="matrix" class="matrix-wrap"></div>
 
+      <!-- 확정 칸은 날짜 표 바로 아래다. 전에는 되는 곡 목록 뒤에 있어서 곡이 많으면 한참 내려가야 했다. -->
+      <div class="confirm-bar" id="confirm-bar">
+        <div class="confirm-row">
+          <select id="confirm-date" class="confirm-select"></select>
+          <input type="time" id="confirm-start" placeholder="시작" />
+          <input type="time" id="confirm-end" placeholder="종료" />
+        </div>
+        <div class="confirm-row">
+          <input id="confirm-place" placeholder="장소 (선택)" />
+          <button type="button" class="pink" id="confirm-btn">이 날짜로 확정</button>
+        </div>
+      </div>
+
       <div class="confirmed-bar" id="confirmed-bar" hidden>
         <div class="confirmed-info">
           <span class="confirmed-badge"><span>확정</span></span>
@@ -110,6 +123,11 @@
       <section class="ps-section" id="playable-section" hidden>
         <div class="ps-head">
           <h3 class="ps-title" id="ps-title">이 날이면 되는 곡</h3>
+          <!-- 길드 일정에서만 보인다. 이 길드 곡만 / 사이트 전체 곡 -->
+          <span class="ps-scope" id="ps-scope" role="group" aria-label="곡 범위" hidden>
+            <button type="button" class="chip" data-scope="guild">이 길드 곡</button>
+            <button type="button" class="chip" data-scope="all">전체</button>
+          </span>
           <button type="button" class="ghost" id="ps-toggle">전체 보기</button>
         </div>
         <div class="ps-dates" id="ps-dates"></div>
@@ -119,17 +137,6 @@
         </div>
       </section>
 
-      <div class="confirm-bar" id="confirm-bar">
-        <div class="confirm-row">
-          <select id="confirm-date" class="confirm-select"></select>
-          <input type="time" id="confirm-start" placeholder="시작" />
-          <input type="time" id="confirm-end" placeholder="종료" />
-        </div>
-        <div class="confirm-row">
-          <input id="confirm-place" placeholder="장소 (선택)" />
-          <button type="button" class="pink" id="confirm-btn">이 날짜로 확정</button>
-        </div>
-      </div>
     </div>
   </div>
 

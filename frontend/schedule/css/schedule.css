@@ -274,6 +274,9 @@
 /* --- 참석 인원 기준 가능 곡 --- */
 .ps-section { display: flex; flex-direction: column; gap: 10px; }
 .ps-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* 길드 일정의 곡 범위 칩(이 길드 곡 · 전체). 제목 바로 옆에 붙고 '전체 보기' 는 오른쪽 끝에 남는다. */
+.ps-scope { display: flex; gap: 2px; margin-right: auto; }
+.ps-scope[hidden] { display: none; }
 .ps-title { font-size: 15px; font-weight: 800; margin: 0; }
 .ps-wrap {
   overflow-x: auto;
