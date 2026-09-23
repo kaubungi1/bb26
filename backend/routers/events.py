@@ -165,9 +165,11 @@ def delete_event(event_id: int):
 
 # ---------- 후보 날짜 끄고 켜기 ----------
 @router.post('/{event_id}/dates/{day}/toggle')
-def toggle_date(event_id: int, day: str):
+def toggle_date(event_id: int, day: str, body: dict | None = None):
     """후보 날짜를 끄거나 켠다. 지우지 않으므로 그 날 찍어 둔 기록은 그대로 남는다.
-    10/24 가 정모일이라 후보에서 빠지는 것 같은 경우를 위한 것이다."""
+    10/24 가 정모일이라 후보에서 빠지는 것 같은 경우를 위한 것이다.
+    active(true/false)를 보내면 그 상태로 맞춘다 — 화면이 누르는 즉시 바꾸고 보내므로 같은 요청이 두 번 가도
+    결과가 같아야 한다. active 가 없으면 예전처럼 뒤집는다(배포 직후의 옛 화면용)."""
     conn = get_db()
     event = _load(conn, event_id)
     row = conn.execute(
@@ -176,10 +178,11 @@ def toggle_date(event_id: int, day: str):
     if not row:
         conn.close()
         raise HTTPException(400, '후보 기간에 없는 날짜입니다.')
-    if event['status'] == 'confirmed' and event['date'] == day and row['active']:
+    want = (body or {}).get('active')
+    nxt = want if isinstance(want, bool) else not row['active']
+    if event['status'] == 'confirmed' and event['date'] == day and not nxt:
         conn.close()
         raise HTTPException(400, '확정된 날짜는 끌 수 없습니다. 확정을 먼저 해제하세요.')
-    nxt = not row['active']
     conn.execute('UPDATE eventDates SET "active"=%s WHERE "id"=%s', (nxt, row['id']))
     conn.commit()
     kept = conn.execute(

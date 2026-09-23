@@ -654,16 +654,31 @@ playableListEl.addEventListener('click', async (e) => {
     return;
   }
   if (!pollEvent) return;
-  const id = Number(btn.dataset.setSong);
-  const ids = pollEvent.songs.map((s) => s.songId);
-  const next = ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
-  const saved = await Writes.commit(btn, `setlist:${pollEvent.id}`,
-    () => api.put(`/events/${pollEvent.id}/songs`, { songIds: next }));
-  if (!saved) return;
-  putEvent(saved);
+  toggleSetSong(pollEvent, Number(btn.dataset.setSong));
+});
+
+/* 셋리스트에 곡 넣기·빼기. 켜고 끄는 동작이라 누르는 즉시 바꾼다(Writes.run).
+   전에는 서버가 셋리스트를 저장하고 라인업을 채울 때까지 기다려 3초쯤 걸렸다.
+   새로 넣은 곡의 라인업은 서버와 같은 규칙('그날 참석자 ∩ 지원자')으로 미리 채운다 —
+   되는 곡 표(playable)가 그 값을 이미 갖고 있다. 저장이 다 끝나면 writes-idle 이 서버 상태로 맞추고,
+   실패하면 폴링 버전을 잊어 그때 서버의 실제 상태로 돌아간다. */
+function toggleSetSong(ev, id) {
+  if (ev.songs.some((x) => x.songId === id)) {
+    ev.songs = ev.songs.filter((x) => x.songId !== id);
+  } else {
+    const p = playable && playable.songs.find((x) => x.songId === id);
+    ev.songs = [...ev.songs, {
+      songId: id, order: ev.songs.length, note: null,
+      title: p ? p.title : '', artist: p ? p.artist : '', guild: p ? p.guild : null,
+      lineup: p ? p.roles.flatMap((r) => r.members.map((n) => ({ role: r.role, nickname: n }))) : [],
+    }];
+  }
   renderSetlist();
   renderPlayable();
-});
+  const songIds = ev.songs.map((x) => x.songId);
+  Writes.run(`setlist:${ev.id}`, () => api.put(`/events/${ev.id}/songs`, { songIds }))
+    .catch((err) => { api.forgetPolls(); alert(err.message); });
+}
 
 /* ---------- 셋리스트 · 라인업 ---------- */
 function renderSetlist() {
@@ -701,13 +716,7 @@ setlistEl.addEventListener('click', async (e) => {
   if (!ev) return;
   const rm = e.target.closest('[data-set-song]');
   if (rm) {
-    const id = Number(rm.dataset.setSong);
-    const saved = await Writes.commit(rm, `setlist:${ev.id}`,
-      () => api.put(`/events/${ev.id}/songs`, { songIds: ev.songs.map((s) => s.songId).filter((x) => x !== id) }));
-    if (!saved) return;
-    putEvent(saved);
-    renderSetlist();
-    renderPlayable();
+    toggleSetSong(ev, Number(rm.dataset.setSong));
     return;
   }
   const nick = e.target.closest('[data-lineup-nick]');
@@ -803,7 +812,9 @@ function setLineup(ev, songId, role, nickname, on) {
   item.lineup = item.lineup.filter((l) => !(l.role === role && l.nickname === nickname));
   if (on) item.lineup.push({ role, nickname });
   renderSetlist();
-  Writes.run(`lineup:${ev.id}:${songId}:${role}:${nickname}`,
+  /* 셋리스트와 같은 줄에 세운다. 방금 넣은 곡의 라인업이 셋리스트 저장보다 먼저 가면
+     서버가 '셋리스트에 없는 곡' 으로 거절한다. */
+  Writes.run(`setlist:${ev.id}`,
     () => api.post(`/events/${ev.id}/songs/${songId}/lineup`, { role, nickname, on }))
     .catch((err) => { api.forgetPolls(); alert(err.message); });
 }
@@ -899,14 +910,17 @@ matrixEl.addEventListener('click', async (e) => {
         : `${monthDay(day)} 를 후보에서 뺄까요?`;
       if (!confirm(msg)) return;
     }
+    /* 켜고 끄는 동작이라 누르는 즉시 바꾼다(Writes.run). 서버에는 '이 상태로' 를 보낸다 —
+       뒤집기로 보내면 같은 요청이 두 번 갈 때 원래대로 돌아간다. 실패하면 writes-idle 이 서버 상태로 되돌린다. */
     const ev = pollEvent;
-    const res = await Writes.commit(offBtn || onBtn, `date:${ev.id}:${day}`,
-      () => api.post(`/events/${ev.id}/dates/${day}/toggle`, {}));
-    if (!res) return;
-    const dr = ev.dates.find((x) => x.date === res.date);   /* 돌려받은 상태로 바로 그린다 */
-    if (dr) dr.active = res.active;
+    const dr = ev.dates.find((x) => x.date === day);
+    if (!dr) return;
+    const active = !!onBtn;
+    dr.active = active;
     playableKey = '';
     renderPollView();
+    Writes.run(`date:${ev.id}:${day}`, () => api.post(`/events/${ev.id}/dates/${day}/toggle`, { active }))
+      .catch((err) => { api.forgetPolls(); alert(err.message); });
     return;
   }
   const pick = e.target.closest('[data-pick-date]');
