@@ -1,6 +1,7 @@
 """불법이륙 밴드 사이트 — 앱 생성, 라우터 등록, 정적 프론트 서빙만 여기서 한다.
 API 는 routers/ 아래 역할별 파일에 있다."""
 import os
+import time
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -136,8 +137,9 @@ def _route_name(scope, tally):
 
 
 class TrafficMeter:
-    """응답 본문 바이트와, 그 요청 동안 DB 에서 받은 바이트를 metrics 에 적는다.
-    다른 미들웨어보다 바깥에 둔다 — 나중에 압축을 넣으면 압축된 크기가 잡혀야 한다."""
+    """응답 본문 바이트, 그 요청 동안 DB 에서 받은 바이트, 처리 시간을 metrics 에 적는다.
+    다른 미들웨어보다 바깥에 둔다 — 나중에 압축을 넣으면 압축된 크기가 잡혀야 한다.
+    처리 시간은 응답을 시작한 순간까지다. 휴대폰까지 보내는 시간은 서버가 어쩔 수 없으니 뺀다."""
 
     def __init__(self, app):
         self.app = app
@@ -148,17 +150,25 @@ class TrafficMeter:
             return
         tally = metrics.Tally()
         token = metrics.begin(tally)
+        started = time.perf_counter()
+        answered = None
 
         async def counting_send(message):
-            if message['type'] == 'http.response.body':
+            nonlocal answered
+            if message['type'] == 'http.response.start' and answered is None:
+                answered = time.perf_counter()
+            elif message['type'] == 'http.response.body':
                 tally.out += len(message.get('body', b''))
             await send(message)
 
+        metrics.enter()
         try:
             await self.app(scope, receive, counting_send)
         finally:
+            metrics.leave()
             metrics.end(token)
-            metrics.commit(_route_name(scope, tally), tally)
+            ms = ((answered or time.perf_counter()) - started) * 1000
+            metrics.commit(_route_name(scope, tally), tally, ms=ms)
 
 
 # add_middleware 는 나중에 붙인 것이 가장 바깥이 된다. 그래서 다른 미들웨어 뒤에 붙인다.

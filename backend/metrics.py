@@ -8,6 +8,11 @@ Neon 무료 한도(월 5GB)를 사흘 만에 넘긴 적이 있다. 그때 원인
             bytes 는 텍스트 형식에서 16진수로 오가므로 2배 + 2 로 센다.
   outBytes  main.py 의 미들웨어가 응답 본문을 센다. 서버가 내보낸 그대로(압축 전)다.
             WebSocket(악보 페어링)은 세지 않는다 — 작은 제어 메시지뿐이다.
+  ms        요청이 들어와서 응답을 시작하기까지. 스레드풀에서 줄 선 시간은 들고,
+            휴대폰까지 가는 네트워크 시간은 빠진다. 최근 SAMPLES_KEPT 건으로 p50·p95 를 낸다.
+  dbMs      그 요청 동안 Neon 연결·쿼리·커밋에 걸린 시간의 합(db.py 가 잰다).
+            ms 에서 dbMs 를 빼면 서버 CPU(조립·직렬화)와 대기 시간이 남는다.
+  inFlight  동시에 처리 중인 요청 수. 0.1 CPU 에서 요청이 줄을 서는지 본다.
 
 요청 밖에서 일어난 DB 읽기는 이름을 따로 붙인다.
   (boot)        기동 때 init_db
@@ -17,7 +22,9 @@ Neon 무료 한도(월 5GB)를 사흘 만에 넘긴 적이 있다. 그때 원인
 로그로 한 줄 남긴다 — Render 로그에는 남는다.
 """
 import contextvars
+import math
 import threading
+from collections import deque
 import time
 from datetime import datetime, timezone
 
@@ -25,24 +32,29 @@ from fastapi.requests import HTTPConnection
 
 HOURS_KEPT = 48            # 시간당 구간 보관 개수
 TOP_IN_LOG = 3             # 시간 요약 로그에 적을 API 수
+SAMPLES_KEPT = 500         # 라우트마다 처리 시간 표본 수(p50·p95 계산용)
 MAX_ROUTES = 200           # 라우트는 70개 남짓(메서드 포함). 틀을 못 만든 경로가 키로 새도 이 이상 늘지 않는다
 
 _lock = threading.Lock()
 _started = time.time()
-_total = {'calls': 0, 'dbBytes': 0, 'outBytes': 0}
+_total = {'calls': 0, 'dbBytes': 0, 'outBytes': 0, 'ms': 0.0, 'dbMs': 0.0}
 _routes = {}               # 'GET /api/songs' -> {'calls','dbBytes','outBytes'}
 _hours = {}                # UTC 기준 시(epoch // 3600) -> {'calls','dbBytes','outBytes','routes':{}}
 _last_hour = None
+_samples = {}              # 라우트 -> deque(최근 처리 시간 ms)
+_in_flight = 0
+_peak_in_flight = 0
 
 
 class Tally:
     """요청 하나(또는 기동 한 번)에서 쌓인 바이트와, 그 요청이 걸린 라우트 틀."""
-    __slots__ = ('db', 'out', 'route')
+    __slots__ = ('db', 'out', 'route', 'db_ms')
 
     def __init__(self):
         self.db = 0
         self.out = 0
         self.route = None
+        self.db_ms = 0.0
 
 
 # 스레드풀에서 도는 동기 엔드포인트에도 문맥이 복사되어 넘어간다.
@@ -117,17 +129,58 @@ def add_db(n):
         commit('(background)', db=n, calls=0)
 
 
+def add_db_time(seconds):
+    """DB 연결·쿼리·커밋에 걸린 시간. 요청 밖(기동·뒤처리)의 것은 버린다 — 누가 기다린 시간이 아니다."""
+    tally = _current.get()
+    if tally is not None:
+        tally.db_ms += seconds * 1000
+
+
+def enter():
+    global _in_flight, _peak_in_flight
+    with _lock:
+        _in_flight += 1
+        _peak_in_flight = max(_peak_in_flight, _in_flight)
+        hour = _hour_bucket(int(time.time() // 3600))
+        hour['peakInFlight'] = max(hour['peakInFlight'], _in_flight)
+
+
+def leave():
+    global _in_flight
+    with _lock:
+        _in_flight -= 1
+
+
 def _bucket(store, key):
     b = store.get(key)
     if b is None:
-        b = store[key] = {'calls': 0, 'dbBytes': 0, 'outBytes': 0}
+        b = store[key] = {'calls': 0, 'dbBytes': 0, 'outBytes': 0, 'ms': 0.0, 'dbMs': 0.0}
     return b
 
 
-def _add(b, calls, db, out):
+def _hour_bucket(h):
+    """호출하는 쪽이 락을 쥐고 있다."""
+    b = _hours.get(h)
+    if b is None:
+        b = _hours[h] = {'calls': 0, 'dbBytes': 0, 'outBytes': 0, 'ms': 0.0, 'dbMs': 0.0,
+                         'maxMs': 0.0, 'peakInFlight': 0, 'routes': {}}
+    return b
+
+
+def _add(b, calls, db, out, ms=0.0, db_ms=0.0):
     b['calls'] += calls
     b['dbBytes'] += db
     b['outBytes'] += out
+    b['ms'] += ms
+    b['dbMs'] += db_ms
+
+
+def _pct(values, p):
+    """정렬된 목록의 p 백분위(최근접 순위). 표본이 없으면 None."""
+    if not values:
+        return None
+    k = max(0, min(len(values) - 1, math.ceil(p / 100 * len(values)) - 1))
+    return round(values[k], 1)
 
 
 def _hour_label(h):
@@ -146,13 +199,15 @@ def _log_hour(h):
     top = sorted(b['routes'].items(), key=lambda kv: kv[1]['dbBytes'], reverse=True)[:TOP_IN_LOG]
     tops = ', '.join(f"{k} db={_mb(v['dbBytes'])} out={_mb(v['outBytes'])}" for k, v in top)
     print(f"[traffic] {_hour_label(h)} db={_mb(b['dbBytes'])} out={_mb(b['outBytes'])} "
-          f"calls={b['calls']} | {tops}", flush=True)
+          f"calls={b['calls']} maxMs={b['maxMs']:.0f} peak={b['peakInFlight']} | {tops}", flush=True)
 
 
-def commit(name, tally=None, db=0, out=0, calls=1):
+def commit(name, tally=None, db=0, out=0, calls=1, ms=None):
+    """ms 는 요청 처리 시간. 요청이 아닌 것(기동·뒤처리)은 None 이라 시간 통계에 넣지 않는다."""
     global _last_hour
+    db_ms = 0.0
     if tally is not None:
-        db, out = tally.db, tally.out
+        db, out, db_ms = tally.db, tally.out, tally.db_ms
     h = int(time.time() // 3600)
     with _lock:
         if name not in _routes and len(_routes) >= MAX_ROUTES:
@@ -162,13 +217,18 @@ def commit(name, tally=None, db=0, out=0, calls=1):
             for old in [k for k in _hours if k <= h - HOURS_KEPT]:
                 del _hours[old]
         _last_hour = h
-        _add(_total, calls, db, out)
-        _add(_bucket(_routes, name), calls, db, out)
-        hour = _hours.get(h)
-        if hour is None:
-            hour = _hours[h] = {'calls': 0, 'dbBytes': 0, 'outBytes': 0, 'routes': {}}
-        _add(hour, calls, db, out)
-        _add(_bucket(hour['routes'], name), calls, db, out)
+        spent = ms or 0.0
+        _add(_total, calls, db, out, spent, db_ms)
+        _add(_bucket(_routes, name), calls, db, out, spent, db_ms)
+        hour = _hour_bucket(h)
+        _add(hour, calls, db, out, spent, db_ms)
+        _add(_bucket(hour['routes'], name), calls, db, out, spent, db_ms)
+        if ms is not None:
+            hour['maxMs'] = max(hour['maxMs'], ms)
+            ring = _samples.get(name)
+            if ring is None:
+                ring = _samples[name] = deque(maxlen=SAMPLES_KEPT)
+            ring.append(ms)
 
 
 class tagged:
@@ -188,17 +248,32 @@ class tagged:
         return False
 
 
+def _timing(b, ring):
+    """누적 합과 표본으로 사람이 읽을 값을 만든다. ms·dbMs 합계는 평균으로 바꿔 내보낸다."""
+    calls = b['calls']
+    out = {k: b[k] for k in ('calls', 'dbBytes', 'outBytes')}
+    out['avgMs'] = round(b['ms'] / calls, 1) if calls else None
+    out['avgDbMs'] = round(b['dbMs'] / calls, 1) if calls else None
+    ordered = sorted(ring) if ring else []
+    out['p50Ms'] = _pct(ordered, 50)
+    out['p95Ms'] = _pct(ordered, 95)
+    out['maxMs'] = round(ordered[-1], 1) if ordered else None
+    return out
+
+
 def snapshot():
     with _lock:
-        total = dict(_total)
-        routes = [{'route': k, **v} for k, v in _routes.items()]
-        hours = [{'hour': _hour_label(h), 'calls': b['calls'],
-                  'dbBytes': b['dbBytes'], 'outBytes': b['outBytes']}
+        total = _timing(_total, None)
+        routes = [{'route': k, **_timing(v, _samples.get(k))} for k, v in _routes.items()]
+        hours = [{'hour': _hour_label(h), **_timing(b, None), 'maxMs': round(b['maxMs'], 1),
+                  'peakInFlight': b['peakInFlight']}
                  for h, b in sorted(_hours.items())]
+        in_flight = {'now': _in_flight, 'peak': _peak_in_flight}
     routes.sort(key=lambda r: r['dbBytes'], reverse=True)
     return {
         'since': datetime.fromtimestamp(_started, timezone.utc).isoformat(timespec='seconds'),
         'uptimeSec': int(time.time() - _started),
+        'inFlight': in_flight,
         'total': total,
         'routes': routes,
         'hours': hours,

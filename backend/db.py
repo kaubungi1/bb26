@@ -1,4 +1,5 @@
 import os
+import time
 
 import psycopg
 from dotenv import load_dotenv
@@ -280,10 +281,34 @@ def _counting_dict_row(cursor):
     return row
 
 
+class _TimedConnection(psycopg.Connection):
+    """쿼리·커밋에 걸린 시간을 metrics 에 더한다. 느린 게 Neon 왕복인지 서버 CPU 인지 가르려고.
+    execute 는 결과를 다 받은 뒤 돌아오므로(클라이언트 쪽 커서) fetch 는 따로 잴 것이 없다."""
+
+    def execute(self, *args, **kwargs):
+        t = time.perf_counter()
+        try:
+            return super().execute(*args, **kwargs)
+        finally:
+            metrics.add_db_time(time.perf_counter() - t)
+
+    def commit(self):
+        t = time.perf_counter()
+        try:
+            return super().commit()
+        finally:
+            metrics.add_db_time(time.perf_counter() - t)
+
+
 def get_db():
     if not DATABASE_URL:
         raise RuntimeError('DATABASE_URL 환경변수를 설정하세요 (예: postgres://...)')
-    return psycopg.connect(DATABASE_URL, row_factory=_counting_dict_row)
+    t = time.perf_counter()
+    try:
+        # 요청마다 새로 연결한다. 연결(TLS·인증)도 기다리는 시간이라 같이 잰다.
+        return _TimedConnection.connect(DATABASE_URL, row_factory=_counting_dict_row)
+    finally:
+        metrics.add_db_time(time.perf_counter() - t)
 
 
 def init_db():
