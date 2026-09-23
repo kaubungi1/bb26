@@ -473,7 +473,10 @@ function render() {
 
   /* 제목 옆 숫자. 필터를 걸면 몇 곡이 남았는지 바로 보인다. */
   const countEl = document.getElementById('song-count');
-  if (countEl) countEl.textContent = songs.length ? visible.length + (bump ? 1 : 0) : '';
+  /* 끌올 띠는 그 곡이 이 목록에 있을 때만 그린다(renderBump). 숫자도 같은 조건으로 센다 —
+     전에는 끌올만 있으면 1을 더해, 다른 길드 곡이 끌올 중이면 길드 페이지에서 1곡이 2로 보였다. */
+  const bumpShown = !!bump && songs.some((s) => s.id === bump.songId);
+  if (countEl) countEl.textContent = songs.length ? visible.length + (bumpShown ? 1 : 0) : '';
 
   if (songs.length === 0) {
     listEl.innerHTML = `<p class="muted song-empty">곡이 없습니다. 첫 곡을 추가해 보세요.</p>`;
@@ -485,7 +488,7 @@ function render() {
       : mineFilter === 'out' ? '모든 곡에 지원했습니다.'
       : guildFilter ? '이 소속의 곡이 없습니다.'
       : '이 태그의 곡이 없습니다.';
-    listEl.innerHTML = bump ? '' : `<p class="muted song-empty">${why}</p>`;
+    listEl.innerHTML = bumpShown ? '' : `<p class="muted song-empty">${why}</p>`;   /* 띠가 서 있으면 빈 목록이 아니다 */
     return;
   }
 
