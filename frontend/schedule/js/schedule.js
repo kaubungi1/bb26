@@ -662,8 +662,19 @@ playableListEl.addEventListener('click', async (e) => {
    새로 넣은 곡의 라인업은 서버와 같은 규칙('그날 참석자 ∩ 지원자')으로 미리 채운다 —
    되는 곡 표(playable)가 그 값을 이미 갖고 있다. 저장이 다 끝나면 writes-idle 이 서버 상태로 맞추고,
    실패하면 폴링 버전을 잊어 그때 서버의 실제 상태로 돌아간다. */
-function toggleSetSong(ev, id) {
-  if (ev.songs.some((x) => x.songId === id)) {
+async function toggleSetSong(ev, id) {
+  const cur = ev.songs.find((x) => x.songId === id);
+  if (cur) {
+    /* 빼기는 한 번 묻는다. 서버가 그 곡의 라인업도 같이 지우므로 손으로 넣은 사람이 사라지고,
+       다시 넣어도 자동으로 채워지는 사람만 돌아온다. 라인업이 비어도 똑같이 묻는다 — 언제는 묻고
+       언제는 안 물으면 그게 더 헷갈린다. */
+    const n = new Set(cur.lineup.map((l) => l.nickname)).size;
+    const ok = await confirmModal({
+      title: `'${cur.title}' 빼기`,
+      body: n ? `라인업 <b>${n}명</b>도 함께 지워집니다.` : '셋리스트에서 뺍니다.',
+      confirm: '빼기', danger: true,
+    });
+    if (!ok || !ev.songs.some((x) => x.songId === id)) return;
     ev.songs = ev.songs.filter((x) => x.songId !== id);
   } else {
     const p = playable && playable.songs.find((x) => x.songId === id);

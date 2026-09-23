@@ -123,8 +123,3 @@ a.party-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 }
 
 /* ---------- 되묻는 창 ---------- */
-.confirm-modal { max-width: 360px; }
-.confirm-body { margin: 0 0 4px; font-size: 13.5px; line-height: 1.65; color: var(--ink-2); }
-.confirm-body b { font-weight: 800; color: var(--ink); }
-.modal-form button.danger { background: #c62872; color: #fff; box-shadow: none; border-radius: 3px; }
-.modal-form button.danger:hover { background: #b2245f; filter: none; }

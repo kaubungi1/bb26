@@ -923,3 +923,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}/* 
 /* 헤더 로고. 좁아지면 높이만 줄인다 — 폭은 비율이 알아서 따라온다. */
 @media (max-width: 800px) { .brand-mark { height: 32px; } }
 @media (max-width: 480px) { .brand-mark { height: 28px; } }
+
+/* 되묻는 창(common.js confirmModal). 전에는 party.css 에 있어서 그 파일을 싣지 않는
+   일정·곡·멤버·악보 페이지에서는 창이 모양 없이 떴다. 창을 여는 코드와 같은 곳에 둔다. */
+.confirm-modal { max-width: 360px; }
+.confirm-body { margin: 0 0 4px; font-size: 13.5px; line-height: 1.65; color: var(--ink-2); }
+.confirm-body b { font-weight: 800; color: var(--ink); }
+.modal-form button.danger { background: #c62872; color: #fff; box-shadow: none; border-radius: 3px; }
+.modal-form button.danger:hover { background: #b2245f; filter: none; }
