@@ -21,8 +21,11 @@ import threading
 import time
 from datetime import datetime, timezone
 
+from fastapi.requests import HTTPConnection
+
 HOURS_KEPT = 48            # 시간당 구간 보관 개수
 TOP_IN_LOG = 3             # 시간 요약 로그에 적을 API 수
+MAX_ROUTES = 200           # 라우트는 70개 남짓(메서드 포함). 틀을 못 만든 경로가 키로 새도 이 이상 늘지 않는다
 
 _lock = threading.Lock()
 _started = time.time()
@@ -33,12 +36,13 @@ _last_hour = None
 
 
 class Tally:
-    """요청 하나(또는 기동 한 번)에서 쌓인 바이트."""
-    __slots__ = ('db', 'out')
+    """요청 하나(또는 기동 한 번)에서 쌓인 바이트와, 그 요청이 걸린 라우트 틀."""
+    __slots__ = ('db', 'out', 'route')
 
     def __init__(self):
         self.db = 0
         self.out = 0
+        self.route = None
 
 
 # 스레드풀에서 도는 동기 엔드포인트에도 문맥이 복사되어 넘어간다.
@@ -52,6 +56,41 @@ def begin(tally):
 
 def end(token):
     _current.reset(token)
+
+
+async def tag_route(conn: HTTPConnection):
+    """앱 전역 의존성. 라우트 안에서 돌기 때문에 그 요청의 경로 변수(path_params)를 안다.
+
+    미들웨어에서 scope['route'].path 를 읽으면 안 된다. FastAPI 0.115 는 바깥 scope 에
+    '/api/songs/{song_id}' 를 남겨 주지만, 0.141 은 include_router 로 붙인 라우트를 감싸서
+    처리해 바깥에는 감싼 쪽만 남고, 안쪽 route.path 에는 prefix 가 빠진 '/{song_id}' 만 있다.
+    실제로 운영(최신판)에서 API 가 전부 (unmatched) 로 잡혔다.
+    그래서 판마다 다른 route 객체 대신, 두 판 모두 주는 실제 경로와 path_params 로 틀을 만든다.
+    async 로 둔다 — 동기 의존성은 스레드풀로 넘어가 굳이 한 번 더 옮겨 탈 이유가 없다.
+    Request 대신 HTTPConnection 을 받는다 — 전역 의존성은 WebSocket(악보 페어링)에도 걸린다."""
+    tally = _current.get()
+    if tally is not None:
+        tally.route = f"{conn.scope.get('method', 'WS')} {route_template(conn.url.path, conn.path_params)}"
+
+
+def route_template(path, params):
+    """'/api/songs/12/thumb', {'song_id': 12} -> '/api/songs/{song_id}/thumb'.
+
+    params 는 경로에 나오는 순서를 따른다. 뒤의 변수부터, 앞 변수가 차지할 수 없는 오른쪽에서
+    찾아 바꾼다. 그래서 '/api/guilds/3/members/3' 처럼 값이 같아도 자리가 맞게 들어간다."""
+    end = len(path)
+    for name, value in reversed(list(params.items())):
+        v = str(value)
+        if not v:
+            continue
+        at = path.rfind('/' + v, 0, end)
+        while at >= 0 and at + 1 + len(v) < len(path) and path[at + 1 + len(v)] != '/':
+            at = path.rfind('/' + v, 0, at)      # '/12' 가 '/123' 의 앞부분인 경우는 건너뛴다
+        if at < 0:
+            continue
+        path = path[:at + 1] + '{' + name + '}' + path[at + 1 + len(v):]
+        end = at
+    return path
 
 
 def row_size(values):
@@ -116,6 +155,8 @@ def commit(name, tally=None, db=0, out=0, calls=1):
         db, out = tally.db, tally.out
     h = int(time.time() // 3600)
     with _lock:
+        if name not in _routes and len(_routes) >= MAX_ROUTES:
+            name = '(other)'
         if _last_hour is not None and h != _last_hour:
             _log_hour(_last_hour)
             for old in [k for k in _hours if k <= h - HOURS_KEPT]:

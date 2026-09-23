@@ -2,7 +2,7 @@
 API 는 routers/ 아래 역할별 파일에 있다."""
 import os
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -18,7 +18,8 @@ FRONTEND_DIR = os.path.normpath(os.path.join(BASE_DIR, '..', 'frontend'))
 
 init_db()
 
-app = FastAPI(title='불법이륙 API')
+# 전역 의존성은 계측이 요청의 라우트 틀을 알아내는 자리다(metrics.tag_route 참고).
+app = FastAPI(title='불법이륙 API', dependencies=[Depends(metrics.tag_route)])
 
 # (모듈, prefix, 태그). 새 리소스는 여기 한 줄만 보태면 된다.
 ROUTERS = [
@@ -125,12 +126,12 @@ async def static_cache_headers(request: Request, call_next):
 
 
 # ---------- 전송량 계측 ----------
-def _route_name(scope):
+def _route_name(scope, tally):
     """API 별로 묶을 이름. 실제 경로 대신 라우트 틀(/api/songs/{song_id}/thumb)을 쓴다.
-    실제 경로를 키로 쓰면 곡 id·닉네임마다 칸이 생겨 끝없이 늘어난다."""
-    route = scope.get('route')
-    if route is not None and getattr(route, 'path', None):
-        return f"{scope['method']} {route.path}"
+    실제 경로를 키로 쓰면 곡 id·닉네임마다 칸이 생겨 끝없이 늘어난다.
+    틀은 라우트 안에서 metrics.tag_route 가 적어 둔다. 없으면 라우트에 닿지 못한 요청이다."""
+    if tally.route:
+        return tally.route
     return '(unmatched)' if scope['path'].startswith('/api/') else '(static)'
 
 
@@ -157,7 +158,7 @@ class TrafficMeter:
             await self.app(scope, receive, counting_send)
         finally:
             metrics.end(token)
-            metrics.commit(_route_name(scope), tally)
+            metrics.commit(_route_name(scope, tally), tally)
 
 
 # add_middleware 는 나중에 붙인 것이 가장 바깥이 된다. 그래서 다른 미들웨어 뒤에 붙인다.
