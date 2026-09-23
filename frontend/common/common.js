@@ -709,6 +709,7 @@ function mountChrome(activeKey) {
       }
       api.get(`/guilds/${encodeURIComponent(Site.slug)}`).then((g) => {
         Site.info = g;
+        Rosters.put([g]);               /* 길드 안의 곡 화면이 용병을 가린다 */
         /* 길드가 고른 테마. 주소의 ?theme= 이 있으면 그쪽이 이긴다 — 미리보기용이다.
            색보다 먼저 걸어야 한다. applyGuildColor 가 지금 테마의 --paper 를 읽어서
            섞기 때문에, 순서가 뒤집히면 어두운 테마인데 흰 종이 기준으로 계산한다. */
@@ -852,6 +853,34 @@ function imageUrl(m) {
    신원 비교는 언제나 nickname 으로 하고, 사람 눈에 보이는 건 이 함수로만 만든다. */
 function supportName(sp) {
   return (sp && (sp.label || sp.nickname)) || '';
+}
+
+/* ---------- 용병 ----------
+   길드 곡에 그 길드 명단에 없는 사람이 지원하면 용병이다. 공용 곡(소속 없음)에는 용병이 없다.
+   명단은 화면이 이미 받는 길드 정보에 들어 있다 — 홈·곡 목록은 /guilds, 길드 안은 헤더의 Site.info.
+   받은 쪽이 Rosters.put 으로 넣어 둔다. 명단을 모르는 길드는 용병으로 치지 않는다(모르면 표시하지 않는다).
+   표시는 글자 색과 점선 밑줄만(common.css .merc) — 좁은 칸에서 자리를 먹지 않게. */
+const Rosters = {
+  map: Object.create(null),
+  put(list) {
+    (list || []).forEach((g) => {
+      if (g && g.slug && Array.isArray(g.members)) this.map[g.slug] = new Set(g.members.map((m) => m.nickname));
+    });
+  },
+  isMerc(song, nickname) {
+    const g = song && song.guild;
+    const set = g && this.map[g.slug];
+    return !!set && !set.has(nickname);
+  },
+};
+/* 지원자 이름 한 사람분의 HTML. 용병이면 표시를 입힌다. text 는 칸에 쓸 글자(기본은 시트 표기). */
+function supportHtml(sp, song, text = supportName(sp)) {
+  if (!Rosters.isMerc(song, sp.nickname)) return escapeHtml(text);
+  return `<span class="merc" title="용병 · ${escapeHtml(song.guild.name || '')} 길드원 아님">${escapeHtml(text)}</span>`;
+}
+/* 쪽지·aria 처럼 글자만 가는 자리. 폰에서는 title 이 안 뜨므로 여기에 적어 둔다. */
+function supportText(sp, song, text = supportName(sp)) {
+  return Rosters.isMerc(song, sp.nickname) ? `${text}(용병)` : text;
 }
 
 /* 아바타 칩. 이미지 > 이모지 > 첫 글자(한글 1, 영문 2) 순으로 그린다. 색은 본인이 정한 색, 없으면 닉네임 고정색. */

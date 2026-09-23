@@ -81,6 +81,7 @@
   --ink: #dde5ee; --ink-2: #bcc7d4; --ink-muted: #94a2b2; --ink-faint: #7c8b9b;
   --paper: #1b232d; --card: #1b232dee; --field: #1b232d; --empty: #222c38;
   --border: #33404f; --line: #2c3845; --line-2: #242e3a;
+  --merc: #f59e0b;   /* 용병 이름. 종이·칸 바탕 대비 6.2 이상 */
 }
 
 /* ───────── 신전 ─────────
@@ -118,6 +119,7 @@
   --ink: #f0e4d4; --ink-2: #dccab4; --ink-muted: #bda88e; --ink-faint: #a6907a;
   --paper: #33241a; --card: #33241aee; --field: #33241a; --empty: #3d2c20;
   --border: #56412e; --line: #4a3726; --line-2: #3f2e20;
+  --merc: #f59e0b;   /* 용병 이름. 종이·칸 바탕 대비 6.2 이상 */
 }
 
 /* ───────── 산 ─────────
@@ -169,6 +171,7 @@
   --ink: #d8e8f6; --ink-2: #b6cde3; --ink-muted: #8ba6c0; --ink-faint: #7590ab;
   --paper: #0a1b31; --card: #0a1b31ee; --field: #0a1b31; --empty: #122741;
   --border: #23456b; --line: #1e3c5f; --line-2: #162c47;
+  --merc: #f59e0b;   /* 용병 이름. 종이·칸 바탕 대비 6.2 이상 */
 }
 
 /* ───────── 바다 ───────── */

@@ -133,6 +133,7 @@ async function refresh() {
   songs = s.data;
   bump = b;
   guilds = g.data;
+  Rosters.put(guilds);            /* 용병을 가리는 명단. 길드 안에서는 헤더가 넣는다(common.js) */
   render();
   if (!sheetEl.hidden) renderSheet();
 }
@@ -203,6 +204,11 @@ function sessionCell(song, session) {
      넉넉하면 그대로 쓰고, 칸이 모자라면 닉네임으로 내려간다. fitNames() 가 정한다. */
   const names = people.map(supportName);
   const nicks = people.map((s) => s.nickname);
+  /* 칸에 넣을 HTML. 용병은 색과 점선 밑줄이 붙는다(common.js supportHtml). fitNames() 가 단계를 내려도
+     표시가 남도록 세 단계(표기 전원·닉네임 전원·첫 사람) 모두 HTML 로 들고 간다. */
+  const allHtml = people.map((sp) => supportHtml(sp, song)).join(', ');
+  const nickHtml = people.map((sp) => supportHtml(sp, song, sp.nickname)).join(', ');
+  const firstHtml = people.length ? supportHtml(people[0], song, people[0].nickname) : '';
   const editing = editingSongId === song.id;
   /* 칸 머리 두 벌. full 은 바꾼 이름(없으면 약칭), short 는 늘 약칭이다.
      넓은 화면은 full, 좁은 화면은 short 를 쓴다 — 어느 쪽을 보일지는 CSS 가 정한다.
@@ -214,10 +220,9 @@ function sessionCell(song, session) {
   const title = session.label || session.role;
 
   /* 일단 표기 전원을 쓴다. 넘치면 fitNames() 가 단계를 내린다. */
-  const joined = names.join(', ');
   const body = names.length
-    ? `<span class="names" data-all="${escapeHtml(joined)}" data-nick="${escapeHtml(nicks.join(', '))}"` +
-      ` data-first="${escapeHtml(nicks[0])}" data-n="${names.length}">${escapeHtml(joined)}</span>`
+    ? `<span class="names" data-all="${escapeHtml(allHtml)}" data-nick="${escapeHtml(nickHtml)}"` +
+      ` data-first="${escapeHtml(firstHtml)}" data-n="${names.length}">${allHtml}</span>`
     : `<span class="empty">＋</span>`;
 
   /* 쪽지에 담을 내용. 여기서는 만들어만 두고 켜지는 않는다.
@@ -225,7 +230,7 @@ function sessionCell(song, session) {
      혼자여도 '쿠로(Echoess baa일 때만)' 처럼 길면 잘리고, 그때 볼 방법이 있어야 한다.
      파트 이름을 바꾼 칸은 원래 파트명도 같이 담는다. */
   const peek = names.length
-    ? `${title}${session.label ? ` (${session.role})` : ''} · ${names.join(', ')}`
+    ? `${title}${session.label ? ` (${session.role})` : ''} · ${people.map((sp) => supportText(sp, song)).join(', ')}`
     : (session.label ? `${title} (${session.role})` : '');
 
   /* 쓰지 않는 자리. 칸은 그대로 두고 꺼진 것만 보인다.
@@ -390,13 +395,13 @@ function fitNames() {
   const many = all.filter((el) => Number(el.dataset.n) > 1);
 
   /* 쓰기 — A. 시트 표기 전원으로 되돌린다. 창을 넓히면 다시 원문이 나와야 한다. */
-  many.forEach((el) => { el.textContent = el.dataset.all; });
+  many.forEach((el) => { el.innerHTML = el.dataset.all; });   /* data-* 는 sessionCell 이 이스케이프해 만든 HTML 이다 */
 
   /* 읽기 — A 가 넘치는 칸 */
   const overA = many.filter((el) => el.scrollWidth > el.clientWidth + 1);
 
   /* 쓰기 — A′. 표기를 버리고 닉네임으로. 괄호 주석과 농담만 떨어지고 사람은 남는다. */
-  overA.forEach((el) => { el.textContent = el.dataset.nick; });
+  overA.forEach((el) => { el.innerHTML = el.dataset.nick; });
 
   /* 읽기 — 닉네임으로도 넘치는 칸 */
   const overB = overA.filter((el) => el.scrollWidth > el.clientWidth + 1);
@@ -405,7 +410,7 @@ function fitNames() {
      개수를 이름과 한 덩어리로 두면 넘칠 때 개수가 먼저 잘린다. 조각을 나눠
      이름만 … 로 잘리게 하고 개수는 끝에 붙여 둔다. */
   overB.forEach((el) => {
-    el.innerHTML = `<span class="nm">${escapeHtml(el.dataset.first)}</span>` +
+    el.innerHTML = `<span class="nm">${el.dataset.first}</span>` +
       `<span class="more">+${Number(el.dataset.n) - 1}</span>`;
   });
 
@@ -726,7 +731,7 @@ function renderSheet() {
     ? sess.supports.map((sp) => `
         <div class="sheet-member${sp.nickname === me ? ' me' : ''}">
           ${avatarChip(sp.nickname, 'lg')}
-          <span class="sheet-member-name">${escapeHtml(supportName(sp))}</span>
+          <span class="sheet-member-name">${supportHtml(sp, song)}</span>
           ${sp.nickname === me ? `<button type="button" class="sheet-member-tag" data-sheet-label="${sp.id}" data-label="${escapeHtml(sp.label || '')}" title="이 곡에서 보일 내 이름">나 ✎</button>` : ''}
         </div>`).join('')
     : `<p class="sheet-empty">아직 지원한 멤버가 없습니다.</p>`;
@@ -800,4 +805,6 @@ document.addEventListener('nickchange', () => { render(); if (!sheetEl.hidden) r
 /* 끌올 남은 시간은 1분마다 다시 그린다 (5초 폴링과 별개로 시계만 맞춘다) */
 setInterval(() => { if (bump) render(); }, 60000);
 document.addEventListener('profiles', () => render());
+/* 길드 안에서는 용병을 가릴 명단이 헤더의 길드 정보로 온다. 목록이 먼저 그려졌으면 한 번 다시 그린다. */
+document.addEventListener('guildinfo', () => { if (songs.length) render(); });
 if (new URLSearchParams(location.search).has('add')) addBtn.click();

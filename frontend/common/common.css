@@ -931,3 +931,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}/* 
 .confirm-body b { font-weight: 800; color: var(--ink); }
 .modal-form button.danger { background: #c62872; color: #fff; box-shadow: none; border-radius: 3px; }
 .modal-form button.danger:hover { background: #b2245f; filter: none; }
+
+/* 용병 이름(common.js supportHtml). 자리를 먹지 않게 글자 색과 점선 밑줄만 바꾼다.
+   색만으로는 색 구분이 어려운 사람에게 안 보이므로 밑줄을 같이 둔다. */
+.merc { color: var(--merc); text-decoration: underline dotted 1.5px; text-underline-offset: 2px; }

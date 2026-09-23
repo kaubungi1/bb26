@@ -190,9 +190,12 @@ function songsSection() {
 /* 한 칸에 누가 있는지. 숫자만 쓰면 '누가' 를 못 알려 주고, 터치에서는 쪽지도 안 뜬다.
    한 명이면 이름이 들어갈 폭이 나오므로 이름을 쓴다. 둘부터는 칩이 이름보다 좁다.
    칩은 사람마다 색이 고정이라 작아도 구분이 된다(avatarChip). */
-function slotWho(names) {
+/* people: 지원 기록, song: 그 곡. 한 사람이면 이름을 쓰고 용병 표시를 입힌다(common.js supportHtml).
+   둘 이상은 얼굴 칩이라 표시할 글자가 없다 — 누가 용병인지는 쪽지(data-peek)에 적힌다. */
+function slotWho(people, song) {
+  const names = people.map(supportName);
   if (!names.length) return '<u></u>';
-  if (names.length === 1) return `<u class="one">${esc(names[0])}</u>`;
+  if (names.length === 1) return `<u class="one">${supportHtml(people[0], song)}</u>`;
   const shown = names.slice(0, 2).map((n) => avatarChip(n)).join('');   /* 크기는 CSS 가 정한다 */
   const rest = names.length - 2;
   return `<u class="chips">${shown}${rest ? `<b>+${rest}</b>` : ''}</u>`;
@@ -221,11 +224,12 @@ function slotWho(names) {
         <span class="g-song-slots">${parts.map((p) => {
           const mine = !!me && p.supports.some((x) => x.nickname === me);
           const names = p.supports.map(supportName);
+          const peekNames = p.supports.map((x) => supportText(x, s)).join(', ');
           return `<button type="button" class="g-slot ${mine ? 'mine' : names.length ? 'on' : 'off'}"
             data-support="${p.id}" aria-pressed="${mine}"
-            data-peek="${esc((p.label || p.role) + ' · ' + (names.join(', ') || '비어 있음'))}"
+            data-peek="${esc((p.label || p.role) + ' · ' + (peekNames || '비어 있음'))}"
             aria-label="${esc(p.label || p.role)} ${names.length}명${mine ? ' · 지원 취소' : ' · 지원'}"
-            ><em>${esc(abbr(p.role))}</em>${slotWho(names)}</button>`;
+            ><em>${esc(abbr(p.role))}</em>${slotWho(p.supports, s)}</button>`;
         }).join('')}</span></li>`;
     }).join('')}</ul>` : `<div class="g-empty">
       <p class="g-empty-title">이 길드로 등록된 곡이 없습니다</p>
@@ -296,6 +300,7 @@ async function refresh() {
     ]);
     if (Writes.stale(seq)) return;   /* 기다리는 동안 누른 것이 있으면 이 응답은 낡았다 */
     guild = gs; songs = sg; events = ev;
+    Rosters.put([guild]);             /* 용병을 가리는 명단 */
     $('#guild-error').hidden = true;
     render();
     /* 배경 낙서는 한 번만 붙인다. 그릴 수 있는지는 길드원인지로 정한다. */
@@ -329,7 +334,7 @@ $('#screen').addEventListener('click', async (e) => {
   if (b.hasAttribute('data-edit-guild')) {
     const saved = await openGuildEditor(guild);
     liveStyle = null;          /* 저장했든 취소했든 미리보기 값은 여기서 끝난다 */
-    if (saved) { guild = saved; render(); refresh(); } else render();   /* 돌려받은 길드로 바로 그리고, 나머지는 뒤에서 */
+    if (saved) { guild = saved; Rosters.put([guild]); render(); refresh(); } else render();   /* 돌려받은 길드로 바로 그리고, 나머지는 뒤에서 */
     return;
   }
   /* 참석·지원은 누르는 즉시 칸을 바꾸고 서버에 보낸다(common.js Writes). 기다리지 않으므로
