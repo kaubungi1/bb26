@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from db import get_db
 import listcache
-from helpers import attach_guilds, guild_where, resolve_guild_id
+from helpers import PART_ROLES, attach_guilds, guild_where, resolve_guild_id
 
 router = APIRouter()
 
@@ -442,6 +442,13 @@ def toggle_lineup(event_id: int, song_id: int, body: dict):
         (event_id, song_id, role, nickname),
     )
     on = want if isinstance(want, bool) else cur.rowcount == 0
+    # 넣을 때는 표준 여섯 파트만 받는다. 전에는 파트를 글로 쳐 넣어 'D'·'EG'·'드럼' 이 섞였고
+    # 순서도 어긋났다. 곡마다 붙인 별칭(니지카 등)은 sessions.label 이 맡는다 — 표시만 바꾼다.
+    # 빼기는 막지 않는다. 예전에 약어로 들어간 줄도 지울 수 있어야 한다.
+    if on and role not in PART_ROLES:
+        conn.rollback()
+        conn.close()
+        raise HTTPException(400, f'파트는 {"·".join(PART_ROLES)} 중 하나입니다.')
     if on:
         conn.execute(
             'INSERT INTO eventLineups ("eventId","songId","role","nickname") VALUES (%s,%s,%s,%s)',

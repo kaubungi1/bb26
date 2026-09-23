@@ -674,13 +674,15 @@ function renderSetlist() {
   }
   const me = Nick.get();
   setlistEl.innerHTML = ev.songs.map((s, i) => {
+    /* 파트별로 묶되, 예전에 약어로 들어간 줄(V·EG1·D …)은 표준 파트로 읽어 같은 자리에 세운다.
+       빼기는 저장된 값 그대로 보내야 하므로 이름마다 원래 파트를 단다. */
     const byRole = {};
-    s.lineup.forEach((l) => { (byRole[l.role] = byRole[l.role] || []).push(l.nickname); });
+    s.lineup.forEach((l) => { (byRole[stdRole(l.role)] = byRole[stdRole(l.role)] || []).push(l); });
     const roles = ROLE_ORDER.filter((r) => byRole[r]).concat(Object.keys(byRole).filter((r) => !ROLE_ORDER.includes(r)));
     const cells = roles.map((r) => `
-      <span class="sl-role" data-lineup-role="${escapeHtml(r)}" data-lineup-song="${s.songId}">
+      <span class="sl-role">
         <span class="sl-role-name">${escapeHtml(ROLE_SHORT[r] || r)}</span>
-        ${byRole[r].map((n) => `<span class="sl-name${n === me ? ' me' : ''}" data-lineup-nick="${escapeHtml(n)}">${escapeHtml(n)}</span>`).join('')}
+        ${byRole[r].map((l) => `<span class="sl-name${l.nickname === me ? ' me' : ''}" data-lineup-nick="${escapeHtml(l.nickname)}" data-lineup-role="${escapeHtml(l.role)}" data-lineup-song="${s.songId}">${escapeHtml(l.nickname)}</span>`).join('')}
       </span>`).join('');
     return `
       <div class="sl-item">
@@ -710,21 +712,88 @@ setlistEl.addEventListener('click', async (e) => {
   }
   const nick = e.target.closest('[data-lineup-nick]');
   if (nick) {
-    const roleEl = nick.closest('[data-lineup-role]');
-    const name = nick.dataset.lineupNick;
-    if (!confirm(`${name}님을 ${roleEl.dataset.lineupRole}에서 뺄까요?`)) return;
-    setLineup(ev, Number(roleEl.dataset.lineupSong), roleEl.dataset.lineupRole, name, false);
+    const name = nick.dataset.lineupNick, role = nick.dataset.lineupRole;
+    if (!confirm(`${name}님을 ${stdRole(role)}에서 뺄까요?`)) return;
+    setLineup(ev, Number(nick.dataset.lineupSong), role, name, false);
     return;
   }
   const add = e.target.closest('[data-lineup-add]');
   if (add) {
-    const role = (prompt('파트 (예: 드럼)') || '').trim();
-    if (!role) return;
-    const name = (prompt('닉네임', Nick.get()) || '').trim();
-    if (!name) return;
-    setLineup(ev, Number(add.dataset.lineupAdd), role, name, true);
+    const pick = await pickLineup(ev, Number(add.dataset.lineupAdd));
+    if (pick) setLineup(ev, Number(add.dataset.lineupAdd), pick.role, pick.name, true);
   }
 });
+
+/* 저장된 파트 값을 표준 여섯 중 하나로 읽는다. 약어(V·EG1·BG·KY·D)는 common.js ROLE_SHORT 를 거꾸로 본다.
+   어느 쪽인지 모르는 값(EG 등)은 그대로 둔다 — 표준 뒤에 따로 선다. */
+function stdRole(r) {
+  const t = String(r || '').trim();
+  if (ROLE_ORDER.includes(t)) return t;
+  return Object.keys(ROLE_SHORT).find((k) => ROLE_SHORT[k] === t.toUpperCase()) || t;
+}
+
+/* 라인업에 사람 넣기. 파트는 표준 여섯 칩 중에서만 고른다(타이핑하면 'D'·'드럼' 이 갈렸다).
+   사람은 그 파트에 지원하고 그날 오는 사람을 먼저 보여 주고, 명단에 없는 표기도 쳐 넣을 수 있다. */
+async function pickLineup(ev, songId) {
+  const song = ev.songs.find((x) => x.songId === songId);
+  const names = await roster();
+  /* 그날 되는 곡 표가 이 곡을 알고 있으면(확정일 기준) 파트별 '지원 + 참석' 을 쓴다 */
+  const known = playable && playable.date === ev.date ? playable.songs.find((x) => x.songId === songId) : null;
+  const labelOf = (r) => known?.roles.find((x) => x.role === r)?.label || '';
+  const wantOf = (r) => known?.roles.find((x) => x.role === r)?.members || [];
+  return new Promise((resolve) => {
+    let role = '';
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="lu-title">
+        <h3 class="modal-title" id="lu-title">${escapeHtml(song ? song.title : '')}</h3>
+        <form class="modal-form lu-form">
+          <div class="chip-set lu-roles" role="group" aria-label="파트">
+            ${ROLE_ORDER.map((r) => `<button type="button" class="chip" data-lu-role="${escapeHtml(r)}" aria-pressed="false">${escapeHtml(ROLE_SHORT[r] || r)}${labelOf(r) ? ` <i>${escapeHtml(labelOf(r))}</i>` : ''}</button>`).join('')}
+          </div>
+          <div class="chip-set lu-want" hidden></div>
+          <input name="who" list="lu-names" placeholder="닉네임" maxlength="40" autocomplete="off" />
+          <datalist id="lu-names">${names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join('')}</datalist>
+          <p class="form-error" role="alert" hidden></p>
+          <button type="submit" class="pink">넣기</button>
+          <button type="button" class="ghost" data-cancel>취소</button>
+        </form>
+      </div>`;
+    const close = (v) => { document.removeEventListener('keydown', onKey); backdrop.remove(); resolve(v); };
+    const onKey = (e) => { if (e.key === 'Escape') close(null); };
+    document.addEventListener('keydown', onKey);
+    const form = backdrop.querySelector('form');
+    const want = backdrop.querySelector('.lu-want');
+    const err = backdrop.querySelector('.form-error');
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop || e.target.closest('[data-cancel]')) return close(null);
+      const r = e.target.closest('[data-lu-role]');
+      if (r) {
+        role = r.dataset.luRole;
+        backdrop.querySelectorAll('[data-lu-role]').forEach((b) => {
+          b.classList.toggle('is-on', b === r);
+          b.setAttribute('aria-pressed', b === r);
+        });
+        /* 이 파트에 지원했고 그날 오는 사람. 누르면 이름 칸에 들어간다. */
+        const list = wantOf(role);
+        want.hidden = !list.length;
+        want.innerHTML = list.map((n) => `<button type="button" class="chip" data-lu-name="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('');
+        err.hidden = true;
+        return;
+      }
+      const n = e.target.closest('[data-lu-name]');
+      if (n) { form.elements.who.value = n.dataset.luName; form.elements.who.focus(); }
+    });
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = form.elements.who.value.trim();
+      if (!role || !name) { err.textContent = !role ? '파트를 고르세요.' : '닉네임을 넣으세요.'; err.hidden = false; return; }
+      close({ role, name });
+    });
+    document.body.appendChild(backdrop);
+  });
+}
 
 /* 라인업 한 칸. 누르는 즉시 바꾸고 서버에 보낸다(common.js Writes).
    실패하면 알리고, 쓰기가 끝날 때 서버의 실제 상태로 되돌아간다. */
