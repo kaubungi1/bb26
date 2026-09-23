@@ -177,17 +177,7 @@ def update_guild(slug: str, body: dict):
     return g
 
 
-@router.delete('/{slug}')
-def delete_guild(slug: str):
-    """길드를 지워도 곡과 일정은 남고 소속만 풀린다 (ON DELETE SET NULL)."""
-    conn = get_db()
-    cur = conn.execute('DELETE FROM guilds WHERE "slug"=%s', (slug,))
-    imageserve.forget('crest', slug)
-    conn.commit()
-    conn.close()
-    if cur.rowcount == 0:
-        raise HTTPException(404, '길드를 찾을 수 없습니다.')
-    return {'ok': True}
+# 길드 삭제는 관리 탭에만 있다(routers/admin.py).
 
 
 @router.post('/{slug}/members')

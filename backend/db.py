@@ -272,6 +272,9 @@ MIGRATIONS = [
     # 2단계: 멤버 캐릭터 이미지 (256px 정사각형 WebP)
     'ALTER TABLE members ADD COLUMN IF NOT EXISTS "image" BYTEA',
     'ALTER TABLE members ADD COLUMN IF NOT EXISTS "imageUpdatedAt" TIMESTAMPTZ',
+    # 파딱(방장) 'blue' · 핑딱(부방장) 'pink'. 관리 탭에서만 바꾼다(routers/admin.py).
+    # 프로필 저장(PUT /api/members)의 EDITABLE 에 넣지 않는다 — 넣으면 누구나 자기에게 붙인다.
+    'ALTER TABLE members ADD COLUMN IF NOT EXISTS "badge" TEXT',
 
     # 변경 번호. 폴링되는 목록을 "바뀌었을 때만" 다시 만들기 위해 쓴다(listcache.py).
     # 쓰기가 일어나면 테이블 이름을 한 줄 더한다. 앱의 쓰기든 손으로 친 SQL 이든 경로를 가리지 않는다.

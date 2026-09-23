@@ -784,8 +784,24 @@ a.brand { text-decoration: none; }
 .guild-badge.lg { font-size: 12px; padding: 3px 10px; }
 
 /* 이미지·이모지 아바타 */
-.avatar-chip { overflow: hidden; }
-.avatar-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 전에는 overflow: hidden 으로 사진을 둥글게 잘랐다. 그러면 가장자리로 나가는 딱지도 잘린다.
+   이제 사진이 칩의 둥근 모서리를 이어받아 스스로 잘린다. */
+.avatar-chip { position: relative; }
+.avatar-chip img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+/* 파딱·핑딱 딱지. 칩 지름의 40%, 작아도 8px. 흰 테두리가 어느 사진 위에서도 경계를 세운다. */
+.chip-badge {
+  position: absolute;
+  right: -10%;
+  bottom: -10%;
+  width: max(40%, 8px);
+  height: max(40%, 8px);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px #fff;
+  background: center / contain no-repeat;
+  pointer-events: none;
+}
+.chip-badge.is-blue { background-image: url('/assets/badge-blue.svg'); }
+.chip-badge.is-pink { background-image: url('/assets/badge-pink.svg'); }
 .avatar-chip.has-img { background: #fff; }
 .avatar-chip .emoji { font-size: 1.05em; line-height: 1; }
 .avatar-chip.has-emoji { background: var(--chip-bg); }

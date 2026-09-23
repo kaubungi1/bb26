@@ -12,6 +12,8 @@ const SHEET_ROLES = [...ROLE_ORDER, '공용'];
 const TAGS = ['보컬로이드', '애니송(게임)', 'J-POP(남)', 'J-POP(여)', '불법'];
 
 const SITE_NAME = '불법이륙';
+/* 관리자 이름. 닉네임 창에 이것을 넣으면 비밀번호를 한 번 더 묻는다(backend/admin.py 와 같은 값). */
+const ADMIN_NICK = '불법이륙';
 
 /* ---------- 곡의 얼굴 ----------
    곡을 그리는 화면이면 어디서나 같은 규칙을 쓴다. 홈에만 있던 것을 여기로 옮겼다. */
@@ -257,7 +259,14 @@ async function apiError(res) {
 const Nick = {
   get() { return localStorage.getItem('nickname') || ''; },
   set(n) { localStorage.setItem('nickname', n); },
-  logout() { localStorage.removeItem('nickname'); },
+  logout() {
+    localStorage.removeItem('nickname');
+    /* 관리자였다면 서버의 쿠키도 지운다. 안 지우면 다음에 이 기기를 쓰는 사람이 관리자로 남는다. */
+    if (AdminSeen.root()) {
+      AdminSeen.setRoot(false);
+      fetch('/api/admin/logout', { method: 'POST', keepalive: true }).catch(() => {});
+    }
+  },
   ensure() {
     const cur = this.get();
     if (cur) return Promise.resolve(cur);
@@ -326,6 +335,12 @@ function promptName() {
       e.preventDefault();
       const name = input.value.trim();
       if (!name || name.length > 20) return;
+      if (name === ADMIN_NICK) {
+        if (await promptAdmin()) return accept(name);
+        input.value = '';
+        input.focus();
+        return;
+      }
       const names = await roster();
       if (names.includes(name)) return accept(name);
 
@@ -355,6 +370,43 @@ function promptName() {
     });
     input.addEventListener('input', () => { hint.hidden = true; });
 
+    document.body.appendChild(backdrop);
+    setTimeout(() => input.focus(), 0);
+  });
+}
+
+/* 관리자 비밀번호. 닉네임 창 위에 한 겹 더 뜬다. 맞으면 서버가 쿠키를 건다(backend/admin.py). */
+function promptAdmin() {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="admin-title">
+        <h3 class="modal-title" id="admin-title">${icon('shield')} 관리자</h3>
+        <form class="modal-form">
+          <input id="admin-pw" type="password" placeholder="비밀번호" autocomplete="current-password" />
+          <p class="form-error" role="alert" hidden></p>
+          <button type="submit" class="pink">확인</button>
+          <button type="button" class="ghost" data-cancel>취소</button>
+        </form>
+      </div>`;
+    const close = (v) => { backdrop.remove(); resolve(v); };
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(false); });
+    backdrop.querySelector('[data-cancel]').addEventListener('click', () => close(false));
+    const err = backdrop.querySelector('.form-error');
+    const input = backdrop.querySelector('#admin-pw');
+    backdrop.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await api.post('/admin/login', { password: input.value });
+        AdminSeen.setRoot(true);
+        close(true);
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.hidden = false;
+        input.select();
+      }
+    });
     document.body.appendChild(backdrop);
     setTimeout(() => input.focus(), 0);
   });
@@ -427,6 +479,13 @@ function icon(name, size = 18) {
    그래야 지원·한마디 기록이 갈라지지 않는다. */
 async function nameModal() {
   const cur = Nick.get();
+  /* 관리자는 멤버가 아니라 꾸밀 프로필이 없다. 로그아웃만 묻는다. */
+  if (cur === ADMIN_NICK) {
+    if (!await confirmModal({ title: '관리자', body: '로그아웃할까요?', confirm: '로그아웃' })) return false;
+    Nick.logout();
+    document.dispatchEvent(new Event('nickchange'));
+    return true;
+  }
   const changed = await openProfileEditor(cur, { withLogout: true });
   return changed;
 }
@@ -569,6 +628,7 @@ function mountChrome(activeKey) {
       const homeLabel = inGuild ? ((Site.info && Site.info.name) || Site.slug) : '홈';
       const inside = [['home',homeLabel,Site.base+'/'],['songs','곡',Site.base+'/songs/'],['schedule','모임 · 일정',Site.base+'/schedule/']];
       const outside = [['sheets','악보','/sheets/'],['guilds','길드','/guilds/'],['members','멤버','/members/']];
+      if (AdminSeen.visible()) outside.push(['admin','관리','/admin/']);
       const link = ([key,label,href],out) => `<a href="${href}"${key===activeKey?' aria-current="page"':''}${out&&inGuild?' class="is-out"':''}><span>${escapeHtml(label)}</span></a>`;
       header.innerHTML = brand() +
         `<nav class="game-nav${inGuild?' in-guild':''}" aria-label="주요 메뉴">` +
@@ -717,6 +777,21 @@ const Profiles = {
   },
 };
 
+/* ---------- 관리 탭을 보일까 ----------
+   파딱·핑딱은 내 프로필의 딱지로 안다(멤버 목록에 실려 온다). 비밀번호로 들어온 관리자는
+   쿠키가 HttpOnly 라 화면이 읽을 수 없으므로, 관리 페이지가 확인한 결과를 표시로 남긴다.
+   이것은 탭을 보일지만 정한다. 허락은 쓰기마다 서버가 다시 본다(backend/admin.py). */
+const AdminSeen = {
+  root() { try { return localStorage.getItem('admin:root') === '1'; } catch { return false; } },
+  setRoot(on) {
+    try { on ? localStorage.setItem('admin:root', '1') : localStorage.removeItem('admin:root'); } catch {}
+  },
+  visible() {
+    const m = Profiles.get(Nick.get());
+    return this.root() || !!(m && (m.badge === 'blue' || m.badge === 'pink'));
+  },
+};
+
 /* 그림 주소는 서버가 버전을 붙여 준다(backend/imageserve.py). 사진이 바뀌면 주소가 바뀐다.
    imageUrl 이 없는 옛 캐시 데이터는 버전 없는 주소로 받는다 — 서버가 매번 확인하게 하므로 틀리지 않는다. */
 function imageUrl(m) {
@@ -747,6 +822,9 @@ function avatarChip(name, extraClass = '') {
   } else {
     body = escapeHtml(/^[a-zA-Z]/.test(name) ? name.slice(0, 2).toUpperCase() : name.slice(0, 1));
   }
+  /* 파딱·핑딱 딱지. 카카오톡 오픈채팅처럼 오른쪽 아래에 붙는다. 그림은 assets/badge-*.svg.
+     img 로 넣으면 사진용 .avatar-chip img 규칙(세 곳)에 걸려 칩만 해지므로 배경 그림으로 둔다. */
+  if (m && (m.badge === 'blue' || m.badge === 'pink')) body += `<i class="chip-badge is-${m.badge}" aria-hidden="true"></i>`;
   return `<span class="${cls}" style="--chip-fg:${escapeHtml(fg)};--chip-bg:${escapeHtml(bg)}" title="${escapeHtml(name)}">${body}</span>`;
 }
 

@@ -7,6 +7,7 @@ from PIL import Image, ImageOps
 from psycopg.types.json import Json
 
 from db import get_db
+import admin
 import imageserve
 import listcache
 from images import MAX_UPLOAD, square_webp
@@ -18,7 +19,7 @@ TEXT_MAX = {'mainRoles': 60, 'availability': 80, 'intro': 200, 'color': 20, 'ava
 NICK_MAX = 20
 # 사진을 줄이는 규칙은 images.py 한 곳에 있다. 길드 문장도 같은 규칙을 쓴다.
 COLS = '"nickname", "mainRoles", "availability", "intro", "color", "avatar", "title", "status", ' \
-       '"lines", "createdAt", "updatedAt", ("image" IS NOT NULL) AS "hasImage", "imageUpdatedAt"'
+       '"lines", "badge", "createdAt", "updatedAt", ("image" IS NOT NULL) AS "hasImage", "imageUpdatedAt"'
 
 
 LINES_MAX = 3          # 대사 줄 수
@@ -48,6 +49,12 @@ def _clean(key, value):
     return str(value).strip()[:TEXT_MAX[key]] or None
 
 
+def _not_reserved(nickname):
+    """관리자 이름은 멤버가 되지 않는다. 멤버 목록에 카드가 생기지 않게 한다(admin.py)."""
+    if nickname == admin.ADMIN_NICK:
+        raise HTTPException(400, '쓸 수 없는 닉네임입니다.')
+
+
 def _row(conn, nickname):
     row = conn.execute(f'SELECT {COLS} FROM members WHERE "nickname"=%s', (nickname,)).fetchone()
     return imageserve.with_member_image(dict(row)) if row else None
@@ -71,6 +78,7 @@ def register(body: dict):
     nickname = (body.get('nickname') or '').strip()[:NICK_MAX]
     if not nickname:
         raise HTTPException(400, '닉네임을 입력하세요.')
+    _not_reserved(nickname)
     conn = get_db()
     try:
         conn.execute('INSERT INTO members ("nickname") VALUES (%s) ON CONFLICT DO NOTHING', (nickname,))
@@ -152,6 +160,7 @@ def upsert_member(nickname: str, body: dict):
     nickname = nickname.strip()
     if not nickname or len(nickname) > NICK_MAX:
         raise HTTPException(400, f'닉네임은 1~{NICK_MAX}자입니다.')
+    _not_reserved(nickname)
     cols = ['"nickname"']
     vals = [nickname]
     sets = []
@@ -174,16 +183,7 @@ def upsert_member(nickname: str, body: dict):
     return row
 
 
-@router.delete('/{nickname}')
-def delete_member(nickname: str):
-    conn = get_db()
-    cur = conn.execute('DELETE FROM members WHERE "nickname"=%s', (nickname,))
-    imageserve.forget('member', nickname)
-    conn.commit()
-    conn.close()
-    if cur.rowcount == 0:
-        raise HTTPException(404, '멤버를 찾을 수 없습니다.')
-    return {'ok': True}
+# 멤버 삭제는 관리 탭에만 있다(routers/admin.py). 참여 기록까지 같이 지운다.
 
 
 # ---------- 캐릭터 이미지 ----------
@@ -192,6 +192,7 @@ async def upload_image(nickname: str, file: UploadFile = File(...)):
     nickname = nickname.strip()
     if not nickname or len(nickname) > NICK_MAX:
         raise HTTPException(400, f'닉네임은 1~{NICK_MAX}자입니다.')
+    _not_reserved(nickname)
     data = await file.read(MAX_UPLOAD + 1)
     if not data:
         raise HTTPException(400, '파일이 비어 있습니다.')

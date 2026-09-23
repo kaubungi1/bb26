@@ -1,0 +1,98 @@
+/* 관리 — 멤버·길드 두 격자.
+   머리는 멤버 페이지(members.css)와 같은 문법이고 값도 거기서 옮겨 왔다.
+   칸은 가로선 하나로만 나눈다. 상자·라운드·그림자 없음. */
+
+.admin .card {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 0;
+  margin: 0 0 28px;
+}
+
+.admin .list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.admin .list-head.second { margin-top: 40px; }
+.admin .list-head h1 { font-size: 28px; line-height: 1.15; margin: 7px 0 0; letter-spacing: -0.02em; }
+.admin .list-head h1 small {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--teal-deep);
+  margin-left: 9px;
+  vertical-align: 5px;
+}
+.admin .overline { display: inline-block; font-size: 9px; letter-spacing: 0.2em; font-weight: 800; }
+
+/* ---------- 격자 ----------
+   멤버 페이지와 같은 격자 규칙이다(members.css .member-list). PC 에서 3열, 좁으면 1열.
+   한 사람이 한 칸이고, 칸은 아래쪽 선 하나로만 나눈다. */
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  column-gap: 20px;
+}
+.admin-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.admin .cell-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.admin .cell-main b {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin .cell-main small { color: var(--ink-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.admin .cell-main small:empty { display: none; }
+.admin .cell-main .guild-badge { align-self: flex-start; max-width: 100%; }
+
+.admin .badge-set { display: flex; flex: none; gap: 2px; }
+/* 켜진 딱지는 왕관 그림과 같은 색(assets/badge-*.svg)으로 찬다. 흰 글자는 대비 2.5 라 잉크 글자를 얹는다(약 6). */
+.admin .badge-set .chip.is-on[data-set-badge="pink"] { background: #e878ff; color: var(--ink); }
+.admin .badge-set .chip.is-on[data-set-badge="blue"] { background: #4aa7ff; color: var(--ink); }
+.admin .badge-name { flex: none; font-size: 12px; font-weight: 800; }
+.admin .badge-name.is-blue { color: #2563eb; }
+.admin .badge-name.is-pink { color: var(--pink); }
+
+/* 삭제는 글자만. 누르면 확인 창이 한 번 더 막는다. */
+.admin .del {
+  flex: none;
+  min-height: 0;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.admin .del:hover { color: #a52b3d; background: none; filter: none; }
+
+/* ---------- 확인 창의 건수 ---------- */
+.impact { display: block; margin: 4px 0 10px; }
+.impact-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--line-2); }
+.impact-row b { font-variant-numeric: tabular-nums; }
+.impact-row.is-zero { color: var(--ink-muted); }
+.impact-note { display: block; font-size: 12px; color: var(--ink-muted); }
+
+/* 340px 칸이 들어가지 않는 폭에서는 칸을 화면 폭에 맞춘다(members.css 와 같은 경계). */
+@media (max-width: 560px) {
+  .admin-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin .list-head h1 { font-size: 24px; }
+}
