@@ -21,6 +21,23 @@ let editingSongId = null;
 let moreId = null;            /* 액션을 펼쳐 둔 곡. 평소엔 ⋯ 하나만 보인다 */
 let songRouteHandled = false;
 
+/* ---------- 나눠 그리기 ----------
+   곡 데이터는 통째로 받는다(서버 캐시·304 를 그대로 탄다). 검색·필터·정렬·끌올도 전부 화면에서 한다.
+   나누는 것은 그리기뿐이다 — 휴대폰에서 수백 곡을 한 번에 그리고 칸 폭을 재는 데 1초가 넘게 걸렸다.
+     넓은 화면  게시판처럼 번호 페이지. 주소에 ?page= 를 남겨 새로고침·뒤로가기가 그 페이지로 온다.
+     좁은 화면  끝에 닿으면 다음 묶음을 이어 붙인다. 데이터는 이미 있으니 기다림이 없다.
+   걸러진 조건(검색·필터·정렬)이 바뀌면 처음으로 돌아간다. 폴링으로 다시 그릴 때는 그대로다. */
+const PAGE_WIDE = 40;
+const PAGE_NARROW = 30;
+const narrowMq = matchMedia('(max-width: 600px)');   /* 사이트의 다른 폰 규칙과 같은 경계 */
+const SHOWN_KEY = 'songs-shown:' + Site.base;
+let page = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('page'))) || 1);
+let shownCount = (() => {
+  try { return Math.max(PAGE_NARROW, Number(sessionStorage.getItem(SHOWN_KEY)) || 0); } catch { return PAGE_NARROW; }
+})();
+let listKey = null;           /* 마지막으로 그린 조건. 달라지면 처음으로 */
+let moreWatcher = null;
+
 const listEl = document.getElementById('song-list');
 const bumpSlotEl = document.getElementById('bump-slot');
 const searchEl = document.getElementById('search');
@@ -497,11 +514,33 @@ function render() {
     return;
   }
 
-  listEl.innerHTML = visible.map(songItem).join('');
+  /* 조건이 바뀌었으면 처음으로. 첫 그림은 주소의 page 를 따른다. */
+  const key = JSON.stringify([query, mineFilter, guildFilter, [...filterTags].sort(), sortBy, sortDesc]);
+  if (listKey !== null && key !== listKey) resetPaging();
+  listKey = key;
+  /* ?song= 으로 들어왔으면 그 곡이 있는 곳까지 연다 */
+  const routeId = songRouteHandled ? 0 : Number(new URLSearchParams(location.search).get('song'));
+  const at = routeId ? visible.findIndex((x) => x.id === routeId) : -1;
+
+  const narrow = narrowMq.matches;
+  let slice, tail = '';
+  if (narrow) {
+    if (at >= shownCount) shownCount = Math.ceil((at + 1) / PAGE_NARROW) * PAGE_NARROW;
+    slice = visible.slice(0, shownCount);
+    if (visible.length > shownCount) tail = '<div class="song-more" aria-hidden="true"></div>';
+  } else {
+    const pages = Math.ceil(visible.length / PAGE_WIDE);
+    if (at >= 0) page = Math.floor(at / PAGE_WIDE) + 1;
+    page = Math.min(Math.max(1, page), pages);
+    slice = visible.slice((page - 1) * PAGE_WIDE, page * PAGE_WIDE);
+    tail = pagerHtml(page, pages);
+  }
+  listEl.innerHTML = slice.map(songItem).join('') + tail;
   fitNames();
   rollTitles();
+  watchMore();
   if (!songRouteHandled) {
-    const id = Number(new URLSearchParams(location.search).get('song'));
+    const id = routeId;
     const target = document.getElementById(`song-${id}`);
     if (target) {
       songRouteHandled = true;
@@ -510,6 +549,54 @@ function render() {
     }
   }
 }
+
+/* 페이지 번호 줄. 처음·끝과 지금 앞뒤 둘만 보이고 사이는 … 로 접는다. 한 페이지뿐이면 없다. */
+function pagerHtml(cur, pages) {
+  if (pages <= 1) return '';
+  const nums = [...new Set([1, pages, cur - 2, cur - 1, cur, cur + 1, cur + 2])]
+    .filter((n) => n >= 1 && n <= pages).sort((a, b) => a - b);
+  let html = '', prev = 0;
+  nums.forEach((n) => {
+    if (n - prev > 1) html += '<span class="pager-gap" aria-hidden="true">…</span>';
+    html += `<button type="button" class="chip${n === cur ? ' is-on' : ''}" data-page="${n}"${n === cur ? ' aria-current="page"' : ''}>${n}</button>`;
+    prev = n;
+  });
+  return `<nav class="pager" aria-label="페이지">` +
+    `<button type="button" class="chip" data-page="${cur - 1}"${cur <= 1 ? ' disabled' : ''} aria-label="이전 페이지">‹</button>${html}` +
+    `<button type="button" class="chip" data-page="${cur + 1}"${cur >= pages ? ' disabled' : ''} aria-label="다음 페이지">›</button></nav>`;
+}
+
+/* 넓은 화면의 페이지를 주소에 남긴다. 다른 값(?mine 등)은 그대로 둔다. 1페이지는 적지 않는다. */
+function syncPageUrl() {
+  const u = new URL(location.href);
+  if (page > 1 && !narrowMq.matches) u.searchParams.set('page', page); else u.searchParams.delete('page');
+  history.replaceState(history.state, '', u);
+}
+
+function resetPaging() {
+  page = 1;
+  shownCount = PAGE_NARROW;
+  try { sessionStorage.removeItem(SHOWN_KEY); } catch {}
+  syncPageUrl();
+}
+
+/* 좁은 화면: 목록 끝의 표지가 화면에 들어오기 조금 전에 다음 묶음을 붙인다. */
+function watchMore() {
+  if (moreWatcher) moreWatcher.disconnect();
+  const mark = listEl.querySelector('.song-more');
+  if (!mark) return;
+  moreWatcher = new IntersectionObserver((entries) => {
+    if (!entries.some((en) => en.isIntersecting)) return;
+    moreWatcher.disconnect();
+    shownCount += PAGE_NARROW;
+    try { sessionStorage.setItem(SHOWN_KEY, shownCount); } catch {}   /* 다른 곡 화면에 갔다 와도 보던 곳까지 그린다 */
+    render();
+  }, { rootMargin: '600px 0px' });
+  moreWatcher.observe(mark);
+}
+
+/* 넓게·좁게가 바뀌면(창 크기) 처음으로. 방식이 달라 이어 볼 자리가 없다. */
+narrowMq.addEventListener('change', () => { resetPaging(); render(); });
 
 /* 이벤트 */
 /* 검색 — 입력마다 바로 거른다. 서버를 타지 않으니 한 글자, 자모 하나에도 반응한다. */
@@ -596,6 +683,16 @@ document.addEventListener('click', (e) => { if (!e.target.closest('.song-item-ac
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMore(); });
 
 async function onListClick(e) {
+  const pg = e.target.closest('[data-page]');
+  if (pg) {
+    if (pg.disabled) return;
+    page = Number(pg.dataset.page);
+    syncPageUrl();
+    render();
+    /* 새 페이지는 맨 위부터 본다. 목록 머리(검색 줄)가 보이게 올린다. */
+    document.querySelector('.list-head')?.scrollIntoView({ block: 'start' });
+    return;
+  }
   const more = e.target.closest('[data-more]');
   if (more) {
     const id = Number(more.dataset.more);
