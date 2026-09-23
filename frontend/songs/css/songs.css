@@ -458,3 +458,8 @@
 .pager .chip:disabled { opacity: 0.3; cursor: default; }
 .pager-gap { padding: 0 4px; color: var(--ink-faint); font-size: 12px; }
 .song-more { grid-column: 1 / -1; height: 1px; }   /* 목록이 2열 격자라 전체 폭을 차지하게 한다 */
+.song-more.is-loading { height: auto; padding: 14px 0; }   /* 끝에 닿은 동안만 로딩 표시가 선다(common showLoading) */
+/* 좁은 화면의 묶음 경계. 가는 선 하나에 페이지 번호만 — 상자·면 없음. */
+.song-page-mark { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin: 14px 0 4px;
+  color: var(--ink-faint); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+.song-page-mark::before, .song-page-mark::after { content: ''; flex: 1; height: 1px; background: var(--line); }

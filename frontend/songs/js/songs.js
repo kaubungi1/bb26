@@ -25,10 +25,12 @@ let songRouteHandled = false;
    곡 데이터는 통째로 받는다(서버 캐시·304 를 그대로 탄다). 검색·필터·정렬·끌올도 전부 화면에서 한다.
    나누는 것은 그리기뿐이다 — 휴대폰에서 수백 곡을 한 번에 그리고 칸 폭을 재는 데 1초가 넘게 걸렸다.
      넓은 화면  게시판처럼 번호 페이지. 주소에 ?page= 를 남겨 새로고침·뒤로가기가 그 페이지로 온다.
-     좁은 화면  끝에 닿으면 다음 묶음을 이어 붙인다. 데이터는 이미 있으니 기다림이 없다.
+     좁은 화면  끝에 실제로 닿았을 때 한 번 끊겼다가(로딩 표시) 다음 묶음을 붙인다. 묶음 사이에 페이지 구분선.
+                데이터는 이미 있어 기다릴 일은 없지만, 미리 붙였더니 경계가 안 느껴져 한 페이지로 보였다(사용자, 2026-09-24).
    걸러진 조건(검색·필터·정렬)이 바뀌면 처음으로 돌아간다. 폴링으로 다시 그릴 때는 그대로다. */
 const PAGE_WIDE = 40;
 const PAGE_NARROW = 30;
+const MORE_PAUSE = 400;       /* 끝에 닿은 뒤 다음 묶음까지. 끊기는 느낌을 위한 멈춤이다 */
 const narrowMq = matchMedia('(max-width: 600px)');   /* 사이트의 다른 폰 규칙과 같은 경계 */
 const SHOWN_KEY = 'songs-shown:' + Site.base;
 let page = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('page'))) || 1);
@@ -535,7 +537,12 @@ function render() {
     slice = visible.slice((page - 1) * PAGE_WIDE, page * PAGE_WIDE);
     tail = pagerHtml(page, pages);
   }
-  listEl.innerHTML = slice.map(songItem).join('') + tail;
+  /* 좁은 화면은 묶음마다 구분선을 끼운다. 어디서 이어졌는지 보이게. */
+  const items = narrow
+    ? slice.map((x, i) => (i && i % PAGE_NARROW === 0
+      ? `<div class="song-page-mark"><span>${i / PAGE_NARROW + 1} 페이지</span></div>` : '') + songItem(x))
+    : slice.map(songItem);
+  listEl.innerHTML = items.join('') + tail;
   fitNames();
   rollTitles();
   watchMore();
@@ -580,7 +587,8 @@ function resetPaging() {
   syncPageUrl();
 }
 
-/* 좁은 화면: 목록 끝의 표지가 화면에 들어오기 조금 전에 다음 묶음을 붙인다. */
+/* 좁은 화면: 목록 끝의 표지가 화면에 실제로 들어오면 로딩 표시를 잠깐 보이고 다음 묶음을 붙인다.
+   미리(600px 앞에서) 붙였더니 끝에 닿기 전에 이어져 묶음 경계가 없었다. */
 function watchMore() {
   if (moreWatcher) moreWatcher.disconnect();
   const mark = listEl.querySelector('.song-more');
@@ -588,10 +596,15 @@ function watchMore() {
   moreWatcher = new IntersectionObserver((entries) => {
     if (!entries.some((en) => en.isIntersecting)) return;
     moreWatcher.disconnect();
-    shownCount += PAGE_NARROW;
-    try { sessionStorage.setItem(SHOWN_KEY, shownCount); } catch {}   /* 다른 곡 화면에 갔다 와도 보던 곳까지 그린다 */
-    render();
-  }, { rootMargin: '600px 0px' });
+    mark.classList.add('is-loading');
+    showLoading(mark);
+    setTimeout(() => {
+      if (!mark.isConnected) return;       /* 그사이 다시 그려졌다(폴링·필터) — 새 표지가 다시 지켜본다 */
+      shownCount += PAGE_NARROW;
+      try { sessionStorage.setItem(SHOWN_KEY, shownCount); } catch {}   /* 다른 곡 화면에 갔다 와도 보던 곳까지 그린다 */
+      render();
+    }, MORE_PAUSE);
+  });
   moreWatcher.observe(mark);
 }
 
