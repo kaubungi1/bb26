@@ -278,6 +278,8 @@ def toggle_date(event_id: int, day: str, body: dict | None = None):
     결과가 같아야 한다. active 가 없으면 예전처럼 뒤집는다(배포 직후의 옛 화면용)."""
     conn = get_db()
     event = _load(conn, event_id)
+    # 후보 날짜 다루기도 일정을 다루는 일이다 — 확정·수정·삭제와 같은 사람만(2026-10-02)
+    _require_manage(conn, event, (body or {}).get('nickname'))
     row = conn.execute(
         'SELECT * FROM eventDates WHERE "eventId"=%s AND "date"=%s', (event_id, day)
     ).fetchone()

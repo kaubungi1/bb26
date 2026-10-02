@@ -390,3 +390,24 @@
 @media(max-width:380px){
   .home .transport #song-link~a{display:none}
 }
+
+/* 모임·일정 카드 = 일정표 규칙(2026-10-02). 한 열, 날짜가 맨 앞, 알약 배지 없이 종류 글자.
+   두 열 격자는 눈이 지그재그로 움직여 시간순이 안 읽혔다. 밴드 전체 일정만 옅은 배경(일정 화면과 같은 색). */
+.home .event-grid{grid-template-columns:1fr;gap:8px}
+.home .meeting{gap:14px;padding:11px 14px}
+.home .meeting .sched-date{flex:none;width:76px;font-size:14px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.home .meeting .sched-date small{margin-left:4px;font-size:12px;font-weight:700;color:var(--ink-faint);letter-spacing:0;display:inline}
+.home .meeting .sched-date small.is-weekend{color:var(--teal-deep)}
+.home .meeting .sched-date i{margin-right:3px;font-style:normal;font-size:11px;color:var(--ink-faint)}
+.home .meeting .event-symbol{width:40px;height:40px;font-size:18px}
+.home .meeting .event-symbol.is-site img{width:40px;height:auto}
+.home .meeting h3{margin:0 0 2px;font-size:15px}
+.home .meeting>div>small{display:block;font-size:12px;font-weight:700;letter-spacing:0;color:var(--ink-muted)}
+.home .meeting>div>small .guild-mark{display:inline-flex;vertical-align:middle;line-height:0;margin-left:2px}
+.home .meeting.kind-regular{background:color-mix(in srgb,var(--teal) 6%,#ffffffce)}
+.home .meeting.kind-concert{background:color-mix(in srgb,var(--pink) 6%,#ffffffce)}
+.home .meeting.kind-band{background:color-mix(in srgb,#7c5cd6 6%,#ffffffce)}
+.home .meeting.kind-regular>div>small{color:var(--teal-deep);font-weight:800}
+.home .meeting.kind-concert>div>small{color:var(--pink);font-weight:800}
+.home .meeting.kind-band>div>small{color:color-mix(in srgb,#7c5cd6 70%,var(--ink));font-weight:800}
+@media(max-width:600px){.home .meeting .sched-date{width:52px;font-size:12.5px;white-space:normal}.home .meeting>b{display:none}}

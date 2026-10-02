@@ -60,6 +60,5 @@
   .poll-detail { padding: 0 13px 13px; }
 }
 
-/* 일정 종류 이름과 참가 길드 문장(eventTag). 상태 글자(날짜 투표 중·일정 확정) 옆에 작게 */
-.event-kind { display: inline-block; margin-left: 4px; font-size: 10.5px; font-weight: 800; color: var(--ink-muted); letter-spacing: 0; }
+/* 종류 글자 안의 참가 길드 문장(eventKindText) */
 .guild-mark.event-guild { display: inline-flex; vertical-align: middle; margin-left: 3px; line-height: 0; }

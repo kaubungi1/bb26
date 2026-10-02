@@ -199,39 +199,9 @@ function monthLabel(iso) {
   return y === new Date().getFullYear() ? `${m}월` : `${y}년 ${m}월`;
 }
 
-/* 종류 · 소속. 길드 합주는 길드 이름, 정기합주·정기공연은 참가 길드 문장, 밴드 행사는 종류만 */
-function kindLine(e) {
-  const kind = eventKind(e);
-  const label = EVENT_KIND[kind];
-  if (kind === 'guild') return `${label}${e.guild && !Site.slug ? ' · ' + escapeHtml(e.guild.name) : ''}`;
-  if (kind === 'band') return label;
-  const crests = (e.guilds || []).map((g) => guildMark(g, 16, 'event-guild')).join('');
-  return `${label}${crests ? ' ' + crests : ''}`;
-}
-
-/* 왼쪽 날짜 칸. 확정·투표 중 모두 같은 크기의 한 줄이다(전에는 큰 숫자와 작은 두 줄이 섞였다).
-   확정은 '12 월', 투표 중은 '10/1–31' 또는 '10/21–11/15'. 올해가 아니면 앞에 '27 처럼 연도를 붙인다. */
-function yearMark(iso) {
-  const y = Number(iso.slice(0, 4));
-  return y === new Date().getFullYear() ? '' : `<i>'${String(y).slice(2)}</i>`;
-}
-function dateCell(e) {
-  if (e.status === 'confirmed' && e.date) {
-    const d = parseDate(e.date);
-    const wk = d.getDay();
-    return `<span class="sched-date">${yearMark(e.date)}${d.getDate()}`
-      + `<small class="${wk === 0 || wk === 6 ? 'is-weekend' : ''}">${DOW[wk]}</small></span>`;
-  }
-  const f = firstDate(e), l = lastDate(e);
-  if (!f) return '<span class="sched-date"></span>';
-  const [, fm] = f.split('-').map(Number);
-  let range = monthDay(f);
-  if (l && l !== f) {
-    const [, lm, ld] = l.split('-').map(Number);
-    range += '–' + (lm === fm ? `${ld}` : monthDay(l));
-  }
-  return `<span class="sched-date">${yearMark(f)}${range}</span>`;
-}
+/* 종류 글자와 날짜 칸은 eventcard.js 에 있다 — 홈 '모임·일정' 과 같은 코드를 쓴다 */
+const kindLine = (e) => eventKindText(e);
+const dateCell = (e) => eventDateHtml(e);
 
 function pollHead(e) {
   const open = e.id === openId;
@@ -369,6 +339,7 @@ guildPick.addEventListener('click', (e) => {
 async function loadGuildList() {
   if (guildList.length) return;
   try { guildList = (await api.poll('/guilds')).data || []; } catch { guildList = []; }
+  Rosters.put(guildList);       /* 용병을 가리는 명단(common.js). 곡 화면과 같은 판정을 쓴다 */
 }
 
 function openAddModal() {
@@ -505,7 +476,7 @@ function renderMatrix() {
     if (!locked && dr.date === playableDate) cls.push('picked');
     html += `<tr class="${cls.join(' ')}">`;
     // 날짜 칸을 누르면 아래 '되는 곡' 표가 그 날짜 기준으로 바뀐다
-    html += `<td class="date-cell"${locked ? '' : ` data-pick-date="${dr.date}"`}>${monthDay(dr.date)} <span class="dow${dow === '일' ? ' sunday' : ''}${dow === '토' ? ' saturday' : ''}">(${dow})</span><span class="date-cnt"><span>${cnt}명</span></span>${isFixed ? '<span class="date-fixed"><span>확정</span></span>' : ''}${locked ? '' : `<button type="button" class="date-off" data-off-date="${dr.date}" title="이 날짜를 후보에서 빼기" aria-label="${monthDay(dr.date)} 후보에서 빼기">×</button>`}</td>`;
+    html += `<td class="date-cell"${locked ? '' : ` data-pick-date="${dr.date}"`}>${monthDay(dr.date)} <span class="dow${dow === '일' ? ' sunday' : ''}${dow === '토' ? ' saturday' : ''}">(${dow})</span><span class="date-cnt"><span>${cnt}명</span></span>${isFixed ? '<span class="date-fixed"><span>확정</span></span>' : ''}${locked || !canManage(ev) ? '' : `<button type="button" class="date-off" data-off-date="${dr.date}" title="이 날짜를 후보에서 빼기" aria-label="${monthDay(dr.date)} 후보에서 빼기">×</button>`}</td>`;
     const canToggle = !locked || isFixed;
     members.forEach((m) => {
       const on = m.name && ev.avails.some((a) => a.date === dr.date && a.nickname === m.name);
@@ -524,9 +495,12 @@ function renderMatrix() {
   /* 뺀 날짜는 지운 게 아니라 꺼 둔 것이다. 찍어 둔 기록이 남아 있으므로 되돌릴 수 있다. */
   const off = ev.dates.filter((dr) => dr.active === false).sort((a, b) => (a.date < b.date ? -1 : 1));
   if (off.length) {
-    html += `<p class="dates-off">후보에서 뺀 날짜 ${off.map((dr) =>
-      `<button type="button" data-on-date="${dr.date}" title="다시 후보로">${monthDay(dr.date)}
-       <i>${countAvail(dr.date)}명</i> ↩</button>`).join('')}</p>`;
+    /* 되돌리기도 다룰 수 있는 사람만. 아니면 뺀 날짜를 글자로만 보여 준다 */
+    const can = canManage(ev);
+    html += `<p class="dates-off">후보에서 뺀 날짜 ${off.map((dr) => (can
+      ? `<button type="button" data-on-date="${dr.date}" title="다시 후보로">${monthDay(dr.date)}
+       <i>${countAvail(dr.date)}명</i> ↩</button>`
+      : `<span class="date-off-text">${monthDay(dr.date)} <i>${countAvail(dr.date)}명</i></span>`)).join('')}</p>`;
   }
   matrixEl.innerHTML = html;
 
@@ -721,6 +695,17 @@ function inSetlist(songId) {
      길드 합주          그 길드 곡은 없음. '전체' 범위에서 섞인 다른 길드 곡은 문장, 프리길드 곡은 '프리길드'
      정기합주·정기공연  참가 길드 곡은 문장. 그날 프리길드로 보는 곡(참가 안 한 길드)·프리길드 곡은 '프리길드'
    셋리스트 자료에는 asFree 가 없어서 참가 길드 목록으로 같은 규칙을 여기서 센다(서버 _playable 과 같음). */
+/* 이 일정에서 이 곡의 용병인가 — 곡의 길드 명단에 없는 사람(common.js Rosters.isMerc, 곡 화면과 같은 판정).
+   정기합주·정기공연 안에서도 용병으로 보인다(사용자 결정). 다만 그날 프리길드로 보는 곡과 프리길드 곡에는 용병이 없다. */
+function isMercHere(s, nick) {
+  if (!s || !s.guild || !pollEvent) return false;
+  if (isUnion(pollEvent)) {
+    const free = s.asFree ?? !(pollEvent.guilds || []).some((g) => g.id === s.guild.id);
+    if (free) return false;
+  }
+  return Rosters.isMerc(s, nick);
+}
+
 function songTag(s) {
   const ev = pollEvent;
   if (!ev) return '';
@@ -821,7 +806,8 @@ function renderPlayable() {
       // 중복지원이면 칩이 그만큼 늘어난다. 열을 넓히면 그만큼 다른 파트가 화면 밖으로
       // 나가므로, 몇 명인지만 알려 주고 겹침은 CSS 가 깊게 준다(무대의 data-n 과 같은 방법).
       html += `<td class="ps-cell on"><span class="ps-chips" data-n="${r.members.length}">` +
-        r.members.map((n) => avatarChip(n)).join('') + `</span></td>`;
+        r.members.map((n) => (isMercHere(s, n)
+          ? `<span class="ps-merc" title="${escapeHtml(n)} · 용병">${avatarChip(n)}</span>` : avatarChip(n))).join('') + `</span></td>`;
     });
     if (locked) {
       html += `<td class="ps-cell act"><button type="button" class="ps-add${picked ? ' is-on' : ''}" data-set-song="${s.songId}" title="${picked ? '셋리스트에서 빼기' : '셋리스트에 넣기'}">${picked ? '✓' : '＋'}</button></td>`;
@@ -948,7 +934,7 @@ function renderSetlist() {
     const cells = roles.map((r) => `
       <span class="sl-role">
         <span class="sl-role-name">${escapeHtml(ROLE_SHORT[r] || r)}</span>
-        ${byRole[r].map((l) => `<span class="sl-name${l.nickname === me ? ' me' : ''}" data-lineup-nick="${escapeHtml(l.nickname)}" data-lineup-role="${escapeHtml(l.role)}" data-lineup-song="${s.songId}">${escapeHtml(l.nickname)}</span>`).join('')}
+        ${byRole[r].map((l) => `<span class="sl-name${l.nickname === me ? ' me' : ''}${isMercHere(s, l.nickname) ? ' merc' : ''}"${isMercHere(s, l.nickname) ? ` title="용병 · ${escapeHtml(s.guild.name)} 길드원 아님"` : ''} data-lineup-nick="${escapeHtml(l.nickname)}" data-lineup-role="${escapeHtml(l.role)}" data-lineup-song="${s.songId}">${escapeHtml(l.nickname)}</span>`).join('')}
       </span>`).join('');
     return `
       <div class="sl-item">
@@ -1186,7 +1172,7 @@ matrixEl.addEventListener('click', async (e) => {
     dr.active = active;
     playableKey = '';
     renderPollView();
-    Writes.run(`date:${ev.id}:${day}`, () => api.post(`/events/${ev.id}/dates/${day}/toggle`, { active }))
+    Writes.run(`date:${ev.id}:${day}`, () => api.post(`/events/${ev.id}/dates/${day}/toggle`, { active, nickname: Nick.get() }))
       .catch((err) => { api.forgetPolls(); alert(err.message); });
     return;
   }

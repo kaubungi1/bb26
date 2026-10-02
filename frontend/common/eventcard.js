@@ -38,14 +38,42 @@ function eventSymbol(e) {
 
 
 /* 일정 종류(2026-10-02). 서버 routers/events.py 의 KINDS 와 같은 값.
-   길드 합주는 지금처럼 길드 배지, 정기합주·정기공연은 종류 이름 + 참가 길드 문장들, 밴드 행사는 종류 이름만.
-   길드 페이지에서 그 길드의 길드 합주는 배지가 필요 없다(전부 그 길드 것이다). */
+   글자 표시는 아래 eventKindText 가 맡는다(알약 배지를 쓰던 eventTag 는 2026-10-02 뺐다). */
 const EVENT_KIND = { regular: '정기합주', concert: '정기공연', guild: '길드 합주', band: '밴드 행사' };
 function eventKind(e) { return (e && e.kind) || (e && e.guild ? 'guild' : 'regular'); }
-function eventTag(e) {
-  if (!e) return '';
+
+/* 날짜 칸과 종류 글자 — 일정표(일정 화면)와 홈 '모임·일정' 이 같이 쓴다(2026-10-02).
+   날짜 칸: 확정은 '12 월', 투표 중은 '10/1–31' 또는 '10/21–11/15'. 올해가 아니면 앞에 '27. 모두 같은 크기의 한 줄.
+   종류 글자: 길드 합주는 '길드 합주 · 길드 이름', 정기합주·정기공연은 종류 + 참가 길드 문장, 밴드 행사는 종류만. */
+const EV_DOW = ['일', '월', '화', '수', '목', '금', '토'];
+function evMonthDay(iso) { const [, m, d] = iso.split('-').map(Number); return `${m}/${d}`; }
+function evYearMark(iso) {
+  const y = Number(iso.slice(0, 4));
+  return y === new Date().getFullYear() ? '' : `<i>'${String(y).slice(2)}</i>`;
+}
+function eventDateHtml(e) {
+  if (e.status === 'confirmed' && e.date) {
+    const d = new Date(`${e.date}T00:00:00`);
+    const wk = d.getDay();
+    return `<span class="sched-date">${evYearMark(e.date)}${d.getDate()}`
+      + `<small class="${wk === 0 || wk === 6 ? 'is-weekend' : ''}">${EV_DOW[wk]}</small></span>`;
+  }
+  const dates = (e.dates || []).map((d) => d.date).sort();
+  const f = dates[0], l = dates[dates.length - 1];
+  if (!f) return '<span class="sched-date"></span>';
+  const [, fm] = f.split('-').map(Number);
+  let range = evMonthDay(f);
+  if (l && l !== f) {
+    const [, lm, ld] = l.split('-').map(Number);
+    range += '–' + (lm === fm ? `${ld}` : evMonthDay(l));
+  }
+  return `<span class="sched-date">${evYearMark(f)}${range}</span>`;
+}
+function eventKindText(e) {
   const kind = eventKind(e);
-  if (kind === 'guild') return Site.slug ? '' : guildBadge(e.guild);
+  const label = EVENT_KIND[kind];
+  if (kind === 'guild') return `${label}${e.guild && !Site.slug ? ' · ' + escapeHtml(e.guild.name) : ''}`;
+  if (kind === 'band') return label;
   const crests = (e.guilds || []).map((g) => guildMark(g, 16, 'event-guild')).join('');
-  return `<span class="event-kind">${EVENT_KIND[kind]}</span>${crests}`;
+  return `${label}${crests ? ' ' + crests : ''}`;
 }

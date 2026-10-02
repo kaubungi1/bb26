@@ -870,3 +870,8 @@
   font-size: 13px; font-weight: 600; color: var(--ink); }
 .ps-head .ps-search:focus { outline: none; border-bottom-color: #00b3bf; }
 @media (max-width: 600px) { .ps-head { flex-wrap: wrap; } .ps-head .ps-search { flex: 1 1 100%; margin-left: 0; order: 9; } }
+.dates-off .date-off-text { margin-left: 8px; font-size: 12px; font-weight: 700; color: var(--ink-faint); }
+.dates-off .date-off-text i { font-style: normal; }
+
+/* 용병 표시(2026-10-02) — 곡 화면과 같은 호박색(--merc). 이름은 .merc(common.css), 얼굴 칩은 호박색 테 */
+.ps-merc { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 2px var(--merc, #f59e0b); }
