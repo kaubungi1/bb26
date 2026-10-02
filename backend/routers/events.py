@@ -6,7 +6,10 @@
   concert  정기공연   정기합주와 같은 구조.
   guild    길드 합주  길드 하나(events.guildId). 그 길드 멤버(와 관리자)만 만든다.
   band     밴드 행사  날짜 투표만. 가능 곡·셋리스트가 없다. 관리자만 만든다.
-참가 길드 바꾸기는 /api/admin/events/{id}/guilds (관리자만, 확정 뒤에도)."""
+참가 길드 바꾸기는 /api/admin/events/{id}/guilds (관리자만, 확정 뒤에도).
+
+다루기(확정·해제·정보 수정·삭제)는 만들 수 있는 사람과 같다: 길드 합주는 그 길드 멤버와 관리자,
+나머지는 관리자. 참석 체크·셋리스트·라인업은 참여 기록이라 누구나 한다(사용자 결정, 2026-10-02)."""
 from datetime import date as _date
 from datetime import timedelta
 
@@ -91,6 +94,26 @@ def serialize_events(conn, rows):
                 e['guilds'].append(guild_brief(g))
     attach_guilds(conn, events)
     return events
+
+
+def can_manage(conn, event, who):
+    """이 일정을 확정·해제·수정·삭제할 수 있는가. 화면도 같은 규칙으로 버튼을 숨긴다(schedule.js canManage)."""
+    who = (who or '').strip()
+    if admin.is_admin_nick(conn, who):
+        return True
+    kind = event.get('kind') or ('guild' if event.get('guildId') else 'regular')
+    if kind == 'guild' and event.get('guildId') and who:
+        return conn.execute('SELECT 1 FROM guildMembers WHERE "guildId"=%s AND "nickname"=%s LIMIT 1',
+                            (event['guildId'], who)).fetchone() is not None
+    return False
+
+
+def _require_manage(conn, event, who):
+    if not can_manage(conn, event, who):
+        kind = event.get('kind') or ('guild' if event.get('guildId') else 'regular')
+        conn.close()
+        raise HTTPException(403, '그 길드의 멤버와 관리자만 고칠 수 있습니다.' if kind == 'guild'
+                            else '관리자만 고칠 수 있습니다.')
 
 
 def participants(conn, event_id):
@@ -235,8 +258,9 @@ def create_event(body: dict):
 
 
 @router.delete('/{event_id}')
-def delete_event(event_id: int):
+def delete_event(event_id: int, nickname: str = ''):
     conn = get_db()
+    _require_manage(conn, _load(conn, event_id), nickname)
     cur = conn.execute('DELETE FROM events WHERE "id"=%s', (event_id,))
     conn.commit()
     conn.close()
@@ -335,7 +359,7 @@ def confirm_event(event_id: int, body: dict):
     if not day:
         raise HTTPException(400, 'date는 필수입니다.')
     conn = get_db()
-    _load(conn, event_id)
+    _require_manage(conn, _load(conn, event_id), body.get('nickname'))
     date_row = conn.execute(
         'SELECT * FROM eventDates WHERE "eventId"=%s AND "date"=%s AND "active"', (event_id, day)
     ).fetchone()
@@ -355,9 +379,10 @@ def confirm_event(event_id: int, body: dict):
 
 
 @router.post('/{event_id}/unconfirm')
-def unconfirm_event(event_id: int):
+def unconfirm_event(event_id: int, body: dict | None = None):
     conn = get_db()
     event = _load(conn, event_id)
+    _require_manage(conn, event, (body or {}).get('nickname'))
     if event['status'] != 'confirmed':
         conn.close()
         raise HTTPException(400, '확정된 일정이 아닙니다.')
@@ -369,6 +394,53 @@ def unconfirm_event(event_id: int):
     conn.commit()
     row = conn.execute('SELECT * FROM events WHERE "id"=%s', (event_id,)).fetchone()
     result = serialize_event(conn, row)
+    conn.close()
+    return result
+
+
+# ---------- 정보 고치기 ----------
+TITLE_MAX = 60
+PLACE_MAX = 80
+NOTE_MAX = 300
+
+
+@router.put('/{event_id}')
+def update_event(event_id: int, body: dict):
+    """제목·메모, 확정된 일정이면 시간·장소도. 날짜는 참석 투표와 묶여 있어 여기서 바꾸지 않는다
+    (바꾸려면 확정 해제 → 다시 확정). 전에는 시간·장소 하나 고치려 해도 해제해야 했고, 해제하면 날짜·시간·장소가
+    다 지워졌다(2026-10-02). 보낸 칸만 바꾼다."""
+    conn = get_db()
+    event = _load(conn, event_id)
+    _require_manage(conn, event, body.get('nickname'))
+    fields, values = [], []
+    if 'title' in body:
+        title = str(body['title'] or '').strip()[:TITLE_MAX]
+        if not title:
+            conn.close()
+            raise HTTPException(400, '제목은 비울 수 없습니다.')
+        fields.append('"title"=%s'); values.append(title)
+    if 'note' in body:
+        fields.append('"note"=%s'); values.append(str(body['note'] or '').strip()[:NOTE_MAX] or None)
+    timed = [k for k in ('startTime', 'endTime', 'place') if k in body]
+    if timed and event['status'] != 'confirmed':
+        conn.close()
+        raise HTTPException(400, '시간·장소는 확정된 일정에서만 고칩니다.')
+    for k in ('startTime', 'endTime'):
+        if k in body:
+            v = str(body[k] or '').strip() or None
+            if v and not (len(v) == 5 and v[2] == ':' and v.replace(':', '').isdigit()):
+                conn.close()
+                raise HTTPException(400, '시간은 HH:MM 입니다.')
+            fields.append(f'"{k}"=%s'); values.append(v)
+    if 'place' in body:
+        fields.append('place=%s'); values.append(str(body['place'] or '').strip()[:PLACE_MAX] or None)
+    if not fields:
+        conn.close()
+        raise HTTPException(400, '고칠 내용이 없습니다.')
+    fields.append('"updatedAt"=now()')
+    conn.execute(f'UPDATE events SET {", ".join(fields)} WHERE "id"=%s', [*values, event_id])
+    conn.commit()
+    result = serialize_event(conn, conn.execute('SELECT * FROM events WHERE "id"=%s', (event_id,)).fetchone())
     conn.close()
     return result
 

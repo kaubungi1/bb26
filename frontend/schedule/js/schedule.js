@@ -525,6 +525,18 @@ function renderMatrix() {
   if (prev) confirmDateEl.value = prev;
 }
 
+/* ---------- 일정 다루기 권한 ----------
+   확정·해제·수정·삭제는 만들 수 있는 사람과 같다(서버 events.can_manage). 안 되는 버튼은 처음부터 안 보인다.
+   길드 멤버 여부는 길드 목록(/guilds, 멤버 포함)으로 본다 — 들어올 때 한 번 받는다. */
+function canManage(ev) {
+  if (!ev) return false;
+  if (AdminSeen.visible()) return true;
+  if (eventKind(ev) !== 'guild' || !ev.guildId) return false;
+  const me = Nick.get();
+  const g = guildList.find((x) => x.id === ev.guildId) || (Site.info && Site.info.id === ev.guildId ? Site.info : null);
+  return !!me && ((g && g.members) || []).some((m) => m.nickname === me);
+}
+
 /* ---------- 정기합주·정기공연 참가 길드 ---------- */
 let editingGuilds = null;     /* 고치는 중이면 고른 길드 id 집합 */
 function renderPollGuilds() {
@@ -602,8 +614,13 @@ function renderPollView() {
     pollHintEl.textContent = '내 열(점선)을 탭해 가능 표시 · 날짜를 탭하면 그날 되는 곡';
     if (!playableDate || !ev.dates.some((dr) => dr.date === playableDate)) playableDate = bestDate(ev);
   }
-  confirmBar.hidden = locked;
+  const can = canManage(ev);
+  confirmBar.hidden = locked || !can;
   confirmedBar.hidden = !locked;
+  unconfirmBtn.hidden = !can;
+  document.getElementById('edit-event-btn').hidden = !can;
+  document.getElementById('poll-delete').hidden = !can;
+  if (!can || !locked) document.getElementById('event-edit').hidden = true;
   /* 밴드 행사는 날짜 투표만 한다. 가능 곡·셋리스트가 없다 */
   const band = eventKind(ev) === 'band';
   setlistSection.hidden = !locked || band;
@@ -1073,7 +1090,7 @@ document.getElementById('poll-delete').addEventListener('click', async () => {
   if (!confirm(`${pollEvent.title} 조율을 삭제할까요?`)) return;
   const id = pollEvent.id;
   const ok = await Writes.commit(document.getElementById('poll-delete'), `event:${id}`,
-    () => api.del(`/events/${id}`).then(() => true));
+    () => api.del(`/events/${id}?nickname=${encodeURIComponent(Nick.get())}`).then(() => true));
   if (!ok) return;
   closePoll();
   events = events.filter((x) => x.id !== id);   /* 목록 전체를 다시 받지 않고 바로 뺀다 */
@@ -1161,7 +1178,7 @@ confirmBtn.addEventListener('click', async () => {
   const d = parseDate(day);
   if (!confirm(`${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]})로 확정할까요?`)) return;
   const ev = await Writes.commit(confirmBtn, `event:${pollEvent.id}`,
-    () => api.post(`/events/${pollEvent.id}/confirm`, { date: day, startTime: start, endTime: end, place }));
+    () => api.post(`/events/${pollEvent.id}/confirm`, { date: day, startTime: start, endTime: end, place, nickname: Nick.get() }));
   if (!ev) return;
   putEvent(ev);          /* 돌려받은 일정으로 바로 그린다 */
   renderPolls();
@@ -1191,13 +1208,53 @@ unconfirmBtn.addEventListener('click', async () => {
   if (!pollEvent) return;
   if (!confirm(`${pollEvent.title} 확정을 해제하고 다시 조율할까요?`)) return;
   const ev = await Writes.commit(unconfirmBtn, `event:${pollEvent.id}`,
-    () => api.post(`/events/${pollEvent.id}/unconfirm`, {}));
+    () => api.post(`/events/${pollEvent.id}/unconfirm`, { nickname: Nick.get() }));
   if (!ev) return;
   putEvent(ev);          /* 돌려받은 일정으로 바로 그린다 */
   renderPolls();
   renderPast();
   renderPollView();
 });
+
+/* ---------- 확정 일정 정보 고치기 ---------- */
+const editForm = document.getElementById('event-edit');
+document.getElementById('edit-event-btn').addEventListener('click', () => {
+  const ev = pollEvent;
+  if (!ev) return;
+  document.getElementById('ee-title').value = ev.title || '';
+  document.getElementById('ee-start').value = ev.startTime || '';
+  document.getElementById('ee-end').value = ev.endTime || '';
+  document.getElementById('ee-place').value = ev.place || '';
+  document.getElementById('ee-note').value = ev.note || '';
+  editForm.hidden = false;
+  document.getElementById('ee-title').focus();
+});
+document.getElementById('ee-cancel').addEventListener('click', () => { editForm.hidden = true; });
+editForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const ev = pollEvent;
+  if (!ev) return;
+  const title = document.getElementById('ee-title').value.trim();
+  if (!title) { document.getElementById('ee-title').focus(); return; }
+  const saved = await Writes.commit(document.getElementById('ee-save'), `event:${ev.id}`,
+    () => api.put(`/events/${ev.id}`, {
+      nickname: Nick.get(),
+      title,
+      startTime: document.getElementById('ee-start').value || null,
+      endTime: document.getElementById('ee-end').value || null,
+      place: document.getElementById('ee-place').value.trim() || null,
+      note: document.getElementById('ee-note').value.trim() || null,
+    }));
+  if (!saved) return;
+  editForm.hidden = true;
+  putEvent(saved);
+  renderPolls();
+  renderPast();
+  renderPollView();
+});
+/* 길드 멤버 여부(수정·확정 버튼)를 가리려고 길드 목록을 받아 둔다. 늦게 오면 펼친 일정을 다시 그린다 */
+loadGuildList().then(() => { if (pollEvent) renderPollView(); });
+['profiles', 'guildinfo', 'nickchange'].forEach((n) => document.addEventListener(n, () => { if (pollEvent) renderPollView(); }));
 
 mountChrome('schedule');
 pollDetail.addEventListener('focusout', (e) => {

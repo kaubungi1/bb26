@@ -831,3 +831,7 @@
 .sched-row.kind-concert .sched-kind { color: var(--pink); font-weight: 800; }
 /* 보라는 테마 변수가 없어 그 테마의 글자색과 섞는다 — 어두운 길드 테마에서도 읽히게 */
 .sched-row.kind-band .sched-kind    { color: color-mix(in srgb, #7c5cd6 70%, var(--ink)); font-weight: 800; }
+
+/* 확정 일정 정보 고치기 — 확정 칸 바로 아래에 펼친다 */
+.event-edit { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 4px; padding: 12px; background: #f5f9fb; }
+.event-edit input { min-height: 38px; }
