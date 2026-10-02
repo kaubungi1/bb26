@@ -70,8 +70,9 @@ function paintGuilds() {
   document.getElementById('guild-count').textContent = guilds.length;
   document.getElementById('guild-rows').innerHTML = guilds.map((g) => `
     <div class="admin-cell">
+      <span class="cell-crest">${guildMark(g, 32)}</span>
       <span class="cell-main">
-        ${guildBadge(g)}
+        <b>${escapeHtml(g.name)}</b>
         <small>${stats([['인원', new Set((g.members || []).map((x) => x.nickname)).size]])}</small>
       </span>
       <button type="button" class="del" data-del-guild="${escapeHtml(g.slug)}">삭제</button>

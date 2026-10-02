@@ -52,12 +52,27 @@
 .sc-yt em { font-style: normal; margin-left: 8px; color: var(--teal-deep); font-weight: 700; }
 
 /* 길드 탭 */
-.sc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 0 0 12px;
+/* 도구줄. 묶음(.sc-field) 사이에서만 줄이 바뀌고, 묶음 안의 글자는 꺾이지 않는다(전에는 '고른 0곡을' 이 한 글자씩 세로로 깨졌다) */
+.sc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 0 0 12px;
   border-bottom: 1.5px solid var(--line-2, #e3ebf1); font-size: 12.5px; font-weight: 700; color: var(--ink-muted); }
-.sc-bar select { min-height: 32px; margin-left: 6px; }
-.sc-bar .sc-move { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.sc-field { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.sc-bar select { width: auto; min-width: 120px; min-height: 32px; padding: 0 8px; }
+.sc-bar .sc-move { margin-left: auto; }
+/* 체크박스는 공통 입력칸 꼴(높이 40)에서 뺀다 — 큰 네모가 됐었다 */
+.song-clean input[type="checkbox"] { width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; flex: none;
+  border: 0; background: none; box-shadow: none; accent-color: var(--ink, #1b2a45); }
+/* 제목 탭의 보기 칩 */
+.sc-chip { border: 0; background: none; box-shadow: none; min-height: 30px; padding: 0 2px; font-size: 13px; font-weight: 800;
+  color: var(--ink-muted); border-bottom: 2px solid transparent; }
+.sc-chip i { font-style: normal; margin-left: 5px; font-size: 11.5px; color: var(--teal-deep); }
+.sc-chip.is-on { color: var(--ink); border-bottom-color: var(--ink); }
+.sc-inputs.is-one { grid-template-columns: 1fr; }
 .sc-guild-row { grid-template-columns: 20px 72px minmax(0, 1fr) auto; cursor: pointer; }
 .sc-where { display: inline-flex; align-items: center; }
+/* 소속: 문장 + 이름 글자 */
+.sc-where-in { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; color: var(--ink-muted); }
+.sc-where-in .guild-mark { display: inline-flex; line-height: 0; }
+.sc-where-in .guild-mark img { display: block; }
 
 /* 중복 탭 — 쌍 하나가 한 덩어리. 두 곡을 나란히 */
 .sc-pair { padding: 12px 0 14px; border-bottom: 1.5px solid var(--line-2, #e3ebf1); }
@@ -66,7 +81,10 @@
 .sc-why em { font-style: normal; color: var(--teal-deep); font-weight: 700; }
 .sc-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .sc-side { display: grid; grid-template-columns: 72px minmax(0, 1fr); grid-template-rows: auto auto; gap: 8px 12px; align-items: start; }
-.sc-side .sc-ok { grid-column: 2; justify-self: start; }
+/* 이쪽 남기기는 테두리만. 진한 버튼은 되돌리기 어려운 [병합] 하나만 남긴다 */
+.sc-keep { grid-column: 2; justify-self: start; min-height: 30px; padding: 0 12px; border: 1px solid #c3d0dc; border-radius: 3px;
+  background: none; box-shadow: none; font-size: 12px; font-weight: 800; color: var(--ink); }
+.sc-keep:hover { border-color: var(--ink); }
 .sc-counts { white-space: normal !important; }
 .sc-confirm { margin-top: 10px; padding: 10px 12px; background: #f5f8fa; font-size: 12.5px; line-height: 1.6; }
 .sc-confirm[hidden] { display: none; }

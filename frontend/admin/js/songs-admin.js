@@ -15,6 +15,7 @@ let songs = [];
 let guilds = [];
 let pairs = null;                       /* 중복 탭을 처음 열 때 받는다 */
 let guildView = 'none';                 /* 길드 탭 보기: 'none'(프리길드) | 'all' | 길드 id */
+let titleView = 'title';                /* 제목 탭 보기: 'title'(제목 손볼 곡) | 'noyt'(유튜브 주소 없는 곡) */
 const picked = new Set();               /* 길드 탭에서 고른 곡 */
 const ytTitles = new Map();             /* 영상 id -> 유튜브 제목 */
 const errorEl = document.getElementById('admin-error');
@@ -33,7 +34,8 @@ const fail = (err) => { errorEl.textContent = err.message; errorEl.hidden = fals
 const hidden = () => { try { return new Set(JSON.parse(localStorage.getItem(HIDE_KEY) || '[]')); } catch { return new Set(); } };
 const hide = (key) => { const s = hidden(); s.add(key); try { localStorage.setItem(HIDE_KEY, JSON.stringify([...s])); } catch {} };
 const guildName = (s) => (s.guild ? s.guild.name : FREE_GUILD);
-const where = (s) => (s.guild ? guildBadge(s.guild) : `<span class="sc-free">${FREE_GUILD}</span>`);
+/* 소속: 문장 + 이름 글자. 알약 배지는 다른 화면처럼 쓰지 않는다 */
+const where = (s) => `<span class="sc-where-in">${guildMark(s.guild || null, 16)}<span>${escapeHtml(s.guild ? s.guild.name : FREE_GUILD)}</span></span>`;
 const jacket = (s) => (s.thumbUrl ? `<img class="sc-jk" src="${escapeHtml(s.thumbUrl)}" alt="" loading="lazy" />` : '<span class="sc-jk"></span>');
 
 /* ---------- 제목 ---------- */
@@ -77,13 +79,63 @@ function titleRow(s) {
     </div>`;
 }
 
+const noYoutube = (s) => !(s.youtubeUrl || '').trim();
+
+/* 유튜브 주소가 없는 곡. 곡 정보 창은 주소가 필수라, 이 곡들은 태그 하나 고치려 해도 막힌다 — 여기서 몰아 채운다 */
+function ytRow(s) {
+  return `
+    <div class="sc-row sc-title-row" data-id="${s.id}" data-mode="yt">
+      ${jacket(s)}
+      <div class="sc-main">
+        <div class="sc-now">${escapeHtml(s.title)} <small>· ${escapeHtml(s.artist)} · ${escapeHtml(guildName(s))}</small></div>
+        <div class="sc-inputs is-one">
+          <label><span>유튜브</span><input data-f="yt" inputmode="url" placeholder="https://youtu.be/…" /></label>
+        </div>
+        <p class="sc-msg" hidden></p>
+      </div>
+      <button type="button" class="sc-ok" data-confirm="${s.id}">저장</button>
+    </div>`;
+}
+
 function paintTitle() {
-  const list = songs.filter(needsTitle);
-  bodyEl.innerHTML = list.length
+  const titled = songs.filter(needsTitle), noyt = songs.filter(noYoutube);
+  const chip = (v, label, n) => `<button type="button" class="sc-chip${titleView === v ? ' is-on' : ''}" data-title-view="${v}">${label}<i>${n}</i></button>`;
+  const head = `<div class="sc-bar">${chip('title', '제목 손볼 곡', titled.length)}${chip('noyt', '유튜브 주소 없음', noyt.length)}</div>`;
+  if (titleView === 'noyt') {
+    bodyEl.innerHTML = head + (noyt.length
+      ? `<p class="sc-lead">유튜브 주소를 넣고 Enter 로 저장합니다. 자켓 그림도 이 주소에서 가져옵니다.</p>` + noyt.map(ytRow).join('')
+      : '<p class="sc-empty">주소가 빠진 곡이 없습니다.</p>');
+    return;
+  }
+  bodyEl.innerHTML = head + (titled.length
     ? `<p class="sc-lead">한 줄씩 확인하고 확정합니다. Enter 로 확정하고 다음 줄로 갑니다. 유튜브 영상 제목을 근거로 보세요.</p>` +
-      list.map(titleRow).join('')
-    : '<p class="sc-empty">손볼 제목이 없습니다.</p>';
+      titled.map(titleRow).join('')
+    : '<p class="sc-empty">손볼 제목이 없습니다.</p>');
   watchYoutube();
+}
+
+async function saveYoutube(row) {
+  const id = Number(row.dataset.id);
+  const s = songs.find((x) => x.id === id);
+  const input = row.querySelector('[data-f="yt"]');
+  const msg = row.querySelector('.sc-msg');
+  const btn = row.querySelector('.sc-ok');
+  const url = input.value.trim();
+  if (!youtubeId(url)) { msg.textContent = url ? '유튜브 주소 형식이 아니에요' : '유튜브 주소를 입력해 주세요'; msg.hidden = false; input.focus(); return; }
+  btn.disabled = true;
+  msg.hidden = true;
+  try {
+    Object.assign(s, await api.put(`/songs/${id}`, { youtubeUrl: url }));
+    const next = row.nextElementSibling;
+    row.remove();
+    paintCounts();
+    if (next) next.querySelector('input')?.focus();
+  } catch (err) {
+    btn.disabled = false;
+    const c = err.detail && Array.isArray(err.detail.candidates) ? err.detail.candidates : [];
+    msg.textContent = c.length ? `${err.message} (${c.map((x) => x.title).join(', ')}) — 중복 탭에서 병합하세요` : err.message;
+    msg.hidden = false;
+  }
 }
 
 /* 유튜브 제목은 줄이 화면에 들어올 때 받는다. 브라우저가 유튜브에 바로 묻는다(서버 전송량 없음). */
@@ -148,14 +200,15 @@ function paintGuild() {
   for (const id of [...picked]) if (!list.some((s) => s.id === id)) picked.delete(id);
   const opt = (v, label, on) => `<option value="${v}"${on ? ' selected' : ''}>${escapeHtml(label)}</option>`;
   const targets = guilds.map((g) => opt(g.id, g.name, false)).join('') + opt('none', FREE_GUILD, false);
+  /* 도구줄 한 줄: 보기 [선택] · □ 모두 고르기 · 고른 n곡을 [길드] [옮기기]. 묶음 안의 글자는 꺾이지 않는다 */
   bodyEl.innerHTML = `
     <div class="sc-bar">
-      <label>보기 <select data-view>
+      <label class="sc-field"><span>보기</span><select data-view>
         ${opt('none', FREE_GUILD, guildView === 'none')}${opt('all', '전체', guildView === 'all')}
         ${guilds.map((g) => opt(g.id, g.name, guildView === g.id)).join('')}
       </select></label>
-      <label class="sc-all"><input type="checkbox" data-all ${list.length && list.every((s) => picked.has(s.id)) ? 'checked' : ''} /> 모두 고르기</label>
-      <span class="sc-move">고른 <b id="n-picked">${picked.size}</b>곡을
+      <label class="sc-field sc-check"><input type="checkbox" data-all ${list.length && list.every((s) => picked.has(s.id)) ? 'checked' : ''} /><span>모두 고르기</span></label>
+      <span class="sc-field sc-move"><span>고른 <b id="n-picked">${picked.size}</b>곡을</span>
         <select data-target>${targets}</select>
         <button type="button" class="sc-ok" data-move>옮기기</button></span>
     </div>
@@ -219,7 +272,7 @@ function side(s, p, which) {
         <span class="sc-where">${where(s)}</span>
         <small class="sc-counts">${counts}${s.createdBy ? ` · 등록 ${escapeHtml(s.createdBy)}` : ''}</small>
       </div>
-      <button type="button" class="sc-ok" data-keep="${which}" data-pair="${pairKey(p)}">이쪽 남기기</button>
+      <button type="button" class="sc-keep" data-keep="${which}" data-pair="${pairKey(p)}">이쪽 남기기</button>
     </div>`;
 }
 
@@ -307,8 +360,13 @@ document.querySelector('.sc-tabs').addEventListener('click', async (e) => {
 
 bodyEl.addEventListener('click', (e) => {
   const t = e.target;
+  const tv = t.closest('[data-title-view]');
+  if (tv) { titleView = tv.dataset.titleView; paintTitle(); return; }
   const ok = t.closest('[data-confirm]');
-  if (ok) return confirmTitle(ok.closest('.sc-title-row'));
+  if (ok) {
+    const row = ok.closest('.sc-title-row');
+    return row.dataset.mode === 'yt' ? saveYoutube(row) : confirmTitle(row);
+  }
   if (t.closest('[data-move]')) return moveSelected(t.closest('[data-move]'));
   const keep = t.closest('[data-keep]');
   if (keep) return askMerge(keep);
@@ -323,7 +381,7 @@ bodyEl.addEventListener('keydown', (e) => {
   const row = e.target.closest('.sc-title-row');
   if (!row || !e.target.matches('input')) return;
   e.preventDefault();
-  confirmTitle(row);
+  if (row.dataset.mode === 'yt') saveYoutube(row); else confirmTitle(row);
 });
 bodyEl.addEventListener('change', (e) => {
   const t = e.target;
