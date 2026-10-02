@@ -277,7 +277,7 @@ function thumb(song) {
   /* 섬네일이 없으면 홈과 같은 규칙으로 그린다 — 장르색 바탕에 글자 하나.
      빈 회색 칸을 두면 그 줄만 곡이 아닌 것처럼 보인다. 20곡이 여기 해당한다. */
   const inner = song.hasThumb
-    ? `<img src="${song.thumbUrl || `/api/songs/${song.id}/thumb`}" alt="" loading="lazy" decoding="async" width="56" height="32">`
+    ? `<img src="${song.thumbUrl || `/api/songs/${song.id}/thumb`}" alt="" loading="lazy" decoding="async" width="72" height="40">`
     : `<span class="th-mark" aria-hidden="true">${escapeHtml(songLetter(song))}</span>`;
   const cls = `song-thumb genre-${songTone(song)}${song.hasThumb ? '' : ' is-mark'}`;
   if (!song.youtubeUrl) return `<span class="${cls}">${inner}</span>`;
@@ -296,7 +296,7 @@ function fillBadge(song) {
   if (!total) return '';
   const filled = filledCount(song);
   const done = filled === total;
-  return `<span class="fill-badge${done ? ' full' : ''}" data-peek="${total}자리 중 ${filled}자리 참">${filled}<i>/${total}</i></span>`;
+  return `<span class="fill-badge${done ? ' full' : ''}" data-peek="${total}자리 중 ${filled}자리 참">${filled}/${total}</span>`;
 }
 
 function monthDay(iso) {
@@ -304,12 +304,10 @@ function monthDay(iso) {
   return `${Number(m)}/${Number(d)}`;
 }
 
-/* 제목 아래 한 줄: 아티스트 · 마지막 합주.
-   유튜브는 자켓이 맡고, 충원 현황은 줄 오른쪽 끝으로 뺐다. */
+/* 제목 아래 한 줄: 아티스트 · 마지막 합주. 줄마다 뜻 하나 — 첫째 줄은 곡 이름(원제·번역), 둘째 줄은 누가.
+   유튜브는 자켓이 맡고, 인원수·등록자는 오른쪽 숫자 칸이 맡는다. */
 function metaLine(song) {
-  /* 한국어 번역은 원제 줄을 비워 두려고 둘째 줄 맨 앞에 둔다. 최종 모양은 디자인 단계에서 다시 본다. */
   const parts = [`<span class="song-artist">${escapeHtml(song.artist)}</span>`];
-  if (song.titleKo) parts.unshift(`<span class="song-ko">${escapeHtml(song.titleKo)}</span>`);
   if (song.lastPlayed) parts.push(`<span class="song-played" data-peek="마지막 합주">${icon('history', 12)} ${monthDay(song.lastPlayed)}</span>`);
   return parts.join('<span class="meta-sep">·</span>');
 }
@@ -351,23 +349,22 @@ function songItem(song) {
     <div id="song-${song.id}" class="song-item${bump && bump.songId === song.id ? ' is-bumped' : ''}" data-song-id="${song.id}">
       <div class="song-item-head">
         ${thumb(song)}
+        ${Site.slug ? '' : `<span class="song-mark">${guildMark(song.guild, 40)}</span>`}
         <div class="song-item-info">
-          <div class="song-title-row">
-            <span class="song-title"><span>${escapeHtml(song.title)}</span></span>
-            ${!Site.slug ? guildBadge(song.guild) : ''}
-            <span class="song-tag${song.tags ? '' : ' none'}"><span>${escapeHtml(song.tags || '태그 없음')}</span></span>
-          </div>
+          <span class="song-title"><span>${escapeHtml(song.title)}${song.titleKo ? `<span class="song-ko">${escapeHtml(song.titleKo)}</span>` : ''}</span></span>
           <div class="song-meta">${metaLine(song)}</div>
         </div>
-        ${fillBadge(song)}
-        <div class="song-item-actions${moreId === song.id ? ' is-open' : ''}">
-          ${song.createdBy ? `<span class="song-by">${icon('user', 13)} ${escapeHtml(song.createdBy)}</span>` : ''}
-          <span class="row-more-set">
-            ${bumpBtn(song)}
-            ${sessionEditBtn(song)}
-            <button type="button" class="session-edit" data-edit-song="${song.id}">수정</button>
-          </span>
-          <button type="button" class="row-more" data-more="${song.id}" aria-label="더보기">⋯</button>
+        <div class="song-right">
+          ${song.createdBy ? `<span class="song-by" title="등록 ${escapeHtml(song.createdBy)}">${escapeHtml(song.createdBy)}</span><span class="meta-sep">·</span>` : ''}
+          ${fillBadge(song)}
+          <div class="song-item-actions${moreId === song.id ? ' is-open' : ''}">
+            <span class="row-more-set">
+              ${bumpBtn(song)}
+              ${sessionEditBtn(song)}
+              <button type="button" class="session-edit" data-edit-song="${song.id}">수정</button>
+            </span>
+            <button type="button" class="row-more" data-more="${song.id}" aria-label="더보기">⋯</button>
+          </div>
         </div>
       </div>
       <div class="sessions">

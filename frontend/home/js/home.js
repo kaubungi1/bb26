@@ -58,7 +58,10 @@ function jacket(s){const parts=ordered(s),me=Nick.get();
  const shot=s.hasThumb
   ? `<img class="jk-img" src="${s.thumbUrl||`/api/songs/${s.id}/thumb`}" alt="" loading="lazy" decoding="async">`
   : `<span class="jk-mark" aria-hidden="true">${esc(bigLetter(s))}</span>`;
- return `<div class="jacket genre-${tone(s)}"><div class="jk-shot"><span class="jk-genre"><span>${esc(shortGenre(s.genre))}</span></span>${!Site.slug&&s.guild?`<span class="jk-guild">${guildBadge(s.guild)}</span>`:''}${shot}${jkBump(s)}</div><div class="jk-band"><b title="${esc(s.titleKo||'')}">${esc(s.title)}</b><small>${esc(s.artist||'')}</small></div><div class="slots" aria-hidden="true">${parts.map(p=>`<i class="slot ${me&&p.supports.some(x=>x.nickname===me)?'mine':p.supports.length?'on':'off'}"><em>${esc(abbr(p.role))}</em><u>${p.supports.length}</u></i>`).join('')}</div></div>`}
+ /* 띠(.jk-band) 색 = 길드 색(읽히게 맞춘 것, common.js bandColor). 프리길드는 --free-band. 장르는 꼬리표가 맡는다.
+    띠 오른쪽에 길드 문장(프리길드는 로고). 길드 안에서는 전부 그 길드 것이라 문장은 그리지 않고 띠 색만 둔다. */
+ const band=s.guild&&bandColor(s.guild.color);
+ return `<div class="jacket genre-${tone(s)}${s.guild?'':' is-free'}"${band?` style="--band:${band}"`:''}><div class="jk-shot"><span class="jk-genre"><span>${esc(shortGenre(s.genre))}</span></span>${shot}${jkBump(s)}</div><div class="jk-band"><b title="${esc(s.titleKo||'')}">${esc(s.title)}</b><small>${esc(s.artist||'')}</small>${Site.slug?'':guildMark(s.guild,40,'jk-gmark')}</div><div class="slots" aria-hidden="true">${parts.map(p=>`<i class="slot ${me&&p.supports.some(x=>x.nickname===me)?'mine':p.supports.length?'on':'off'}"><em>${esc(abbr(p.role))}</em><u>${p.supports.length}</u></i>`).join('')}</div></div>`}
 /* 섬네일이 없을 때 깔 글자. 가나·한자·영숫자만 쓴다. 한글은 건너뛴다. */
 const bigLetter=songLetter;
 function detail(s){const me=Nick.get(),parts=ordered(s);return `<section class="now"><div class="now-slots">${parts.map(p=>slot(p,me,s)).join('')||'<span class="muted">등록된 파트 없음</span>'}</div>${murmur(s)}</section>`}

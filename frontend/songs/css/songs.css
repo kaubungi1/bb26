@@ -294,11 +294,33 @@
 .songs .song-item { padding: 11px 0 12px; border-bottom: 1px solid var(--line-2);
   border-radius: 0; background: none; box-shadow: none; }
 .songs .song-item:last-child { border-bottom: 1px solid var(--line-2); }
-.songs .song-item-head { display: flex; align-items: center; gap: 11px; margin-bottom: 7px; }
-.songs .song-item-info { min-width: 0; flex: 1; }
-.songs .song-title-row { display: flex; align-items: baseline; gap: 7px; flex-wrap: nowrap; min-width: 0; }
-.songs .song-title { font-size: 14.5px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink);
+/* 곡 머리는 줄마다 같은 세로선을 쓰는 격자다(2026-10-02). 줄마다 달라지는 것은 글자 내용뿐이다.
+   섬네일(72x40) | 길드 표식(40) | 곡 이름·아티스트(남는 폭) | 등록자 · 인원수 · ⋯(자연 폭, 오른쪽 끝)
+   섬네일·표식·글자 두 줄이 모두 높이 40 이다. 길드 안에서는 표식 칸이 없다.
+   표식은 문장·로고가 같은 폭(40)을 쓴다 — 폭이 달랐더니 둘의 무게가 어긋났다(사용자, 2026-10-02).
+   왼쪽 끝 길드 색 막대는 3px 에서 색이 거의 구별되지 않아 뺐다. */
+.songs .song-item-head { display: grid; grid-template-columns: 72px 40px minmax(0, 1fr) auto;
+  column-gap: 10px; align-items: center; margin-bottom: 7px; }
+.songs .song-item-head:not(:has(.song-mark)) { grid-template-columns: 72px minmax(0, 1fr) auto; }
+.songs .song-item-info { min-width: 0; }
+.songs .song-mark { display: flex; justify-content: center; align-items: center; line-height: 0; }
+/* 칸 폭에 맞춘다(guildMark 는 로고 높이를 인라인으로 준다) */
+.songs .song-mark .guild-mark.is-free img { width: 40px; height: auto !important; }
+.songs .song-title { display: block; font-size: 14.5px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 한국어 번역 — 원제 바로 뒤, 한 단계 약하게. 회원들은 한국어로 곡을 본다(사용자, 2026-10-02).
+   원제와 한 덩어리라 길면 같이 흐른다(rollTitles). */
+.songs .song-title .song-ko { margin-left: 8px; font-size: 13px; font-weight: 600; color: var(--ink-muted); letter-spacing: -0.01em; }
+/* 등록자 · 인원수 · ⋯ — 제목 줄 높이에, 오른쪽 끝에 붙인 한 덩어리. 폭을 고정하지 않는다(빈 틈이 생겼다).
+   인원수는 늘 0/6~6/6 이라 폭이 같아서, 오른쪽 끝에서부터 ⋯ 와 인원수가 줄마다 같은 세로선에 선다.
+   길이가 들쭉날쭉한 등록자는 맨 왼쪽에 둔다. 두 줄로 쌓았더니 ⋯ 와 삼각형을 이뤘다(사용자, 2026-10-02). */
+.songs .song-right { display: flex; align-items: center; gap: 6px; align-self: start; min-height: 22px; }
+.songs .song-right .song-by, .songs .song-right .fill-badge { font-size: 11.5px; font-weight: 700; color: var(--ink-faint);
+  white-space: nowrap; }
+.songs .song-right .song-by { max-width: 5.5em; overflow: hidden; text-overflow: ellipsis; }
+.songs .song-right .fill-badge { font-variant-numeric: tabular-nums; }
+.songs .song-right .fill-badge.full { color: var(--teal-deep); }
+.songs .song-right .song-item-actions { margin-left: 2px; }
 /* 잘린 제목만 흐른다. 잘린 폭(--roll)은 songs.js 의 rollTitles() 가 칸마다 재서 넣는다.
 
    주기는 6초로 고정한다. 전에는 흐르는 시간을 잘린 길이에 비례시켰는데, 그러면 주기가
@@ -326,12 +348,9 @@
 .songs .song-meta { display: flex; align-items: center; gap: 6px; margin-top: 1px; font-size: 11.5px; }
 .songs .song-artist { color: var(--ink-faint); font-size: 11.5px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 한국어 번역. 아티스트보다 앞, 같은 크기. 길면 먼저 줄어든다 */
-.songs .song-ko { color: var(--ink-soft, var(--ink-faint)); font-size: 11.5px; font-weight: 700;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
 
 /* 자켓. 줄 높이를 늘리지 않는 크기다. 누르면 유튜브로 간다. */
-.songs .song-thumb { flex: none; display: block; width: 56px; height: 32px; overflow: hidden;
+.songs .song-thumb { flex: none; display: block; width: 72px; height: 40px; overflow: hidden;
   background: var(--empty); }
 /* 섬네일이 없는 자리. 홈 자켓과 같은 규칙 — 장르색 바탕에 글자 하나.
    한글은 songLetter() 가 건너뛰므로 여기 오는 건 가나·한자·영숫자뿐이다. */
@@ -343,11 +362,6 @@
 .songs a.song-thumb { transition: box-shadow 0.12s; }
 .songs a.song-thumb:hover { box-shadow: 0 0 0 2px var(--teal); }
 
-/* 몇 자리 찼는가. 숫자 하나면 충분하다. 게이지 막대는 뺐다. */
-.songs .fill-badge { flex: none; background: none; padding: 0; color: var(--ink-muted);
-  font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-.songs .fill-badge i { font-style: normal; font-weight: 700; color: var(--ink-faint); }
-.songs .fill-badge.full { color: var(--teal-deep); }
 
 /* ---------- 파트 여섯 칸 ---------- */
 /* 상자가 아니라 채워진 면이다. 색이 차 있으면 사람이 있다는 뜻이다. */
@@ -395,7 +409,11 @@
 /* ---------- 좁은 화면 ---------- */
 @media (max-width: 560px) {
   .songs .list-head h1 { font-size: 23px; }
-  .songs .song-thumb { width: 44px; height: 25px; }
+  .songs .song-thumb { width: 56px; height: 32px; }
+  .songs .song-item-head { grid-template-columns: 56px 32px minmax(0, 1fr) auto; column-gap: 8px; }
+  .songs .song-item-head:not(:has(.song-mark)) { grid-template-columns: 56px minmax(0, 1fr) auto; }
+  .songs .song-mark .guild-mark.is-free img { width: 32px; }
+  .songs .song-mark svg { width: 32px; height: 32px; }
   .songs .session-cell { min-height: 36px; padding: 4px 5px; }
   .songs .session-cell .role.short { display: inline; }
   .songs .session-cell .role.full { display: none; }
@@ -413,8 +431,9 @@
 .songs .song-tag:hover { color: var(--teal-deep); filter: none; }
 .songs .song-tag > span { transform: skewX(calc(var(--skew) * -1)); }
 
-/* 길드 꼬리표도 같은 이유로 한 단계 낮춘다 */
-.songs .song-title-row .guild-badge { font-size: 9.5px; }
+/* 소속 — 이름 없이 문장만(프리길드는 로고). 이름은 마우스를 올리면 보인다(common.js guildMark) */
+.songs .song-mark .guild-mark { display: inline-flex; }
+.songs .song-mark .guild-mark img { display: block; }
 
 /* 정렬·필터 메뉴 버튼 — 검색칸과 같은 높이에 앉힌다 */
 .songs .tool-line .drop-btn { min-height: 40px; padding: 0 2px; font-size: 13px; font-weight: 800; color: var(--ink-muted); }
@@ -424,7 +443,9 @@
   text-decoration-thickness: 2px; text-decoration-color: var(--teal); }
 
 /* 마지막 합주일·등록자는 배경으로 물러난다 */
-.songs .song-played, .songs .song-by { color: var(--ink-faint); font-size: 11px; font-weight: 700; }
+.songs .song-by { color: var(--ink-faint); font-size: 11px; font-weight: 700; }
+/* 둘째 줄의 보조 정보라 아티스트와 같은 크기·굵기로 맞춘다(전에는 700 이라 아티스트보다 진했다, 2026-10-02) */
+.songs .song-played { color: var(--ink-faint); font-size: 11.5px; font-weight: inherit; }
 .songs .meta-sep { color: #c3d2de; }
 
 /* ---------- 쓰지 않는 자리 ---------- */

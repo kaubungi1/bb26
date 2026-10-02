@@ -645,6 +645,47 @@ function guildBadge(guild, extra = '') {
     `${mark}<span>${escapeHtml(guild.name)}</span></span>`;
 }
 
+/* 길드 색으로 자켓 띠 색을 만든다. 띠 위 제목·아티스트는 흰 글자라, 길드가 고른 색 그대로 깔면
+   연한 색(#ffd6f0·#ffdd00)은 대비 1.3 으로 읽히지 않는다. 그래서 색조(H)는 지키고 밝기만 맞춘다 —
+   상대 휘도 BAND_LUM(흰 글자 대비 약 11.7:1). 장르 띠 다섯 색이 0.031~0.058(대비 9.7~13)이었던 것과 같은 범위다.
+   채도는 BAND_SAT_MAX 를 넘지 않게 눌러, 장르 띠처럼 한 세트로 보이게 한다. 형식이 틀리면 null. */
+const BAND_LUM = 0.04;
+const BAND_SAT_MAX = 0.6;
+function bandColor(hex) {
+  const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec((hex || '').trim());
+  if (!m) return null;
+  let h6 = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1];
+  const [r0, g0, b0] = [0, 2, 4].map((i) => parseInt(h6.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r0, g0, b0), min = Math.min(r0, g0, b0), d = max - min;
+  let h = 0;
+  if (d) h = max === r0 ? ((g0 - b0) / d) % 6 : max === g0 ? (b0 - r0) / d + 2 : (r0 - g0) / d + 4;
+  h = (h * 60 + 360) % 360;
+  const l0 = (max + min) / 2;
+  const s = Math.min(d ? d / (1 - Math.abs(2 * l0 - 1)) : 0, BAND_SAT_MAX);
+  const rgb = (l) => {
+    const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), o = l - c / 2;
+    const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+    return [r + o, g + o, b + o];
+  };
+  const lin = (v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (lum(rgb(mid)) < BAND_LUM) lo = mid; else hi = mid; }
+  return '#' + rgb(lo).map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('');
+}
+
+/* 길드를 이름 없이 문장만으로. 프리길드(guild 없음)는 불법이륙 로고 — 길드가 아니라서 모양도 다르게 둔다
+   (육각 안에 로고를 넣으면 글자가 4~6px 이 되어 빈 문장처럼 보였다. 2026-10-02 사용자 결정).
+   이름은 title·aria-label 로 남는다(마우스를 올리면 보인다). size 는 문장 한 변, 로고는 그 0.7 높이. */
+function guildMark(guild, size, cls = '') {
+  if (!guild) {
+    return `<span class="guild-mark is-free ${cls}" title="${FREE_GUILD}" aria-label="${FREE_GUILD}">` +
+      `<img src="/assets/logo.png" alt="" style="height:${Math.round(size * 0.7)}px" /></span>`;
+  }
+  const mark = (typeof crestFor === 'function' && crestFor(guild, size)) || '';
+  return `<span class="guild-mark ${cls}" title="${escapeHtml(guild.name)}" aria-label="${escapeHtml(guild.name)}">${mark}</span>`;
+}
+
 /* 임시 로고 마크. 이륙각으로 올라가는 기체.
    실제 로고가 나오면 이 상수의 SVG 만 통째로 교체하면 된다. 다른 곳은 건드릴 필요 없다. */
 /* 공식 로고. 1782×780 투명 PNG 이고, 글자(不法離陸)가 그림에 들어 있어

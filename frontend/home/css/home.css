@@ -94,14 +94,21 @@
 .home .carousel img{-webkit-user-drag:none;user-select:none}
 .home .jk-mark{font-size:92px;font-weight:900;line-height:1;color:#ffffff96;letter-spacing:-.04em;user-select:none}
 .home .jk-genre{position:absolute;left:9px;top:9px;z-index:2;padding:3px 9px;background:#ffffffd9;
-  color:var(--jk-ink);font-size:11px;font-weight:800;letter-spacing:.14em;transform:skew(var(--skew))}
+  color:var(--jk-ink);font-size:11px;font-weight:800;letter-spacing:.02em;transform:skew(var(--skew))}
+/* 자간을 .14em 에서 줄였다. 넓은 자간은 영문 대문자용이라 한글은 '보 컬 로 이 드' 처럼 낱자로 떨어졌다(2026-10-02) */
 .home .jk-genre>span{display:inline-block;transform:skew(calc(var(--skew) * -1))}
-/* 어느 길드의 곡인지. 장르 칩 오른쪽에 붙는다 — 왼쪽 위가 이 카드의 '꼬리표' 자리다.
-   오른쪽 위는 유튜브 버튼이 쓰고, 아래 띠는 제목·아티스트라 더 넣을 자리가 없다.
-   길드 안에서는 안 그린다(home.js). 전부 그 길드 것이라 줄만 차지한다. */
-.home .jk-guild{position:absolute;left:9px;top:31px;z-index:2;max-width:calc(100% - 18px)}
-.home .jk-guild .guild-badge{max-width:100%;background:#ffffffd9;color:var(--g)}
-.home .jk-guild .guild-badge>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 어느 길드의 곡인지 — 띠 색(길드 색을 읽히게 맞춘 것)과 띠 오른쪽 문장. 프리길드는 남색 띠 + 흰 로고.
+   섬네일 위에는 장르 꼬리표와 (고른 카드의) 유튜브만 둔다. 그림 위에 정보를 겹쳐 올리면 서로 가렸다(2026-10-02). */
+.home .jacket.is-free{--band:#1b2a45}  /* 프리길드 띠 = 사이트 기본 남색 */
+.home .jk-band{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:center}
+.home .jk-band>b,.home .jk-band>small{grid-column:1}
+/* 표식 칸은 폭 48px 로 고정한다. 문장(40px)과 가로로 긴 로고(폭 48px)가 같은 칸에 들어가
+   카드마다 제목 칸 폭이 같아진다 — 로고를 높이로 맞췄더니 프리길드 카드만 제목이 좁아 먼저 꺾였다. */
+.home .jk-gmark{grid-column:2;grid-row:1/span 2;width:48px;display:flex;justify-content:center;align-items:center;line-height:0}
+/* guildMark 는 로고 높이를 인라인으로 준다(곡 목록용). 여기서는 칸 폭에 맞춰야 해서 덮어쓴다 */
+.home .jk-gmark.is-free img{width:48px;height:auto!important}
+/* 문장은 컬러 그대로, 테 없이. 흰 테(이중 테가 됨)·흑백·경계 걸치기를 거쳐 사용자가 고른 모양(2026-10-02) */
+.home .jk-gmark.is-free img{filter:invert(1);opacity:.9}
 .home .jk-band{flex:none;padding:9px 13px 10px;background:var(--band);color:#fff}
 .home .jacket b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
   margin:0;font-size:15px;line-height:1.25;letter-spacing:-.01em;overflow-wrap:anywhere;font-weight:800}
@@ -112,13 +119,15 @@
 /* 유튜브 아이콘. 자켓 버튼의 형제라 버튼 안에 링크가 들어가지 않는다. */
 /* 유튜브 아이콘. 자켓 버튼의 형제라 버튼 안에 링크가 들어가지 않는다.
    흰 바탕에 빨간 아이콘이라 어떤 섬네일 위에서도 보인다. */
-.home .yt{position:absolute;right:8px;top:8px;z-index:3;display:grid;place-items:center;width:30px;height:24px;padding:0;border:0;border-radius:5px;background:#ffffffe8;box-shadow:0 1px 4px #00000030;transition:transform .12s,background .12s}
+.home .yt{position:absolute;right:8px;top:8px;z-index:3;display:grid;place-items:center;width:30px;height:24px;padding:0;border:0;border-radius:5px;background:#ffffffe8;box-shadow:none;transition:transform .12s,background .12s}
+/* 그림자는 뺐다(§9.3). 모서리는 각지게 해 봤다가 사용자가 5px 이 낫다고 해 되돌렸다(2026-10-02) */
 .home .yt svg{width:24px;height:24px;display:block}
 .home .yt svg .body{fill:#ff0033}
 .home .yt svg .play{fill:#fff}
 .home .yt:hover{background:#fff}
 .home .yt:active{transform:scale(.92)}
-.home .track-wrap:not(:has(.chosen)) .yt{opacity:.55}
+/* 유튜브는 고른 카드에만. 옆 카드 섬네일 위를 비운다(2026-10-02) */
+.home .track-wrap:not(:has(.chosen)) .yt{display:none}
 .home .slots{display:grid;grid-template-columns:repeat(6,1fr);gap:0;margin:0;flex:none;background:#00000033}
 .home .slot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:38px;font-style:normal;box-shadow:inset 1.5px 0 0 #ffffff26;color:#fff;font-size:10px;font-weight:800;line-height:1}
 .home .slot:first-child{box-shadow:none}
