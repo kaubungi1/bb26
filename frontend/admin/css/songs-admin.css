@@ -1,0 +1,84 @@
+/* 관리 — 곡 정리. 관리 화면(admin.css)과 같은 문법: 칸은 가로선 하나로만 나누고 상자·라운드·그림자는 없다.
+   줄마다 '자켓 · 내용 · 단추' 같은 순서로 서서, 탭이 바뀌어도 눈이 같은 자리를 찾는다. */
+
+
+.sc-tabs { display: flex; gap: 2px; margin: 0 0 14px; border-bottom: 1.5px solid var(--line-2, #e3ebf1); }
+.sc-tabs button {
+  min-height: 38px; padding: 0 14px; border: 0; border-radius: 0; background: none;
+  font-size: 13.5px; font-weight: 800; color: var(--ink-muted); box-shadow: none;
+  border-bottom: 2.5px solid transparent; margin-bottom: -1.5px;
+}
+.sc-tabs button i { font-style: normal; margin-left: 6px; font-size: 11.5px; color: var(--teal-deep); }
+.sc-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+
+.sc-lead { margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: var(--ink-muted); }
+.sc-lead a { color: var(--ink); font-weight: 800; }
+.sc-empty { padding: 24px 0; font-size: 13px; color: var(--ink-faint); }
+.sc-msg { margin: 2px 0 0; font-size: 11.5px; font-weight: 700; color: var(--pink); }
+.sc-msg[hidden] { display: none; }
+.sc-free { font-size: 11.5px; font-weight: 800; color: var(--ink-muted); }
+
+/* 줄 하나 */
+.sc-row {
+  display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--line-2, #e3ebf1);
+}
+.sc-jk { width: 72px; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #eef4f8; }
+.sc-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sc-main b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-main small { font-size: 11.5px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.sc-ok {
+  flex: none; min-height: 34px; padding: 0 14px; border: 0; border-radius: 3px;
+  background: var(--ink, #1b2a45); color: #fff; font-size: 12.5px; font-weight: 800; box-shadow: none;
+}
+.sc-ok:disabled { opacity: .5; }
+.sc-ok.is-danger { background: var(--pink); }
+.sc-link { border: 0; background: none; padding: 0 6px; font-size: 12px; font-weight: 700; color: var(--ink-muted);
+  text-decoration: underline; box-shadow: none; min-height: 0; }
+
+/* 제목 탭 — 지금 제목, 원제·번역 두 칸, 유튜브 제목. 이름표 폭을 같게 해 칸의 왼쪽 끝을 맞춘다(곡 정보 창과 같은 규칙) */
+.sc-now { font-size: 12px; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-now span, .sc-yt span { display: inline-block; width: 36px; font-size: 10.5px; font-weight: 800; color: var(--ink-faint); }
+.sc-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sc-inputs label { display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: center; gap: 0; }
+.sc-inputs span { font-size: 10.5px; font-weight: 800; color: var(--ink-faint); }
+.sc-inputs input {
+  width: 100%; min-height: 34px; padding: 0 10px; border: 0; border-bottom: 2px solid #d3e0ea;
+  border-radius: 3px 3px 0 0; background: #eef4f8; font-size: 13.5px; font-weight: 600; color: #1b2a45;
+}
+.sc-inputs input:focus { outline: none; border-bottom-color: #00b3bf; }
+.sc-yt { min-height: 16px; font-size: 12px; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-yt em { font-style: normal; margin-left: 8px; color: var(--teal-deep); font-weight: 700; }
+
+/* 길드 탭 */
+.sc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 0 0 12px;
+  border-bottom: 1.5px solid var(--line-2, #e3ebf1); font-size: 12.5px; font-weight: 700; color: var(--ink-muted); }
+.sc-bar select { min-height: 32px; margin-left: 6px; }
+.sc-bar .sc-move { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.sc-guild-row { grid-template-columns: 20px 72px minmax(0, 1fr) auto; cursor: pointer; }
+.sc-where { display: inline-flex; align-items: center; }
+
+/* 중복 탭 — 쌍 하나가 한 덩어리. 두 곡을 나란히 */
+.sc-pair { padding: 12px 0 14px; border-bottom: 1.5px solid var(--line-2, #e3ebf1); }
+.sc-why { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 11.5px; }
+.sc-why span { padding: 2px 8px; background: #eef4f8; font-weight: 800; color: var(--ink); }
+.sc-why em { font-style: normal; color: var(--teal-deep); font-weight: 700; }
+.sc-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.sc-side { display: grid; grid-template-columns: 72px minmax(0, 1fr); grid-template-rows: auto auto; gap: 8px 12px; align-items: start; }
+.sc-side .sc-ok { grid-column: 2; justify-self: start; }
+.sc-counts { white-space: normal !important; }
+.sc-confirm { margin-top: 10px; padding: 10px 12px; background: #f5f8fa; font-size: 12.5px; line-height: 1.6; }
+.sc-confirm[hidden] { display: none; }
+.sc-confirm p { margin: 0 0 8px; }
+
+@media (max-width: 640px) {
+  .sc-row { grid-template-columns: 56px minmax(0, 1fr); }
+  .sc-jk { width: 56px; }
+  .sc-title-row .sc-ok { grid-column: 1 / -1; }
+  .sc-inputs { grid-template-columns: 1fr; }
+  .sc-guild-row { grid-template-columns: 20px 56px minmax(0, 1fr); }
+  .sc-guild-row .sc-where { grid-column: 3; }
+  .sc-sides { grid-template-columns: 1fr; }
+  .sc-bar .sc-move { margin-left: 0; }
+}

@@ -234,6 +234,9 @@ MIGRATIONS = [
     # 곡 제목은 원제(title) + 한국어 번역(titleKo, 선택)으로 나눠 받는다(2026-10-02).
     # 전에는 "メルト (melt 멜트)" 처럼 한 칸에 섞여 있었다. 같은 곡 판정(songmatch.py)이 둘 다 본다.
     'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "titleKo" TEXT',
+    # 관리 탭 '곡 정리' 에서 제목을 확인했다는 표시. 한글 원제가 맞는 곡(한국 곡)이 정리 목록에 계속 남지 않게.
+    # 정리하는 사람이 여럿이라 브라우저가 아니라 DB 에 둔다(routers/songadmin.py).
+    'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "titleCheckedAt" TIMESTAMPTZ',
 
     # 외래키/조회 컬럼 인덱스. 유니크 제약이 이미 덮는 곳은 뺐다.
     'CREATE INDEX IF NOT EXISTS idx_sessions_song ON sessions("songId")',

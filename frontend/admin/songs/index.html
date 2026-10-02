@@ -4,38 +4,38 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="robots" content="noindex" />
-  <title>관리 - 불법이륙</title>
+  <title>곡 정리 - 불법이륙</title>
   <link rel="stylesheet" href="/common/tokens.css?v=4" />
   <link rel="stylesheet" href="/common/themes.css?v=4" />
   <link rel="stylesheet" href="/common/common.css?v=4" />
   <link rel="stylesheet" href="/common/profile.css?v=4" />
-  <link rel="stylesheet" href="/common/party.css?v=4" />
   <link rel="stylesheet" href="/admin/css/admin.css?v=3" />
+  <link rel="stylesheet" href="/admin/css/songs-admin.css?v=1" />
 </head>
 <body>
   <header id="app-header" class="app-bar"></header>
-  <main class="container admin">
+  <main class="container admin song-clean">
     <section id="panel" class="card" hidden>
       <div class="list-head">
         <div>
           <span class="overline"><span>ADMIN</span></span>
-          <h1>멤버<small id="member-count"></small></h1>
+          <h1>곡 정리</h1>
         </div>
-        <a class="sc-back" href="/admin/songs/">곡 정리</a>
+        <a class="sc-back" href="/admin/">관리로</a>
+      </div>
+      <div class="sc-tabs" role="tablist">
+        <button type="button" role="tab" data-tab="title">제목<i id="n-title"></i></button>
+        <button type="button" role="tab" data-tab="guild">길드<i id="n-guild"></i></button>
+        <button type="button" role="tab" data-tab="dup">중복<i id="n-dup"></i></button>
       </div>
       <p id="admin-error" class="form-error" role="alert" hidden></p>
-      <div id="member-rows" class="admin-grid"></div>
-
-      <div class="list-head second">
-        <div><h1>길드<small id="guild-count"></small></h1></div>
-      </div>
-      <div id="guild-rows" class="admin-grid"></div>
+      <div id="sc-body"></div>
     </section>
   </main>
   <nav id="app-tabbar" class="tab-bar"></nav>
   <script src="/common/common.js?v=4"></script>
   <script src="/common/crest.js?v=4"></script>
   <script src="/common/crop.js?v=4"></script><script src="/common/profile.js?v=4"></script>
-  <script src="/admin/js/admin.js?v=4"></script>
+  <script src="/admin/js/songs-admin.js?v=1"></script>
 </body>
 </html>

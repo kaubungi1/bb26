@@ -12,6 +12,7 @@ from db import init_db
 from guildtheme import theme_of
 from routers import comments, drawings, events, guilds, members, pairs, sessions, sheets, songs
 from routers import admin as admin_router
+from routers import songadmin
 from routers import metrics as metrics_router
 
 BASE_DIR = os.path.dirname(__file__)
@@ -35,6 +36,7 @@ ROUTERS = [
     (members, '/api/members', '멤버'),
     (metrics_router, '/api/stats', '계측'),
     (admin_router, '/api/admin', '관리'),
+    (songadmin, '/api/admin', '곡 정리'),
 ]
 for module, prefix, tag in ROUTERS:
     app.include_router(module.router, prefix=prefix, tags=[tag])

@@ -96,3 +96,7 @@
   .admin-grid { grid-template-columns: minmax(0, 1fr); }
   .admin .list-head h1 { font-size: 24px; }
 }
+
+/* 관리 ↔ 곡 정리 오가는 글자 링크. 머리 오른쪽 끝 */
+.admin .sc-back { font-size: 12.5px; font-weight: 800; color: var(--ink-muted); text-decoration: none; }
+.admin .sc-back:hover { color: var(--ink); }
