@@ -14,6 +14,11 @@ const addModal = document.getElementById('add-modal');
 const dowPick = document.getElementById('dow-pick');
 const dowHint = document.getElementById('dow-hint');
 let pickedDows = new Set();   /* 만들 때 고른 요일. 비어 있으면 전체 */
+const kindPick = document.getElementById('kind-pick');
+const guildPick = document.getElementById('guild-pick');
+let pickedKind = null;        /* 만들 때 고른 종류 */
+let pickedGuilds = new Set(); /* 정기합주·정기공연의 참가 길드 */
+let guildList = [];           /* 참가 길드 고르기·고치기에 쓰는 길드 목록. 창을 열 때 받는다 */
 const addForm = document.getElementById('add-form');
 const inTitle = document.getElementById('in-title');
 const inFrom = document.getElementById('in-from');
@@ -96,7 +101,9 @@ function isWeekend(iso) {
 function todayStr() { return toDateStr(new Date()); }
 
 /* 길드 밖(메인)에서만 배지를 단다. 길드 안에서는 전부 그 길드 것이다. */
-function badge(ev) { return Site.slug ? '' : guildBadge(ev.guild); }
+/* 상태 글자 옆 꼬리표. 종류·참가 길드는 eventcard.js 가 정한다(홈과 같은 모양) */
+function badge(ev) { return eventTag(ev); }
+const isUnion = (ev) => ['regular', 'concert'].includes(eventKind(ev));
 
 /* 상세 안의 글자·시간·날짜 칸에 커서가 있는가. 체크박스(주말만)는 누르고 끝이라 뺀다. */
 function editingDetail() {
@@ -257,7 +264,50 @@ function renderPast() {
 }
 
 /* ---------- 일정 추가 ---------- */
+/* 고를 수 있는 종류. 길드 페이지는 길드 합주로 고정, 정기합주·정기공연은 관리자만(서버가 다시 본다) */
+function allowedKinds() {
+  if (Site.slug) return ['guild'];
+  return AdminSeen.visible() ? ['regular', 'concert', 'band'] : ['band'];
+}
+function renderKindPick() {
+  const allowed = allowedKinds();
+  if (!allowed.includes(pickedKind)) pickedKind = allowed[0];
+  kindPick.hidden = allowed.length < 2;
+  kindPick.querySelectorAll('[data-kind]').forEach((b) => {
+    b.hidden = !allowed.includes(b.dataset.kind);
+    b.setAttribute('aria-pressed', String(b.dataset.kind === pickedKind));
+  });
+  const union = ['regular', 'concert'].includes(pickedKind);
+  guildPick.hidden = !union;
+  if (union) {
+    guildPick.innerHTML = '<span class="dow-pick-label">참가 길드</span>' + guildList.map((g) =>
+      `<button type="button" data-guild="${g.id}" aria-pressed="${pickedGuilds.has(g.id)}" title="${escapeHtml(g.name)}">`
+      + `${guildMark(g, 16)} ${escapeHtml(g.name)}</button>`).join('');
+  }
+}
+kindPick.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-kind]');
+  if (!b) return;
+  pickedKind = b.dataset.kind;
+  renderKindPick();
+});
+guildPick.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-guild]');
+  if (!b) return;
+  const id = Number(b.dataset.guild);
+  if (pickedGuilds.has(id)) pickedGuilds.delete(id); else pickedGuilds.add(id);
+  renderKindPick();
+});
+async function loadGuildList() {
+  if (guildList.length) return;
+  try { guildList = (await api.poll('/guilds')).data || []; } catch { guildList = []; }
+}
+
 function openAddModal() {
+  pickedKind = null;
+  pickedGuilds = new Set();
+  renderKindPick();
+  loadGuildList().then(renderKindPick);
   const t = new Date();
   inFrom.value = toDateStr(t);
   const to = new Date(t);
@@ -316,6 +366,8 @@ addForm.addEventListener('submit', async (e) => {
     dateFrom: from,
     dateTo: to,
     weekdays: [...pickedDows],
+    kind: pickedKind,
+    guildIds: ['regular', 'concert'].includes(pickedKind) ? [...pickedGuilds] : [],
   })));
   if (!made) return;
   inTitle.value = '';
@@ -417,6 +469,66 @@ function renderMatrix() {
   if (prev) confirmDateEl.value = prev;
 }
 
+/* ---------- 정기합주·정기공연 참가 길드 ---------- */
+let editingGuilds = null;     /* 고치는 중이면 고른 길드 id 집합 */
+function renderPollGuilds() {
+  const box = document.getElementById('poll-guilds');
+  const ev = pollEvent;
+  if (!ev || !isUnion(ev)) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  const admin = AdminSeen.visible();
+  if (editingGuilds) {
+    box.innerHTML = '<div class="dow-pick guild-pick"><span class="dow-pick-label">참가 길드</span>' + guildList.map((g) =>
+      `<button type="button" data-edit-guild="${g.id}" aria-pressed="${editingGuilds.has(g.id)}">`
+      + `${guildMark(g, 16)} ${escapeHtml(g.name)}</button>`).join('') + '</div>'
+      + '<div class="poll-guilds-acts"><button type="button" class="pink" data-save-guilds>저장</button>'
+      + '<button type="button" class="ghost" data-cancel-guilds>취소</button></div>';
+    return;
+  }
+  const names = ev.guilds.length
+    ? ev.guilds.map((g) => `${guildMark(g, 18)} ${escapeHtml(g.name)}`).join('<span class="meta-sep">·</span>')
+    : '<span class="muted">아직 없음</span>';
+  box.innerHTML = `<span class="poll-guilds-label">참가 길드</span> ${names}`
+    + (admin ? ' <button type="button" class="ghost mini" data-edit-guilds>수정</button>' : '');
+}
+document.getElementById('poll-guilds').addEventListener('click', async (e) => {
+  const ev = pollEvent;
+  if (!ev) return;
+  if (e.target.closest('[data-edit-guilds]')) {
+    await loadGuildList();
+    editingGuilds = new Set(ev.guilds.map((g) => g.id));
+    renderPollGuilds();
+    return;
+  }
+  const g = e.target.closest('[data-edit-guild]');
+  if (g) {
+    const id = Number(g.dataset.editGuild);
+    if (editingGuilds.has(id)) editingGuilds.delete(id); else editingGuilds.add(id);
+    renderPollGuilds();
+    return;
+  }
+  if (e.target.closest('[data-cancel-guilds]')) { editingGuilds = null; renderPollGuilds(); return; }
+  const save = e.target.closest('[data-save-guilds]');
+  if (save) {
+    const ids = [...editingGuilds];
+    const saved = await Writes.commit(save, `event:${ev.id}`, async () => {
+      const res = await fetch(`/api/admin/events/${ev.id}/guilds`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Nickname': encodeURIComponent(Nick.get()) },
+        body: JSON.stringify({ guildIds: ids }),
+      });
+      if (!res.ok) throw await apiFailure(res);
+      return res.json();
+    });
+    if (!saved) return;
+    editingGuilds = null;
+    putEvent(saved);
+    playableKey = '';          /* 참가 길드가 바뀌면 '그날 프리길드로 보는 곡' 이 바뀐다 */
+    renderPolls();
+    renderPollView();
+  }
+});
+
 function renderPollView() {
   const ev = pollEvent;
   if (!ev) return;
@@ -436,8 +548,11 @@ function renderPollView() {
   }
   confirmBar.hidden = locked;
   confirmedBar.hidden = !locked;
-  setlistSection.hidden = !locked;
-  playableSection.hidden = !playableDate;
+  /* 밴드 행사는 날짜 투표만 한다. 가능 곡·셋리스트가 없다 */
+  const band = eventKind(ev) === 'band';
+  setlistSection.hidden = !locked || band;
+  playableSection.hidden = !playableDate || band;
+  renderPollGuilds();
   renderMatrix();
   if (locked) renderSetlist();
   renderPsDates();
@@ -503,12 +618,21 @@ function inSetlist(songId) {
   return !!pollEvent && pollEvent.songs.some((s) => s.songId === songId);
 }
 
+/* 가능 곡 한 줄의 소속 표시. 정기합주에서 그날 프리길드로 보는 곡은 프리길드로 적는다 */
+function songWhere(s, union) {
+  if (union && s.asFree) return ` <span class="ps-free">${FREE_GUILD}</span>`;
+  if (s.guild && (union || !Site.slug)) return ' ' + guildBadge(s.guild);
+  return '';
+}
+
 function renderPlayable() {
   if (!playable) { showLoading(playableListEl); return; }
   const all = playable.songs;
   const locked = pollEvent.status === 'confirmed';
-  /* 길드 일정이면 범위 칩을 세운다. 길드 곡만 / 전체. */
-  const g = pollEvent.guild;
+  /* 길드 일정이면 범위 칩을 세운다. 길드 곡만 / 전체. 정기합주·정기공연은 길드연합이라 범위 칩이 없다 —
+     참가 길드 곡 + 프리길드 곡이고, 참가하지 않은 길드의 곡은 그날 프리길드로 보인다(서버 asFree). */
+  const union = isUnion(pollEvent);
+  const g = union ? null : pollEvent.guild;
   psScopeEl.hidden = !g;
   psScopeEl.querySelectorAll('[data-scope]').forEach((b) => {
     const on = b.dataset.scope === playableScope;
@@ -573,7 +697,7 @@ function renderPlayable() {
       `<i style="width:${pct}%"></i></span></td>`;
     html += `<td class="ps-song" title="${escapeHtml(s.title)}${s.artist ? ' · ' + escapeHtml(s.artist) : ''}">` +
       `<div class="ps-song-title">${escapeHtml(s.title)}</div>` +
-      `<div class="ps-song-sub">${escapeHtml(s.artist || '')}${!Site.slug && s.guild ? ' ' + guildBadge(s.guild) : ''}</div></td>`;
+      `<div class="ps-song-sub">${escapeHtml(s.artist || '')}${songWhere(s, union)}</div></td>`;
     cols.forEach((role) => {
       const r = byRole[role];
       if (!r) { html += `<td class="ps-cell none"></td>`; return; }
@@ -849,6 +973,7 @@ function openPoll(id) {
   playableDate = null;
   stageSongId = null;
   playableScope = 'guild';
+  editingGuilds = null;
   renderPolls();
   renderPast();
   renderPollView();

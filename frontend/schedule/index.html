@@ -40,9 +40,19 @@
 
   <div class="modal-backdrop" id="add-modal" hidden>
     <div class="modal">
-      <h3 class="modal-title">＋ 합주 후보 만들기</h3>
+      <h3 class="modal-title">＋ 일정 후보 만들기</h3>
       <p class="modal-desc">후보 기간을 정하면 날짜별 참석 가능 여부 선택 가능합니다.</p>
       <form id="add-form" class="modal-form">
+        <!-- 일정 종류. 정기합주·정기공연은 관리자에게만 보인다. 길드 페이지에서는 길드 합주로 고정이라 숨는다 -->
+        <div class="dow-pick kind-pick" id="kind-pick" role="radiogroup" aria-label="일정 종류">
+          <span class="dow-pick-label">종류</span>
+          <button type="button" data-kind="regular">정기합주</button>
+          <button type="button" data-kind="concert">정기공연</button>
+          <button type="button" data-kind="guild">길드 합주</button>
+          <button type="button" data-kind="band">밴드 행사</button>
+        </div>
+        <!-- 정기합주·정기공연의 참가 길드. 여러 개 고른다 -->
+        <div class="dow-pick guild-pick" id="guild-pick" role="group" aria-label="참가 길드" hidden></div>
         <input id="in-title" placeholder="일정 제목 (예: 10월 주말 정기합주)" required />
         <div class="range-row">
           <input type="date" id="in-from" required />
@@ -78,6 +88,8 @@
         <span id="poll-meta" class="muted"></span>
         <button type="button" class="ghost" id="poll-delete">삭제</button>
       </div>
+      <!-- 정기합주·정기공연의 참가 길드. 관리자는 여기서 고친다(확정 뒤에도) -->
+      <div class="poll-guilds" id="poll-guilds" hidden></div>
 
       <div class="poll-toolbar">
         <label class="chk"><input type="checkbox" id="weekend-only" /> 주말만</label>

@@ -97,6 +97,13 @@ def badge_of(conn, nickname: str):
     return row['badge'] if row else None
 
 
+def is_admin_nick(conn, nickname: str) -> bool:
+    """관리 경로(/api/admin) 밖에서 쓰는 판정. root 쿠키는 /api/admin 에만 실려서 여기선 못 본다 —
+    그래서 관리자 닉네임 자체와 파딱·핑딱 딱지로 본다. 사이트의 다른 닉네임 권한과 같은 수준이다."""
+    nick = (nickname or '').strip()
+    return bool(nick) and (nick == ADMIN_NICK or badge_of(conn, nick) in BADGES)
+
+
 def role_of(conn, request: Request):
     """root > 닉네임의 딱지 > None."""
     if _cookie_ok(request.cookies.get(COOKIE, '')):

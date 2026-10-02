@@ -768,3 +768,12 @@
 }
 .dates-off button:hover { background: var(--teal-soft); color: var(--teal-deep); }
 .dates-off button i { font-style: normal; font-weight: 700; color: var(--ink-faint); }
+
+/* 일정 종류·참가 길드(2026-10-02). 고르기는 요일 칩(.dow-pick)과 같은 모양이다 */
+.guild-pick button { display: inline-flex; align-items: center; gap: 4px; }
+.guild-pick .guild-mark { line-height: 0; }
+.poll-guilds { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 4px; font-size: 12.5px; font-weight: 700; }
+.poll-guilds-label { font-size: 11px; font-weight: 800; color: var(--ink-faint); }
+.poll-guilds .guild-mark { display: inline-flex; vertical-align: middle; line-height: 0; }
+.poll-guilds-acts { display: flex; gap: 6px; width: 100%; }
+.ps-free { font-size: 10.5px; font-weight: 800; color: var(--ink-faint); }

@@ -239,3 +239,32 @@ def delete_song(song_id: int, request: Request):
         conn.close()
     imageserve.forget('thumb', song_id)
     return {'ok': True}
+
+
+# ---------- 정기합주·정기공연 참가 길드 ----------
+@router.put('/events/{event_id}/guilds')
+def set_event_guilds(event_id: int, body: dict, request: Request):
+    """참가 길드를 이 목록으로 맞춘다(멱등). 관리자만. 확정 뒤에도 바꿀 수 있다 — 늦게 합류하는 길드가 있다."""
+    from routers.events import UNION_KINDS, _guild_ids, serialize_event
+    conn = get_db()
+    try:
+        admin.require(conn, request)
+        event = conn.execute('SELECT * FROM events WHERE "id"=%s', (event_id,)).fetchone()
+        if not event:
+            raise HTTPException(404, '일정을 찾을 수 없습니다.')
+        kind = event['kind'] or ('guild' if event['guildId'] else 'regular')
+        if kind not in UNION_KINDS:
+            raise HTTPException(400, '참가 길드는 정기합주·정기공연에만 있습니다.')
+        ids = _guild_ids(conn, body)
+        if ids:
+            ph = ','.join('%s' for _ in ids)
+            conn.execute(f'DELETE FROM eventGuilds WHERE "eventId"=%s AND "guildId" NOT IN ({ph})', [event_id, *ids])
+        else:
+            conn.execute('DELETE FROM eventGuilds WHERE "eventId"=%s', (event_id,))
+        for gid in ids:
+            conn.execute('INSERT INTO eventGuilds ("eventId", "guildId") VALUES (%s,%s) ON CONFLICT DO NOTHING',
+                         (event_id, gid))
+        conn.commit()
+        return serialize_event(conn, conn.execute('SELECT * FROM events WHERE "id"=%s', (event_id,)).fetchone())
+    finally:
+        conn.close()

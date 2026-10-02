@@ -44,7 +44,7 @@ def _require_member(conn, guild_id, nickname):
     if guild_id is None:
         return
     nick = (nickname or '').strip()
-    if nick and (nick == admin.ADMIN_NICK or admin.badge_of(conn, nick) in admin.BADGES):
+    if admin.is_admin_nick(conn, nick):
         return
     if nick and conn.execute('SELECT 1 FROM guildMembers WHERE "guildId"=%s AND "nickname"=%s LIMIT 1',
                              (guild_id, nick)).fetchone():

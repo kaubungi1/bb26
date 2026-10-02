@@ -35,3 +35,17 @@ function eventSymbol(e) {
     : escapeHtml([...(g.name || '')][0] || '♫');
   return `<span class="event-symbol" style="${style}" aria-hidden="true">${body}</span>`;
 }
+
+
+/* 일정 종류(2026-10-02). 서버 routers/events.py 의 KINDS 와 같은 값.
+   길드 합주는 지금처럼 길드 배지, 정기합주·정기공연은 종류 이름 + 참가 길드 문장들, 밴드 행사는 종류 이름만.
+   길드 페이지에서 그 길드의 길드 합주는 배지가 필요 없다(전부 그 길드 것이다). */
+const EVENT_KIND = { regular: '정기합주', concert: '정기공연', guild: '길드 합주', band: '밴드 행사' };
+function eventKind(e) { return (e && e.kind) || (e && e.guild ? 'guild' : 'regular'); }
+function eventTag(e) {
+  if (!e) return '';
+  const kind = eventKind(e);
+  if (kind === 'guild') return Site.slug ? '' : guildBadge(e.guild);
+  const crests = (e.guilds || []).map((g) => guildMark(g, 16, 'event-guild')).join('');
+  return `<span class="event-kind">${EVENT_KIND[kind]}</span>${crests}`;
+}

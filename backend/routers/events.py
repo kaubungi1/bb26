@@ -1,18 +1,29 @@
-"""일정. 날짜 투표 → 확정 → 셋리스트와 라인업 저장. 길드 합주도 같은 달력에 놓인다."""
+"""일정. 날짜 투표 → 확정 → 셋리스트와 라인업 저장. 길드 합주도 같은 달력에 놓인다.
+
+종류(kind, 2026-10-02 사용자 결정)
+  regular  정기합주   길드연합. 참가 길드 여럿(eventGuilds). 관리자만 만든다.
+                      가능 곡 = 참가 길드 곡 + 프리길드 곡. 참가하지 않은 길드의 곡은 그날만 프리길드로 본다(asFree).
+  concert  정기공연   정기합주와 같은 구조.
+  guild    길드 합주  길드 하나(events.guildId). 그 길드 멤버(와 관리자)만 만든다.
+  band     밴드 행사  날짜 투표만. 가능 곡·셋리스트가 없다. 누구나 만든다.
+참가 길드 바꾸기는 /api/admin/events/{id}/guilds (관리자만, 확정 뒤에도)."""
 from datetime import date as _date
 from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException, Request
 
 from db import get_db
+import admin
 import listcache
-from helpers import PART_ROLES, attach_guilds, guild_where, resolve_guild_id
+from helpers import PART_ROLES, attach_guilds, guild_brief, resolve_guild_id
 
 router = APIRouter()
 
 # 후보 날짜 상한. 한 달치를 넘기지 않는다 — 매트릭스가 그만큼 길어지고,
 # 아무도 안 찍을 날이 줄로 남는다.
 MAX_DATES = 40
+KINDS = ('regular', 'concert', 'guild', 'band')
+UNION_KINDS = ('regular', 'concert')     # 참가 길드가 여럿인 길드연합 일정
 
 
 # ---------- 직렬화 ----------
@@ -67,8 +78,38 @@ def serialize_events(conn, rows):
     setlists = _setlists(conn, ids)
     for e in events:
         e['songs'] = setlists.get(e['id'], [])
+        e['guilds'] = []
+        if not e.get('kind'):
+            e['kind'] = 'guild' if e.get('guildId') else 'regular'
+    for g in conn.execute(
+        f'SELECT eg."eventId", g."id", g."slug", g."name", g."color", g."style", '
+        f'(g."image" IS NOT NULL) AS "hasImage", g."imageUpdatedAt" '
+        f'FROM eventGuilds eg JOIN guilds g ON g."id"=eg."guildId" WHERE eg."eventId" IN ({ph}) ORDER BY g."name"', ids
+    ).fetchall():
+        for e in events:
+            if e['id'] == g['eventId']:
+                e['guilds'].append(guild_brief(g))
     attach_guilds(conn, events)
     return events
+
+
+def participants(conn, event_id):
+    """정기합주·정기공연의 참가 길드 id 집합."""
+    return {r['guildId'] for r in conn.execute(
+        'SELECT "guildId" FROM eventGuilds WHERE "eventId"=%s', (event_id,)).fetchall()}
+
+
+def _guild_ids(conn, body):
+    try:
+        ids = list(dict.fromkeys(int(i) for i in (body.get('guildIds') or [])))
+    except (TypeError, ValueError):
+        raise HTTPException(400, 'guildIds 가 올바르지 않습니다.')
+    if ids:
+        ph = ','.join('%s' for _ in ids)
+        found = {r['id'] for r in conn.execute(f'SELECT "id" FROM guilds WHERE "id" IN ({ph})', ids).fetchall()}
+        if found != set(ids):
+            raise HTTPException(404, '없는 길드가 있습니다.')
+    return ids
 
 
 def serialize_event(conn, row):
@@ -88,7 +129,17 @@ def _load(conn, event_id):
 def list_events(request: Request, guild: str | None = None):
     """5초마다 폴링된다. 바뀐 게 없으면 DB 를 다시 읽지 않는다(listcache.py)."""
     def build(conn):
-        clause, params = guild_where(conn, guild)
+        # 길드 페이지: 그 길드의 길드 합주 + 그 길드가 참가하는 정기합주·정기공연
+        if not guild:
+            clause, params = '', []
+        elif guild == 'none':
+            clause, params = ' WHERE "guildId" IS NULL', []
+        else:
+            row = conn.execute('SELECT "id" FROM guilds WHERE "slug"=%s', (guild,)).fetchone()
+            if not row:
+                raise HTTPException(404, '길드를 찾을 수 없습니다.')
+            clause = (' WHERE "guildId"=%s OR "id" IN (SELECT "eventId" FROM eventGuilds WHERE "guildId"=%s)')
+            params = [row['id'], row['id']]
         rows = conn.execute(f'SELECT * FROM events{clause} ORDER BY "createdAt" DESC', params).fetchall()
         return serialize_events(conn, rows)
     return listcache.serve(request, 'events', listcache.EVENTS, build)
@@ -135,11 +186,38 @@ def create_event(body: dict):
 
     conn = get_db()
     guild_id = resolve_guild_id(conn, body)
+    # 종류를 안 보낸 옛 화면: 길드에서 만들면 길드 합주, 아니면 밴드 행사(누구나 되는 쪽)
+    kind = body.get('kind') or ('guild' if guild_id else 'band')
+    if kind not in KINDS:
+        conn.close()
+        raise HTTPException(400, '일정 종류가 올바르지 않습니다.')
+    who = (body.get('createdBy') or '').strip()
+    guild_ids = []
+    if kind in UNION_KINDS:
+        if not admin.is_admin_nick(conn, who):
+            conn.close()
+            raise HTTPException(403, '정기합주·정기공연은 관리자만 만들 수 있습니다.')
+        guild_id = None
+        guild_ids = _guild_ids(conn, body)
+    elif kind == 'guild':
+        if guild_id is None:
+            conn.close()
+            raise HTTPException(400, '길드 합주는 길드를 정해야 합니다.')
+        member = conn.execute('SELECT 1 FROM guildMembers WHERE "guildId"=%s AND "nickname"=%s LIMIT 1',
+                              (guild_id, who)).fetchone()
+        if not member and not admin.is_admin_nick(conn, who):
+            conn.close()
+            raise HTTPException(403, '그 길드의 멤버만 길드 합주를 만들 수 있습니다.')
+    else:
+        guild_id = None
     cur = conn.execute(
-        'INSERT INTO events (title, status, note, "createdBy", "guildId") VALUES (%s,%s,%s,%s,%s) RETURNING "id"',
-        (title, 'poll', body.get('note'), body.get('createdBy'), guild_id),
+        'INSERT INTO events (title, status, note, "createdBy", "guildId", "kind") VALUES (%s,%s,%s,%s,%s,%s) RETURNING "id"',
+        (title, 'poll', body.get('note'), body.get('createdBy'), guild_id, kind),
     )
     event_id = cur.fetchone()['id']
+    for gid in guild_ids:
+        conn.execute('INSERT INTO eventGuilds ("eventId", "guildId") VALUES (%s,%s) ON CONFLICT DO NOTHING',
+                     (event_id, gid))
     for day in days:
         conn.execute(
             'INSERT INTO eventDates ("eventId", "date") VALUES (%s,%s) ON CONFLICT DO NOTHING',
@@ -332,6 +410,9 @@ def _song_map(conn):
 def _playable(conn, event, day):
     att = _attendees(conn, event['id'], day)
     songs = _song_map(conn)
+    # 정기합주·정기공연: 참가하지 않은 길드의 곡은 그날만 프리길드로 본다(용병도 없다).
+    union = (event.get('kind') or ('guild' if event.get('guildId') else 'regular')) in UNION_KINDS
+    joined = participants(conn, event['id']) if union else set()
     result = []
     for song in songs.values():
         roles = []
@@ -344,6 +425,7 @@ def _playable(conn, event, day):
         result.append({
             'songId': song['songId'], 'title': song['title'], 'artist': song['artist'],
             'youtubeUrl': song['youtubeUrl'], 'guildId': song['guildId'],
+            'asFree': bool(union and song['guildId'] is not None and song['guildId'] not in joined),
             'roles': roles, 'needed': len(roles), 'filled': filled, 'attending': len(members),
         })
     attach_guilds(conn, result)

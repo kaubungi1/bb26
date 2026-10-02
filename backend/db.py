@@ -199,7 +199,7 @@ CREATE TABLE IF NOT EXISTS songComments (
 # pairs 는 뺀다 — 악보 넘길 때마다 써서 잦고, 어느 목록도 읽지 않는다.
 CHANGE_TRACKED = ('songs', 'sessions', 'sessionSupports', 'songComments', 'sheets', 'events', 'eventDates',
                   'eventAvails', 'eventSongs', 'eventLineups', 'guilds', 'guildMembers', 'guildDrawings',
-                  'members')
+                  'members', 'eventGuilds')
 
 MIGRATIONS = [
     'CREATE INDEX IF NOT EXISTS idx_songcomments_song ON songComments ("songId", "id")',
@@ -237,6 +237,15 @@ MIGRATIONS = [
     # 관리 탭 '곡 정리' 에서 제목을 확인했다는 표시. 한글 원제가 맞는 곡(한국 곡)이 정리 목록에 계속 남지 않게.
     # 정리하는 사람이 여럿이라 브라우저가 아니라 DB 에 둔다(routers/songadmin.py).
     'ALTER TABLE songs ADD COLUMN IF NOT EXISTS "titleCheckedAt" TIMESTAMPTZ',
+    # 일정 종류(2026-10-02). regular 정기합주 · concert 정기공연 · guild 길드 합주 · band 밴드 행사.
+    # 정기합주·정기공연은 길드연합이라 참가 길드가 여럿이다(eventGuilds). 길드 합주는 지금처럼 events.guildId 하나.
+    'ALTER TABLE events ADD COLUMN IF NOT EXISTS "kind" TEXT',
+    'CREATE TABLE IF NOT EXISTS eventGuilds ("id" SERIAL PRIMARY KEY, '
+    '"eventId" INTEGER NOT NULL REFERENCES events("id") ON DELETE CASCADE, '
+    '"guildId" INTEGER NOT NULL REFERENCES guilds("id") ON DELETE CASCADE, UNIQUE ("eventId", "guildId"))',
+    'CREATE INDEX IF NOT EXISTS idx_eventguilds_guild ON eventGuilds("guildId")',
+    # 종류가 없던 옛 일정: 길드가 있으면 길드 합주, 없으면 정기합주(2026-10-02 기준 9개·2개). 빈 것에만 한 번.
+    "UPDATE events SET \"kind\" = CASE WHEN \"guildId\" IS NULL THEN 'regular' ELSE 'guild' END WHERE \"kind\" IS NULL",
 
     # 외래키/조회 컬럼 인덱스. 유니크 제약이 이미 덮는 곳은 뺐다.
     'CREATE INDEX IF NOT EXISTS idx_sessions_song ON sessions("songId")',
