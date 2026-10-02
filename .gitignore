@@ -7,6 +7,10 @@ temp/
 .env
 backend/.env
 
+# DB 백업: 비공개 저장소 bb26-backup 으로 따로 관리. 복구용으로 받은 덤프도 올리지 않는다
+backup/
+*.dump
+
 # 로컬 산출물
 backend/app.db
 **/__pycache__/
