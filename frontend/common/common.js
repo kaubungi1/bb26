@@ -12,6 +12,8 @@ const SHEET_ROLES = [...ROLE_ORDER, '공용'];
 const TAGS = ['보컬로이드', '애니송(게임)', 'J-POP(남)', 'J-POP(여)', '불법'];
 
 const SITE_NAME = '불법이륙';
+/* 어느 길드에도 속하지 않은 곡(guildId 없음)의 이름. 2026-10-02 '무길드' 에서 바꿨다 */
+const FREE_GUILD = '프리길드';
 /* 관리자 이름. 닉네임 창에 이것을 넣으면 비밀번호를 한 번 더 묻는다(backend/admin.py 와 같은 값). */
 const ADMIN_NICK = '불법이륙';
 

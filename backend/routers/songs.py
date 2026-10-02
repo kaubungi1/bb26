@@ -1,17 +1,20 @@
-"""곡. 모든 곡은 길드 하나 또는 무길드에 속한다. 끌올은 전체에서 한 곡만 30분 독점.
+"""곡. 모든 곡은 길드 하나 또는 프리길드(길드 없음)에 속한다. 끌올은 전체에서 한 곡만 30분 독점.
 
 같은 곡을 여러 길드가 하면 길드마다 따로 둔다 — 지원자 명단이 섞이지 않게(사용자 결정, 2026-10-02).
-같은 소속 안의 중복, 길드에 있는 곡의 무길드 등록은 막는다(songmatch.py).
+같은 소속 안의 중복, 길드에 있는 곡의 프리길드 등록은 막는다(songmatch.py).
+길드 곡은 그 길드 멤버(와 관리자)만 등록한다. 프리길드 곡은 누구나 등록한다(사용자 결정, 2026-10-02).
+태그는 꼭 하나 고른다(SONG_TAGS).
 소속을 바꾸는 것(이전)은 여기가 아니라 /api/admin/songs/{id}/guild 에서 한다 — 관리자·길드장만 된다."""
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from db import get_db
 
 import imageserve
+import admin
 import listcache
 import songmatch
 import thumbs
-from helpers import (PART_ROLES, SONG_COLS, attach_guilds, build_songs, guild_where, norm_tag,
+from helpers import (PART_ROLES, SONG_COLS, SONG_TAGS, attach_guilds, build_songs, guild_where, norm_tag,
                      resolve_guild_id)
 
 router = APIRouter()
@@ -24,6 +27,29 @@ TITLE_MAX = 120
 def _title_ko(body):
     """한국어 번역은 선택이다. 비우면 None."""
     return (str(body.get('titleKo') or '').strip()[:TITLE_MAX]) or None
+
+
+def _tag(value):
+    """태그는 꼭 하나, 목록 안에서. 옛 데이터의 '쉼표로 여럿' 은 norm_tag 가 첫 번째만 남긴다."""
+    tag = norm_tag(value)
+    if tag not in SONG_TAGS:
+        raise HTTPException(400, '태그를 골라 주세요.')
+    return tag
+
+
+def _require_member(conn, guild_id, nickname):
+    """길드 곡은 그 길드 멤버만 등록한다. 관리자(파딱·핑딱, 관리자 닉네임)는 어느 길드든 된다(사용자 결정 (a)).
+    신원은 닉네임뿐이라 화면 실수를 막는 정도다 — 사이트의 다른 권한과 같은 수준이다."""
+    if guild_id is None:
+        return
+    nick = (nickname or '').strip()
+    if nick and (nick == admin.ADMIN_NICK or admin.badge_of(conn, nick) in admin.BADGES):
+        return
+    if nick and conn.execute('SELECT 1 FROM guildMembers WHERE "guildId"=%s AND "nickname"=%s LIMIT 1',
+                             (guild_id, nick)).fetchone():
+        return
+    conn.close()
+    raise HTTPException(403, '그 길드의 멤버만 길드 곡으로 등록할 수 있습니다. 프리길드로 등록해 주세요.')
 
 
 def _check_duplicate(conn, title, title_ko, url, guild_id, not_same, exclude=None, already=()):
@@ -97,14 +123,16 @@ def create_song(body: dict, background: BackgroundTasks):
     if not title or not artist:
         raise HTTPException(400, 'title과 artist는 필수입니다.')
     title_ko = _title_ko(body)
+    tag = _tag(body.get('tags'))
     conn = get_db()
     guild_id = resolve_guild_id(conn, body)
+    _require_member(conn, guild_id, body.get('createdBy'))
     _check_duplicate(conn, title, title_ko, body.get('youtubeUrl'), guild_id, body.get('notSame'))
     cur = conn.execute(
         'INSERT INTO songs (title, "titleKo", artist, category, "tags", "youtubeUrl", status, "isCandidate", note, '
         '"createdBy", "guildId") VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING "id"',
         (
-            title, title_ko, artist, body.get('category'), norm_tag(body.get('tags')), body.get('youtubeUrl'),
+            title, title_ko, artist, body.get('category'), tag, body.get('youtubeUrl'),
             body.get('status') or 'candidate', 1 if body.get('isCandidate') else 0,
             body.get('note'), body.get('createdBy'), guild_id,
         ),
@@ -147,6 +175,8 @@ def update_song(song_id: int, body: dict, background: BackgroundTasks):
     if 'guildId' in body or 'guildSlug' in body:
         # 소속 변경은 권한을 따지는 이전 API 로만 한다. 여기서 받으면 누구나 옮길 수 있게 된다.
         raise HTTPException(400, '길드는 곡 정보 창의 길드 칸(관리자·길드장)에서 바꿉니다.')
+    if 'tags' in body:
+        body['tags'] = _tag(body['tags'])       # 비우는 것도 막는다
     conn = get_db()
     before = conn.execute('SELECT "thumbVideoId" v, "title", "titleKo", "youtubeUrl", "guildId" '
                           'FROM songs WHERE "id"=%s', (song_id,)).fetchone()

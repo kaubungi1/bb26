@@ -172,7 +172,7 @@ def _leader_of(conn, guild_id):
 
 def can_move(conn, request, from_gid, to_gid):
     """관리자(파딱·핑딱·root)는 언제나. 길드장은 자기 길드 곡을 내보낼 때,
-    그리고 무길드 곡을 자기 길드로 가져올 때(사용자 결정, 2026-10-02). 길드장은 guilds.leader 닉네임이다."""
+    그리고 프리길드 곡을 자기 길드로 가져올 때(사용자 결정, 2026-10-02). 길드장은 guilds.leader 닉네임이다."""
     if admin.rank(admin.role_of(conn, request)) >= admin.rank('pink'):
         return True
     me = admin.nickname_of(request)
@@ -194,7 +194,7 @@ def move_song(song_id: int, body: dict, request: Request):
                             (song_id,)).fetchone()
         if not song:
             raise HTTPException(404, '곡을 찾을 수 없습니다.')
-        target = resolve_guild_id(conn, body)          # 비우면 무길드
+        target = resolve_guild_id(conn, body)          # 비우면 프리길드
         if target != song['guildId']:
             if not can_move(conn, request, song['guildId'], target):
                 raise HTTPException(403, '관리자나 길드장만 길드를 옮길 수 있습니다.')

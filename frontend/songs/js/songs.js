@@ -9,7 +9,7 @@ let songs = [];
 let guilds = [];              /* 길드 목록 — 필터 메뉴와 소속 선택에 쓴다 */
 let bump = null;              /* 지금 끌올된 곡 {songId, bumpedBy, bumpNote, expiresAt} */
 let filterTags = new Set();   /* 태그 필터. 여러 개 고를 수 있고, 비어 있으면 전체 */
-/* 길드 필터. '' 전체 | 'none' 길드에 붙지 않은 곡 = 불법이륙 공통 | slug
+/* 길드 필터. '' 전체 | 'none' 길드에 붙지 않은 곡 = 프리길드 | slug
    곡의 소속은 등록한 자리가 정한다. 길드 페이지에서 넣으면 그 길드, 메인에서 넣으면 공통이다. */
 let guildFilter = '';
 let query = '';               /* 검색어. 제목·아티스트·업로더에 부분 일치 */
@@ -177,11 +177,11 @@ function renderTools() {
       gcount[k] = (gcount[k] || 0) + 1;
     });
     const cur = guilds.find((g) => g.slug === guildFilter);
-    guildLabelEl.textContent = !guildFilter ? '길드' : guildFilter === 'none' ? SITE_NAME : (cur ? cur.name : guildFilter);
+    guildLabelEl.textContent = !guildFilter ? '길드' : guildFilter === 'none' ? FREE_GUILD : (cur ? cur.name : guildFilter);
     document.getElementById('drop-guild').classList.toggle('is-set', !!guildFilter);
     menuGuildEl.innerHTML =
       `<button type="button" class="menu-item${guildFilter ? '' : ' is-on'}" data-pick-guild="">전체<i>${songs.length}</i></button>` +
-      `<button type="button" class="menu-item${guildFilter === 'none' ? ' is-on' : ''}" data-pick-guild="none">${SITE_NAME}<i>${gcount.none || ''}</i></button>` +
+      `<button type="button" class="menu-item${guildFilter === 'none' ? ' is-on' : ''}" data-pick-guild="none">${FREE_GUILD}<i>${gcount.none || ''}</i></button>` +
       guilds.map((g) =>
         `<button type="button" class="menu-item${guildFilter === g.slug ? ' is-on' : ''}" data-pick-guild="${escapeHtml(g.slug)}">` +
         `${escapeHtml(g.name)}${gcount[g.slug] ? `<i>${gcount[g.slug]}</i>` : ''}</button>`).join('');

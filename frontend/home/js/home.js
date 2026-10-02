@@ -159,12 +159,12 @@ function guildDrop(){
  const n=guildCounts(),cur=prefs.guilds[0]||'';
  const mark=g=>(g&&typeof crestFor==='function'&&crestFor(g,14))||'';
  const row=(v,label,svg)=>`<button type="button" class="menu-item${cur===v?' is-on':''}${v&&!n[v]?' is-zero':''}" data-guild="${esc(v)}">${svg}<span>${esc(label)}</span><i>${n[v]||0}</i></button>`;
- const here=cur===''?'전체':cur==='none'?SITE_NAME:(guildList.find(g=>g.slug===cur)||{}).name||cur;
+ const here=cur===''?'전체':cur==='none'?FREE_GUILD:(guildList.find(g=>g.slug===cur)||{}).name||cur;
  return `<div class="drop guildbox${cur?' is-set':''}${guildOpen?' is-open':''}" id="drop-guild">`
   +`<button type="button" class="drop-btn" data-guild-drop aria-expanded="${guildOpen}" aria-label="길드로 거르기">`
   +`<span>${esc(here)}</span><i>▾</i></button>`
   +`<div class="drop-menu"${guildOpen?'':' hidden'}>`
-  +row('','전체','')+row('none',SITE_NAME,'')
+  +row('','전체','')+row('none',FREE_GUILD,'')
   +guildList.map(g=>row(g.slug,g.name,mark(g))).join('')
   +`</div></div>`;
 }
