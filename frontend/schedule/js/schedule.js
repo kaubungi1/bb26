@@ -234,7 +234,7 @@ function pollHead(e) {
   }
   /* 열: 날짜 | 문장 | 제목 | 종류·소속 | 시간·장소·곡 | 인원. 좁으면 종류·시간이 제목 아래 한 줄로 접힌다(CSS) */
   return `
-      <div class="poll-item sched-row" data-open-poll="${e.id}" role="button" tabindex="0" aria-expanded="${open}">
+      <div class="poll-item sched-row kind-${eventKind(e)}" data-open-poll="${e.id}" role="button" tabindex="0" aria-expanded="${open}">
         ${dateCell(e)}
         ${eventSymbol(e)}
         <div class="poll-item-title">${escapeHtml(e.title)}</div>

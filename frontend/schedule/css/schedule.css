@@ -820,3 +820,14 @@
   .sched-row .sched-when::before { content: '·'; margin-right: 6px; color: var(--ink-faint); }
   .sched-row .poll-item-title { font-size: 14px; }
 }
+
+/* 종류 구분(2026-10-02). 흔한 길드 합주는 흰 줄 그대로, 드문 밴드 전체 일정만 옅은 배경과 같은 색 글자로 떠오른다.
+   색이 '밴드 전체 일정' 이라는 중요도를 말한다 — 모든 줄에 깔면 어느 줄이 중요한지 다시 안 보인다.
+   밴드 행사는 보라. 호박색(--merc)은 용병 표시 색이라 쓰지 않는다. */
+.sched-row.kind-regular { background: color-mix(in srgb, var(--teal) 6%, transparent); }
+.sched-row.kind-concert { background: color-mix(in srgb, var(--pink) 6%, transparent); }
+.sched-row.kind-band    { background: color-mix(in srgb, #7c5cd6 6%, transparent); }
+.sched-row.kind-regular .sched-kind { color: var(--teal-deep); font-weight: 800; }
+.sched-row.kind-concert .sched-kind { color: var(--pink); font-weight: 800; }
+/* 보라는 테마 변수가 없어 그 테마의 글자색과 섞는다 — 어두운 길드 테마에서도 읽히게 */
+.sched-row.kind-band .sched-kind    { color: color-mix(in srgb, #7c5cd6 70%, var(--ink)); font-weight: 800; }
