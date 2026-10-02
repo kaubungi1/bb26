@@ -13,13 +13,14 @@
 import itertools
 
 from fastapi import APIRouter, HTTPException, Request
+from psycopg import errors as pg_errors
 
 import admin
 import imageserve
 import songmatch
 import thumbs
 from db import get_db
-from helpers import attach_guilds
+from helpers import SONG_IN_USE, attach_guilds, release_song_refs
 
 router = APIRouter()
 
@@ -200,8 +201,13 @@ def merge(body: dict, request: Request):
         if not k['titleKo'] and d['titleKo']:
             conn.execute('UPDATE songs SET "titleKo"=%s WHERE "id"=%s', (d['titleKo'], keep))
         conn.execute('UPDATE songs SET "updatedAt"=now() WHERE "id"=%(k)s', args)
+        release_song_refs(conn, drop, keep)
         conn.execute('DELETE FROM songs WHERE "id"=%(d)s', args)
         conn.commit()
+    except pg_errors.ForeignKeyViolation:
+        # 아직 모르는 표가 곡을 가리키면 여기로 온다. 이유 없는 500 대신 무엇이 막았는지 말한다
+        conn.rollback()
+        raise HTTPException(409, SONG_IN_USE)
     except Exception:
         conn.rollback()
         raise

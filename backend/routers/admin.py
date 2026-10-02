@@ -4,13 +4,14 @@
 이미 캐시되고 있고, 관리 탭 때문에 같은 데이터를 한 벌 더 만들 이유가 없다.
 여기에는 되돌릴 수 없는 쓰기와, 그 직전에 무엇이 사라지는지 세는 조회만 있다."""
 from fastapi import APIRouter, HTTPException, Request, Response
+from psycopg import errors as pg_errors
 
 import admin
 import imageserve
 import songmatch
 from db import get_db
 from guildtheme import cache_clear
-from helpers import SONG_COLS, attach_guilds, build_songs, resolve_guild_id
+from helpers import SONG_COLS, SONG_IN_USE, attach_guilds, build_songs, release_song_refs, resolve_guild_id
 
 router = APIRouter()
 
@@ -234,8 +235,12 @@ def delete_song(song_id: int, request: Request):
             raise HTTPException(404, '곡을 찾을 수 없습니다.')
         if not can_delete(conn, request, row['createdBy']):
             raise HTTPException(403, '관리자나 곡을 등록한 사람만 지울 수 있습니다.')
+        release_song_refs(conn, song_id)
         conn.execute('DELETE FROM songs WHERE "id"=%s', (song_id,))
         conn.commit()
+    except pg_errors.ForeignKeyViolation:
+        conn.rollback()
+        raise HTTPException(409, SONG_IN_USE)
     finally:
         conn.close()
     imageserve.forget('thumb', song_id)

@@ -13,6 +13,22 @@ GUILD_BRIEF = ('id', 'slug', 'name', 'color', 'style')
 GUILD_BRIEF_SQL = ('"id","slug","name","color","style",'
                    '("image" IS NOT NULL) AS "hasImage","imageUpdatedAt"')
 
+# 곡을 지울 수 없을 때 화면에 띄우는 말. 트랜잭션이라 실패하면 아무것도 바뀌지 않는다.
+SONG_IN_USE = '다른 기록이 아직 이 곡을 가리키고 있어 지울 수 없습니다. 아무것도 바뀌지 않았습니다.'
+
+
+def release_song_refs(conn, song_id, keep=None):
+    """곡을 지우기 전에 앱 밖에서 그 곡을 가리키는 줄을 푼다.
+
+    sheet_import.blocks 는 엑셀 합주표를 옮길 때 남은 '셀 → 곡' 기록이다. 앱은 읽지 않지만
+    ON DELETE 규칙이 없어 가리키는 곡을 지우면 DB 가 거절했다(2026-10-02, 중복 병합 '요청 실패').
+    병합이면 남길 곡(keep)으로 옮기고, 그냥 지우면 곡 칸만 비운다 — 셀 기록 자체는 남긴다.
+    이 표가 없는 DB(로컬 시험)에서는 아무것도 안 한다."""
+    if not conn.execute("SELECT to_regclass('sheet_import.blocks') IS NOT NULL AS t").fetchone()['t']:
+        return
+    conn.execute('UPDATE sheet_import.blocks SET song_id=%s WHERE song_id=%s', (keep, song_id))
+
+
 # 밴드 한 팀의 자리. 곡마다 이 여섯이 늘 있고, 쓰지 않는 자리는 지우는 게 아니라 끈다.
 # 순서도 여기서 정해진다. 화면의 여섯 칸이 곡마다 같은 자리에 오도록 하기 위함이다.
 # 프론트의 common.js ROLE_ORDER 와 같은 값이어야 한다.
