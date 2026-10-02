@@ -168,6 +168,8 @@
             <button type="button" class="chip" data-scope="guild">이 길드 곡</button>
             <button type="button" class="chip" data-scope="all">전체</button>
           </span>
+          <!-- 곡이 수백이라 찾을 길이 필요하다. 받은 목록 안에서만 거른다(서버를 다시 부르지 않는다) -->
+          <input type="search" class="ps-search" id="ps-search" placeholder="곡·아티스트·사람" aria-label="되는 곡 검색" />
           <button type="button" class="ghost" id="ps-toggle">전체 보기</button>
         </div>
         <div class="ps-dates" id="ps-dates"></div>

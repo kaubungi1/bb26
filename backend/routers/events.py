@@ -461,7 +461,7 @@ def _song_map(conn):
     꺼 둔 자리(active=false)는 뺀다. 안 쓰는 자리가 needed 에 들어가면 같은 곡이
     곡 페이지에서는 4/5, 일정에서는 4/6 으로 보인다."""
     rows = conn.execute(
-        'SELECT s."id" AS "songId", s.title, s.artist, s."youtubeUrl", s."guildId", '
+        'SELECT s."id" AS "songId", s.title, s."titleKo", s.artist, s."youtubeUrl", s."guildId", '
         'se."id" AS "sessionId", se.role, se.label, sp.nickname '
         'FROM songs s '
         'JOIN sessions se ON se."songId"=s."id" AND se."active" '
@@ -472,7 +472,7 @@ def _song_map(conn):
     for r in rows:
         song = songs.setdefault(
             r['songId'],
-            {'songId': r['songId'], 'title': r['title'], 'artist': r['artist'],
+            {'songId': r['songId'], 'title': r['title'], 'titleKo': r['titleKo'], 'artist': r['artist'],
              'youtubeUrl': r['youtubeUrl'], 'guildId': r['guildId'], 'sessions': {}},
         )
         sess = song['sessions'].setdefault(
@@ -499,7 +499,7 @@ def _playable(conn, event, day):
             roles.append({'role': sess['role'], 'label': sess['label'], 'members': here, 'ok': bool(here)})
         filled = sum(1 for r in roles if r['ok'])
         result.append({
-            'songId': song['songId'], 'title': song['title'], 'artist': song['artist'],
+            'songId': song['songId'], 'title': song['title'], 'titleKo': song['titleKo'], 'artist': song['artist'],
             'youtubeUrl': song['youtubeUrl'], 'guildId': song['guildId'],
             'asFree': bool(union and song['guildId'] is not None and song['guildId'] not in joined),
             'roles': roles, 'needed': len(roles), 'filled': filled, 'attending': len(members),

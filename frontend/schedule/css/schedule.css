@@ -863,3 +863,10 @@
 .sl-remove:hover { color: var(--pink); }
 /* 곡 옆 작은 문장(songTag) */
 .guild-mark.song-tag-mark { display: inline-flex; vertical-align: middle; margin-left: 4px; line-height: 0; }
+
+/* '되는 곡' 검색 칸 — 머리 줄 안, 전체 보기 앞 */
+.ps-head .ps-search { flex: 0 1 220px; min-width: 120px; min-height: 32px; margin-left: auto; padding: 0 10px;
+  border: 0; border-bottom: 2px solid #d3e0ea; border-radius: 3px 3px 0 0; background: #eef4f8;
+  font-size: 13px; font-weight: 600; color: var(--ink); }
+.ps-head .ps-search:focus { outline: none; border-bottom-color: #00b3bf; }
+@media (max-width: 600px) { .ps-head { flex-wrap: wrap; } .ps-head .ps-search { flex: 1 1 100%; margin-left: 0; order: 9; } }

@@ -51,6 +51,14 @@ const playableStageEl = document.getElementById('playable-stage');
 const psTitleEl = document.getElementById('ps-title');
 const psDatesEl = document.getElementById('ps-dates');
 const psToggleBtn = document.getElementById('ps-toggle');
+const psSearchEl = document.getElementById('ps-search');
+let psQuery = '';             /* '되는 곡' 검색어. 일정을 바꾸면 비운다 */
+
+/* 원제·번역·아티스트·그날 되는 사람 이름. 곡 목록 검색과 같은 규칙이다 */
+function psMatch(s, q) {
+  if ([s.title, s.titleKo, s.artist].some((v) => (v || '').toLowerCase().includes(q))) return true;
+  return s.roles.some((r) => r.members.some((n) => n.toLowerCase().includes(q)));
+}
 const setlistSection = document.getElementById('setlist-section');
 const setlistEl = document.getElementById('setlist');
 const pollHintEl = document.getElementById('poll-hint');
@@ -740,7 +748,9 @@ function renderPlayable() {
     b.classList.toggle('is-on', on);
     b.setAttribute('aria-pressed', on);
   });
-  const pool = g && playableScope === 'guild' ? all.filter((s) => s.guildId === g.id) : all;
+  const scoped = g && playableScope === 'guild' ? all.filter((s) => s.guildId === g.id) : all;
+  /* 검색 중에는 '3개 이상만' 을 무시한다 — 찾는 곡은 충족이 낮아도 보여야 셋리스트에 넣는다 */
+  const pool = psQuery ? scoped.filter((s) => psMatch(s, psQuery)) : scoped;
   /* 참석자가 없으면 충족도가 전부 0 이다. 조율 중이면 볼 것이 없지만, 확정 뒤에는 셋리스트를
      먼저 짜야 할 수 있다 — 전에는 표가 아예 안 떠서 ＋ 를 누를 곳이 없었다(쿠로 제보, 2026-09-16).
      그래서 확정된 일정이면 곡 전체를 ＋ 와 함께 보여 준다. */
@@ -751,11 +761,16 @@ function renderPlayable() {
     psToggleBtn.hidden = true;
     return;
   }
-  const shown = playableAll || nobody ? pool : pool.filter((s) => s.filled >= MIN_FILLED);
+  const shown = playableAll || nobody || psQuery ? pool : pool.filter((s) => s.filled >= MIN_FILLED);
   const hidden = pool.length - shown.length;
-  psToggleBtn.hidden = nobody || (playableAll ? pool.length === 0 : hidden <= 0);
+  psToggleBtn.hidden = nobody || !!psQuery || (playableAll ? pool.length === 0 : hidden <= 0);
   psToggleBtn.textContent = playableAll ? `${MIN_FILLED}개 이상만 보기` : `전체 보기 (+${hidden}곡)`;
 
+  if (!shown.length && psQuery) {
+    playableListEl.innerHTML = `<p class="muted empty-msg">'${escapeHtml(psQuery)}' 에 맞는 곡이 없습니다.</p>`;
+    playableStageEl.innerHTML = '';
+    return;
+  }
   if (!shown.length) {
     const what = g && playableScope === 'guild' ? '이 길드 곡 중 ' : '';
     playableListEl.innerHTML = `<p class="muted empty-msg">${nobody ? `${what}곡이 없습니다.` : `${what}${MIN_FILLED}개 세션 이상 채워지는 곡이 없습니다.`}</p>`;
@@ -1077,6 +1092,8 @@ function openPoll(id) {
   playableScope = 'guild';
   editingGuilds = null;
   voteOpen = false;
+  psQuery = '';
+  psSearchEl.value = '';
   renderPolls();
   renderPast();
   renderPollView();
@@ -1116,6 +1133,10 @@ pastListEl.addEventListener('click', onOpenClick);
 pollListEl.addEventListener('keydown', onOpenKey);
 pastListEl.addEventListener('keydown', onOpenKey);
 voteToggle.addEventListener('click', () => { voteOpen = !voteOpen; renderPollView(); });
+psSearchEl.addEventListener('input', () => {
+  psQuery = psSearchEl.value.trim().toLowerCase();
+  if (playable) renderPlayable();
+});
 
 /* 삭제는 머리(투표 중)와 확정 요약(확정) 두 자리에 있다. 하는 일은 같다 */
 async function deleteEvent(btn) {
