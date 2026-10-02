@@ -777,3 +777,4 @@
 .poll-guilds .guild-mark { display: inline-flex; vertical-align: middle; line-height: 0; }
 .poll-guilds-acts { display: flex; gap: 6px; width: 100%; }
 .ps-free { font-size: 10.5px; font-weight: 800; color: var(--ink-faint); }
+.kind-fixed { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-size: 13px; font-weight: 800; color: var(--ink); }

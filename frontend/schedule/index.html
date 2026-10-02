@@ -25,7 +25,8 @@
           <span class="overline"><span>SCHEDULE</span></span>
           <h1>모임 · 일정<small id="event-count"></small></h1>
         </div>
-        <button type="button" class="add-link" id="add-poll-btn">＋ 일정 추가</button>
+        <!-- 만들 수 있는 종류가 있을 때만 보인다(schedule.js allowedKinds). 판정 전에는 숨겨 둔다 -->
+        <button type="button" class="add-link" id="add-poll-btn" hidden>＋ 일정 추가</button>
       </div>
       <div id="poll-list" class="poll-list"></div>
     </section>
@@ -40,12 +41,13 @@
 
   <div class="modal-backdrop" id="add-modal" hidden>
     <div class="modal">
-      <h3 class="modal-title">＋ 일정 후보 만들기</h3>
+      <h3 class="modal-title" id="add-title">＋ 일정 후보 만들기</h3>
       <p class="modal-desc">후보 기간을 정하면 날짜별 참석 가능 여부 선택 가능합니다.</p>
       <form id="add-form" class="modal-form">
         <!-- 일정 종류. 정기합주·정기공연은 관리자에게만 보인다. 길드 페이지에서는 길드 합주로 고정이라 숨는다 -->
         <div class="dow-pick kind-pick" id="kind-pick" role="radiogroup" aria-label="일정 종류">
           <span class="dow-pick-label">종류</span>
+          <span class="kind-fixed" id="kind-fixed" hidden></span>
           <button type="button" data-kind="regular">정기합주</button>
           <button type="button" data-kind="concert">정기공연</button>
           <button type="button" data-kind="guild">길드 합주</button>

@@ -264,17 +264,38 @@ function renderPast() {
 }
 
 /* ---------- 일정 추가 ---------- */
-/* 고를 수 있는 종류. 길드 페이지는 길드 합주로 고정, 정기합주·정기공연은 관리자만(서버가 다시 본다) */
+/* 만들 수 있는 종류(2026-10-02). 서버(routers/events.py)가 다시 보지만, 안 되는 것은 처음부터 못 하게 한다 —
+   다 입력한 뒤에 거절하지 않는다.
+     메인 일정   관리자만: 정기합주·정기공연·밴드 행사. 그 밖의 사람은 만들 것이 없어 버튼이 안 보인다.
+     길드 안     그 길드 멤버와 관리자: 길드 합주. 멤버 명단은 헤더가 받는 Site.info 에 있다. */
 function allowedKinds() {
-  if (Site.slug) return ['guild'];
-  return AdminSeen.visible() ? ['regular', 'concert', 'band'] : ['band'];
+  const admin = AdminSeen.visible();
+  if (Site.slug) {
+    const me = Nick.get();
+    const member = !!me && ((Site.info && Site.info.members) || []).some((m) => m.nickname === me);
+    return admin || member ? ['guild'] : [];
+  }
+  return admin ? ['regular', 'concert', 'band'] : [];
 }
+const addPollBtn = document.getElementById('add-poll-btn');
+function refreshAddBtn() {
+  addPollBtn.hidden = !allowedKinds().length;
+  if (addPollBtn.hidden && !addModal.hidden) closeAddModal();
+}
+['profiles', 'guildinfo', 'nickchange'].forEach((ev) => document.addEventListener(ev, refreshAddBtn));
+refreshAddBtn();
+
 function renderKindPick() {
   const allowed = allowedKinds();
   if (!allowed.includes(pickedKind)) pickedKind = allowed[0];
-  kindPick.hidden = allowed.length < 2;
+  /* 종류 줄은 늘 보인다. 고를 것이 하나뿐이면 칩 대신 그 종류를 글자로 적는다 — 무엇이 만들어지는지 보여야 한다 */
+  const single = allowed.length === 1;
+  const fixed = document.getElementById('kind-fixed');
+  fixed.hidden = !single;
+  if (single) fixed.innerHTML = `${EVENT_KIND[pickedKind]}${pickedKind === 'guild' && Site.info ? ' ' + guildBadge(Site.info) : ''}`;
+  document.getElementById('add-title').textContent = `＋ ${EVENT_KIND[pickedKind] || '일정'} 후보 만들기`;
   kindPick.querySelectorAll('[data-kind]').forEach((b) => {
-    b.hidden = !allowed.includes(b.dataset.kind);
+    b.hidden = single || !allowed.includes(b.dataset.kind);
     b.setAttribute('aria-pressed', String(b.dataset.kind === pickedKind));
   });
   const union = ['regular', 'concert'].includes(pickedKind);
@@ -304,6 +325,7 @@ async function loadGuildList() {
 }
 
 function openAddModal() {
+  if (!allowedKinds().length) return;
   pickedKind = null;
   pickedGuilds = new Set();
   renderKindPick();

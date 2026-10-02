@@ -5,7 +5,7 @@
                       가능 곡 = 참가 길드 곡 + 프리길드 곡. 참가하지 않은 길드의 곡은 그날만 프리길드로 본다(asFree).
   concert  정기공연   정기합주와 같은 구조.
   guild    길드 합주  길드 하나(events.guildId). 그 길드 멤버(와 관리자)만 만든다.
-  band     밴드 행사  날짜 투표만. 가능 곡·셋리스트가 없다. 누구나 만든다.
+  band     밴드 행사  날짜 투표만. 가능 곡·셋리스트가 없다. 관리자만 만든다.
 참가 길드 바꾸기는 /api/admin/events/{id}/guilds (관리자만, 확정 뒤에도)."""
 from datetime import date as _date
 from datetime import timedelta
@@ -186,7 +186,7 @@ def create_event(body: dict):
 
     conn = get_db()
     guild_id = resolve_guild_id(conn, body)
-    # 종류를 안 보낸 옛 화면: 길드에서 만들면 길드 합주, 아니면 밴드 행사(누구나 되는 쪽)
+    # 종류를 안 보낸 옛 화면: 길드에서 만들면 길드 합주, 아니면 밴드 행사(관리자만 된다)
     kind = body.get('kind') or ('guild' if guild_id else 'band')
     if kind not in KINDS:
         conn.close()
@@ -209,6 +209,10 @@ def create_event(body: dict):
             conn.close()
             raise HTTPException(403, '그 길드의 멤버만 길드 합주를 만들 수 있습니다.')
     else:
+        # 밴드 행사도 관리자만(사용자 결정, 2026-10-02). 메인 일정 화면은 관리자에게만 만들기 버튼이 보인다.
+        if not admin.is_admin_nick(conn, who):
+            conn.close()
+            raise HTTPException(403, '밴드 행사는 관리자만 만들 수 있습니다.')
         guild_id = None
     cur = conn.execute(
         'INSERT INTO events (title, status, note, "createdBy", "guildId", "kind") VALUES (%s,%s,%s,%s,%s,%s) RETURNING "id"',
