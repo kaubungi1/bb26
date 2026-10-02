@@ -75,7 +75,7 @@ function titleRow(s) {
         <div class="sc-yt" data-yt="${escapeHtml(youtubeId(s.youtubeUrl) || '')}">${g.hint ? escapeHtml(g.hint) : ''}</div>
         <p class="sc-msg" hidden></p>
       </div>
-      <button type="button" class="sc-ok" data-confirm="${s.id}">확정</button>
+      <button type="button" class="pink sc-btn" data-confirm="${s.id}">확정</button>
     </div>`;
 }
 
@@ -93,7 +93,7 @@ function ytRow(s) {
         </div>
         <p class="sc-msg" hidden></p>
       </div>
-      <button type="button" class="sc-ok" data-confirm="${s.id}">저장</button>
+      <button type="button" class="pink sc-btn" data-confirm="${s.id}">저장</button>
     </div>`;
 }
 
@@ -119,7 +119,7 @@ async function saveYoutube(row) {
   const s = songs.find((x) => x.id === id);
   const input = row.querySelector('[data-f="yt"]');
   const msg = row.querySelector('.sc-msg');
-  const btn = row.querySelector('.sc-ok');
+  const btn = row.querySelector('.sc-btn');
   const url = input.value.trim();
   if (!youtubeId(url)) { msg.textContent = url ? '유튜브 주소 형식이 아니에요' : '유튜브 주소를 입력해 주세요'; msg.hidden = false; input.focus(); return; }
   btn.disabled = true;
@@ -169,7 +169,7 @@ async function confirmTitle(row) {
   const title = row.querySelector('[data-f="title"]').value.trim();
   const ko = row.querySelector('[data-f="ko"]').value.trim();
   const msg = row.querySelector('.sc-msg');
-  const btn = row.querySelector('.sc-ok');
+  const btn = row.querySelector('.sc-btn');
   if (!title) { msg.textContent = '원제를 입력해 주세요'; msg.hidden = false; row.querySelector('[data-f="title"]').focus(); return; }
   const body = {};
   if (title !== s.title) body.title = title;
@@ -195,26 +195,42 @@ async function confirmTitle(row) {
 }
 
 /* ---------- 길드 ---------- */
+let moveTarget = null;                  /* 옮길 곳: 길드 id, 프리길드는 'none'. 처음엔 첫 길드 */
+let openDrop = null;                    /* 열린 드롭 메뉴: 'view' | 'target' | null */
+
+/* 드롭 메뉴 — 곡 목록 도구줄과 같은 부품(common.css .drop·.drop-menu·.menu-item). 브라우저 기본 선택 상자를 쓰지 않는다 */
+function dropHtml(key, label, items, left) {
+  const open = openDrop === key;
+  return `<div class="drop${open ? ' is-open' : ''}${left ? ' drop-left' : ''}">`
+    + `<button type="button" class="drop-btn" data-drop="${key}" aria-expanded="${open}">${label} <i>▼</i></button>`
+    + `<div class="drop-menu"${open ? '' : ' hidden'}>${items.map((it) =>
+      `<button type="button" class="menu-item check${it.on ? ' is-on' : ''}" data-pick-${key}="${it.v}">`
+      + `${it.g ? crestFor(it.g, 14) : ''}${escapeHtml(it.label)}${it.n !== undefined ? `<i>${it.n}</i>` : ''}</button>`).join('')}</div></div>`;
+}
+
 function paintGuild() {
   const list = songs.filter((s) => guildView === 'all' || (guildView === 'none' ? !s.guildId : s.guildId === guildView));
   for (const id of [...picked]) if (!list.some((s) => s.id === id)) picked.delete(id);
-  const opt = (v, label, on) => `<option value="${v}"${on ? ' selected' : ''}>${escapeHtml(label)}</option>`;
-  const targets = guilds.map((g) => opt(g.id, g.name, false)).join('') + opt('none', FREE_GUILD, false);
-  /* 도구줄 한 줄: 보기 [선택] · □ 모두 고르기 · 고른 n곡을 [길드] [옮기기]. 묶음 안의 글자는 꺾이지 않는다 */
+  if (moveTarget === null) moveTarget = guilds.length ? guilds[0].id : 'none';
+  const count = (v) => songs.filter((s) => (v === 'all' ? true : v === 'none' ? !s.guildId : s.guildId === v)).length;
+  const viewItems = [{ v: 'none', label: FREE_GUILD, n: count('none') }, { v: 'all', label: '전체', n: count('all') }]
+    .concat(guilds.map((g) => ({ v: g.id, label: g.name, g, n: count(g.id) })))
+    .map((it) => ({ ...it, on: it.v === guildView }));
+  const targetItems = guilds.map((g) => ({ v: g.id, label: g.name, g })).concat([{ v: 'none', label: FREE_GUILD }])
+    .map((it) => ({ ...it, on: it.v === moveTarget }));
+  const nameOf = (v, items) => (items.find((x) => x.v === v) || {}).label || '';
+  const all = list.length > 0 && list.every((s) => picked.has(s.id));
+  /* 도구줄: 보기 · 모두 고르기 · 고른 n곡을 [길드] [옮기기]. 묶음 안의 글자는 꺾이지 않는다 */
   bodyEl.innerHTML = `
     <div class="sc-bar">
-      <label class="sc-field"><span>보기</span><select data-view>
-        ${opt('none', FREE_GUILD, guildView === 'none')}${opt('all', '전체', guildView === 'all')}
-        ${guilds.map((g) => opt(g.id, g.name, guildView === g.id)).join('')}
-      </select></label>
-      <label class="sc-field sc-check"><input type="checkbox" data-all ${list.length && list.every((s) => picked.has(s.id)) ? 'checked' : ''} /><span>모두 고르기</span></label>
+      <span class="sc-field">${dropHtml('view', `보기 · ${escapeHtml(nameOf(guildView, viewItems))}`, viewItems, true)}</span>
+      <button type="button" class="sc-chk${all ? ' is-on' : ''}" data-all aria-pressed="${all}">모두 고르기</button>
       <span class="sc-field sc-move"><span>고른 <b id="n-picked">${picked.size}</b>곡을</span>
-        <select data-target>${targets}</select>
-        <button type="button" class="sc-ok" data-move>옮기기</button></span>
+        ${dropHtml('target', escapeHtml(nameOf(moveTarget, targetItems)), targetItems, false)}
+        <button type="button" class="pink sc-btn" data-move>옮기기</button></span>
     </div>
     ${list.length ? list.map((s) => `
-      <label class="sc-row sc-guild-row" data-id="${s.id}">
-        <input type="checkbox" data-pick="${s.id}" ${picked.has(s.id) ? 'checked' : ''} />
+      <div class="sc-row sc-guild-row${picked.has(s.id) ? ' is-picked' : ''}" data-id="${s.id}" data-pick="${s.id}" role="button" tabindex="0" aria-pressed="${picked.has(s.id)}">
         ${jacket(s)}
         <span class="sc-main">
           <b>${escapeHtml(s.title)}</b>
@@ -222,13 +238,12 @@ function paintGuild() {
           <span class="sc-msg" hidden></span>
         </span>
         <span class="sc-where">${where(s)}</span>
-      </label>`).join('') : '<p class="sc-empty">이 보기에는 곡이 없습니다.</p>'}`;
+      </div>`).join('') : '<p class="sc-empty">이 보기에는 곡이 없습니다.</p>'}`;
 }
 
 /* 한 곡씩 순서대로 옮긴다. 옮길 곳에 같은 곡이 있으면 그 줄만 실패로 적고 나머지는 계속한다. */
 async function moveSelected(btn) {
-  const target = bodyEl.querySelector('[data-target]').value;
-  const gid = target === 'none' ? null : Number(target);
+  const gid = moveTarget === 'none' ? null : moveTarget;
   const ids = [...picked];
   if (!ids.length) return;
   btn.disabled = true;
@@ -309,7 +324,7 @@ async function askMerge(btn) {
     box.innerHTML = `
       <p><b>${escapeHtml(drop.title)}</b>(${escapeHtml(guildName(drop))})을 <b>${escapeHtml(keep.title)}</b>(${escapeHtml(guildName(keep))})에 합칩니다.
         옮겨짐: ${escapeHtml(lines)}. 합친 뒤 ${escapeHtml(drop.title)}은 지워집니다.</p>
-      <button type="button" class="sc-ok is-danger" data-merge="${keep.id}-${drop.id}">병합</button>
+      <button type="button" class="pink sc-btn" data-merge="${keep.id}-${drop.id}">병합</button>
       <button type="button" class="sc-link" data-cancel-merge>취소</button>`;
   } catch (err) {
     box.innerHTML = `<p class="sc-msg">${escapeHtml(err.message)}</p>`;
@@ -358,8 +373,30 @@ document.querySelector('.sc-tabs').addEventListener('click', async (e) => {
   }
 });
 
+function togglePick(id) {
+  if (picked.has(id)) picked.delete(id); else picked.add(id);
+  paintGuild();
+}
 bodyEl.addEventListener('click', (e) => {
   const t = e.target;
+  const dropBtn = t.closest('[data-drop]');
+  if (dropBtn) { openDrop = openDrop === dropBtn.dataset.drop ? null : dropBtn.dataset.drop; paintGuild(); return; }
+  const pv = t.closest('[data-pick-view]');
+  if (pv) {
+    const v = pv.dataset.pickView;
+    guildView = v === 'none' || v === 'all' ? v : Number(v);
+    openDrop = null; picked.clear(); paintGuild(); return;
+  }
+  const pt = t.closest('[data-pick-target]');
+  if (pt) { const v = pt.dataset.pickTarget; moveTarget = v === 'none' ? 'none' : Number(v); openDrop = null; paintGuild(); return; }
+  if (t.closest('[data-all]')) {
+    const list = [...bodyEl.querySelectorAll('[data-pick]')].map((r) => Number(r.dataset.pick));
+    const all = list.length && list.every((id) => picked.has(id));
+    list.forEach((id) => (all ? picked.delete(id) : picked.add(id)));
+    paintGuild(); return;
+  }
+  const row = t.closest('.sc-guild-row[data-pick]');
+  if (row && !t.closest('a')) { togglePick(Number(row.dataset.pick)); return; }
   const tv = t.closest('[data-title-view]');
   if (tv) { titleView = tv.dataset.titleView; paintTitle(); return; }
   const ok = t.closest('[data-confirm]');
@@ -376,31 +413,18 @@ bodyEl.addEventListener('click', (e) => {
   const ns = t.closest('[data-notsame]');
   if (ns) { hide(ns.dataset.notsame); paintDup(); paintCounts(); }
 });
+/* 드롭 메뉴는 바깥을 누르거나 Esc 로 닫는다(곡 목록과 같다) */
+document.addEventListener('click', (e) => { if (openDrop && !e.target.closest('.drop')) { openDrop = null; paintGuild(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && openDrop) { openDrop = null; paintGuild(); } });
 bodyEl.addEventListener('keydown', (e) => {
+  const pickRow = e.target.closest('.sc-guild-row[data-pick]');
+  if (pickRow && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); togglePick(Number(pickRow.dataset.pick)); return; }
   if (e.key !== 'Enter' || e.isComposing) return;
   const row = e.target.closest('.sc-title-row');
   if (!row || !e.target.matches('input')) return;
   e.preventDefault();
   if (row.dataset.mode === 'yt') saveYoutube(row); else confirmTitle(row);
 });
-bodyEl.addEventListener('change', (e) => {
-  const t = e.target;
-  if (t.matches('[data-view]')) { guildView = t.value === 'none' || t.value === 'all' ? t.value : Number(t.value); picked.clear(); paintGuild(); return; }
-  if (t.matches('[data-pick]')) {
-    const id = Number(t.dataset.pick);
-    t.checked ? picked.add(id) : picked.delete(id);
-    document.getElementById('n-picked').textContent = picked.size;
-    return;
-  }
-  if (t.matches('[data-all]')) {
-    bodyEl.querySelectorAll('[data-pick]').forEach((c) => {
-      c.checked = t.checked;
-      t.checked ? picked.add(Number(c.dataset.pick)) : picked.delete(Number(c.dataset.pick));
-    });
-    document.getElementById('n-picked').textContent = picked.size;
-  }
-});
-
 async function start() {
   errorEl.hidden = true;
   let role = null;
