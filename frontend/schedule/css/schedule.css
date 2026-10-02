@@ -772,20 +772,51 @@
 .kind-fixed { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-size: 13px; font-weight: 800; color: var(--ink); }
 
 /* --- 일정표 (2026-10-02) --- */
-/* 묶음 머리: 날짜 정하는 중 / 10월 / 11월 … */
-.sched-group { margin: 22px 0 8px; padding-bottom: 6px; border-bottom: 1.5px solid var(--line-2);
-  font-size: 13px; font-weight: 800; color: var(--ink-muted); letter-spacing: -0.01em; }
-.sched-group:first-child { margin-top: 0; }
-/* 왼쪽 날짜 칸. 일은 크게, 요일은 작게. 주말은 요일만 색을 바꾼다 */
-.sched-date { flex: none; width: 46px; display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
-.sched-date b { font-size: 26px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.sched-date small { font-size: 11.5px; font-weight: 700; color: var(--ink-faint); }
-.sched-date.is-weekend small { color: var(--teal-deep); }
-.sched-date.is-poll small { font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-/* 제목 아래 두 줄: 종류 · 소속 / 시간 · 장소 · 곡 수 */
-.poll-item-meta + .poll-item-meta { margin-top: 2px; }
-.poll-item-meta .guild-mark.event-guild { margin-left: 2px; }
-@media (max-width: 600px) {
-  .sched-date { width: 34px; }
-  .sched-date b { font-size: 21px; }
+/* 카드를 걷고 한 판 안의 줄로. 카드 모양(eventcard.css)은 두 열 격자용이라 한 열로 펴니 줄 하나가
+   110px·화면 폭 전체가 되어 9건에 두 화면을 내려야 했다. 홈 카드는 그대로 둔다. */
+.schedule .poll-list { background: #ffffffce; border: 2px solid white; }
+.schedule .poll-list .poll-entry { margin: 0; background: none; border: 0; border-bottom: 1px solid var(--line-2); }
+.schedule .poll-list .poll-entry:last-child { border-bottom: 0; }
+.schedule .poll-list .poll-entry.is-open { background: #ffffffe6; }
+.schedule .poll-list .poll-detail { padding: 0 14px 14px; }
+
+/* 묶음 머리: 날짜 정하는 중 / 10월 / 11월 … 판 안에서 줄 사이를 나눈다 */
+.sched-group { padding: 14px 14px 6px; border-bottom: 1px solid var(--line-2);
+  font-size: 12px; font-weight: 800; color: var(--ink-muted); letter-spacing: -0.01em; background: #f5f9fb; }
+
+/* 한 줄 = 열. 같은 종류의 정보가 줄마다 같은 세로선에 선다 */
+.schedule .poll-list .poll-item.sched-row {
+  display: grid; align-items: center; column-gap: 14px; padding: 9px 14px; min-height: 52px;
+  grid-template-columns: 84px 40px minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1.4fr) 64px;
+  grid-template-areas: "date sym title kind when count";
+}
+.sched-row .sched-date { grid-area: date; font-size: 13.5px; font-weight: 800; color: var(--ink);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sched-row .sched-date small { margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--ink-faint); }
+.sched-row .sched-date small.is-weekend { color: var(--teal-deep); }
+.sched-row .sched-date i { margin-right: 3px; font-style: normal; font-size: 11px; color: var(--ink-faint); }
+.sched-row .event-symbol { grid-area: sym; width: 40px; height: 40px; font-size: 18px; }
+.sched-row .event-symbol.is-site img { width: 40px; height: auto; }
+.sched-row .poll-item-title { grid-area: title; margin: 0; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 넓을 때는 묶음 상자를 풀어 두 칸이 각자 열에 선다 */
+.sched-row .sched-meta { display: contents; }
+.sched-row .sched-kind, .sched-row .sched-when { font-size: 12px; color: var(--ink-muted); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sched-row .sched-kind { grid-area: kind; font-weight: 700; }
+.sched-row .sched-when { grid-area: when; }
+.sched-row .sched-kind .guild-mark.event-guild { margin-left: 2px; }
+.sched-row .poll-item-count { grid-area: count; text-align: right; }
+
+/* 좁은 화면: 종류·시간은 제목 아래 한 줄로 접는다 */
+@media (max-width: 760px) {
+  .schedule .poll-list .poll-item.sched-row {
+    grid-template-columns: 52px 32px minmax(0, 1fr) auto; column-gap: 10px; row-gap: 2px; padding: 9px 12px;
+    grid-template-areas: "date sym title count" "date sym meta meta";
+  }
+  .sched-row .event-symbol { width: 32px; height: 32px; }
+  .sched-row .event-symbol.is-site img { width: 32px; }
+  .sched-row .sched-date { font-size: 12.5px; white-space: normal; line-height: 1.2; }
+  .sched-row .sched-meta { display: flex; grid-area: meta; gap: 6px; min-width: 0; }
+  .sched-row .sched-when::before { content: '·'; margin-right: 6px; color: var(--ink-faint); }
+  .sched-row .poll-item-title { font-size: 14px; }
 }

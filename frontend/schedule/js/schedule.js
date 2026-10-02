@@ -196,15 +196,28 @@ function kindLine(e) {
   return `${label}${crests ? ' ' + crests : ''}`;
 }
 
-/* 왼쪽 날짜 칸. 확정이면 일과 요일, 투표 중이면 후보 기간 */
+/* 왼쪽 날짜 칸. 확정·투표 중 모두 같은 크기의 한 줄이다(전에는 큰 숫자와 작은 두 줄이 섞였다).
+   확정은 '12 월', 투표 중은 '10/1–31' 또는 '10/21–11/15'. 올해가 아니면 앞에 '27 처럼 연도를 붙인다. */
+function yearMark(iso) {
+  const y = Number(iso.slice(0, 4));
+  return y === new Date().getFullYear() ? '' : `<i>'${String(y).slice(2)}</i>`;
+}
 function dateCell(e) {
   if (e.status === 'confirmed' && e.date) {
     const d = parseDate(e.date);
     const wk = d.getDay();
-    return `<span class="sched-date${wk === 0 || wk === 6 ? ' is-weekend' : ''}"><b>${d.getDate()}</b><small>${DOW[wk]}</small></span>`;
+    return `<span class="sched-date">${yearMark(e.date)}${d.getDate()}`
+      + `<small class="${wk === 0 || wk === 6 ? 'is-weekend' : ''}">${DOW[wk]}</small></span>`;
   }
   const f = firstDate(e), l = lastDate(e);
-  return `<span class="sched-date is-poll"><small>${f ? monthDay(f) : ''}</small><small>${l && l !== f ? '~' + monthDay(l) : ''}</small></span>`;
+  if (!f) return '<span class="sched-date"></span>';
+  const [, fm] = f.split('-').map(Number);
+  let range = monthDay(f);
+  if (l && l !== f) {
+    const [, lm, ld] = l.split('-').map(Number);
+    range += '–' + (lm === fm ? `${ld}` : monthDay(l));
+  }
+  return `<span class="sched-date">${yearMark(f)}${range}</span>`;
 }
 
 function pollHead(e) {
@@ -219,15 +232,13 @@ function pollHead(e) {
     when = `후보 ${e.dates.length}일${e.createdBy ? ' · ' + escapeHtml(e.createdBy) : ''}`;
     count = `<span class="poll-item-count${best > 0 ? ' max' : ''}">최다 ${best}명</span>`;
   }
+  /* 열: 날짜 | 문장 | 제목 | 종류·소속 | 시간·장소·곡 | 인원. 좁으면 종류·시간이 제목 아래 한 줄로 접힌다(CSS) */
   return `
-      <div class="poll-item" data-open-poll="${e.id}" role="button" tabindex="0" aria-expanded="${open}">
+      <div class="poll-item sched-row" data-open-poll="${e.id}" role="button" tabindex="0" aria-expanded="${open}">
         ${dateCell(e)}
         ${eventSymbol(e)}
-        <div class="poll-item-info">
-          <div class="poll-item-title">${escapeHtml(e.title)}</div>
-          <div class="poll-item-meta">${kindLine(e)}</div>
-          <div class="poll-item-meta">${when}</div>
-        </div>
+        <div class="poll-item-title">${escapeHtml(e.title)}</div>
+        <div class="sched-meta"><span class="sched-kind">${kindLine(e)}</span><span class="sched-when">${when}</span></div>
         ${count}
       </div>`;
 }
