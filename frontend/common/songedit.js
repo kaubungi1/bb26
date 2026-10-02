@@ -40,6 +40,15 @@ async function adminPost(url, body) {
   return res.json();
 }
 
+async function adminDelete(url) {
+  const res = await fetch('/api/admin' + url, {
+    method: 'DELETE',
+    headers: { 'X-Nickname': encodeURIComponent(Nick.get()) },
+  });
+  if (!res.ok) throw await apiFailure(res);
+  return res.json();
+}
+
 /* 후보가 고른 소속과 부딪히는 방식. 서버 songmatch.conflicts 와 같은 규칙이다.
    gid: 고른 길드 id, 프리길드는 null. 부딪히지 않으면 'other'(다른 길드 — 길드마다 따로 해도 된다). */
 function songConflict(cand, gid) {
@@ -64,6 +73,8 @@ function openSongEditor(song, opts = {}) {
     let asked = 0;                      /* 늦게 온 후보 응답이 새 것을 덮지 않게 */
     const me = Nick.get();
     const isAdmin = AdminSeen.visible();
+    /* 삭제는 관리자와 등록한 사람만. 아니면 버튼 자체를 그리지 않는다. 서버(admin.can_delete)가 다시 본다 */
+    const canDelete = editing && (isAdmin || (!!me && (song.createdBy || '') === me));
 
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
@@ -130,7 +141,7 @@ function openSongEditor(song, opts = {}) {
                 <button type="submit" class="pink" id="se-save">${editing ? '저장' : '등록'}</button>
                 <button type="button" class="ghost" data-cancel>취소</button>
               </div>
-              ${editing ? '<button type="button" class="ghost mini se-del" data-del>이 곡 삭제</button>' : ''}
+              ${canDelete ? '<button type="button" class="ghost mini se-del" data-del>이 곡 삭제</button>' : ''}
             </div>
           </div>
         </form>
@@ -387,7 +398,7 @@ function openSongEditor(song, opts = {}) {
       if (!confirm('이 곡과 연결된 파트·지원이 모두 삭제됩니다. 진행할까요?')) return;
       busy = true;
       try {
-        await Writes.run(`song:${song.id}`, () => api.del(`/songs/${song.id}`));
+        await Writes.run(`song:${song.id}`, () => adminDelete(`/songs/${song.id}`));
         close('deleted');
       } catch (err) {
         busy = false;

@@ -4,7 +4,8 @@
 같은 소속 안의 중복, 길드에 있는 곡의 프리길드 등록은 막는다(songmatch.py).
 길드 곡은 그 길드 멤버(와 관리자)만 등록한다. 프리길드 곡은 누구나 등록한다(사용자 결정, 2026-10-02).
 태그는 꼭 하나 고른다(SONG_TAGS).
-소속을 바꾸는 것(이전)은 여기가 아니라 /api/admin/songs/{id}/guild 에서 한다 — 관리자·길드장만 된다."""
+소속을 바꾸는 것(이전)은 여기가 아니라 /api/admin/songs/{id}/guild 에서 한다 — 관리자·길드장만 된다.
+삭제도 /api/admin/songs/{id} 에서 한다 — 관리자와 등록한 사람만 된다."""
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from db import get_db
@@ -234,16 +235,8 @@ def update_song(song_id: int, body: dict, background: BackgroundTasks):
     return result
 
 
-@router.delete('/{song_id}')
-def delete_song(song_id: int):
-    conn = get_db()
-    cur = conn.execute('DELETE FROM songs WHERE "id"=%s', (song_id,))
-    imageserve.forget('thumb', song_id)
-    conn.commit()
-    conn.close()
-    if cur.rowcount == 0:
-        raise HTTPException(404, '곡을 찾을 수 없습니다.')
-    return {'ok': True}
+# 곡 삭제는 /api/admin/songs/{id} 에 있다 — 관리자와 등록한 사람만 지운다(사용자 결정, 2026-10-02).
+# 여기 두면 화면을 거치지 않고 누구나 지울 수 있어 없앴다.
 
 
 @router.post('/{song_id}/bump')

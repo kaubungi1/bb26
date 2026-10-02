@@ -211,3 +211,31 @@ def move_song(song_id: int, body: dict, request: Request):
         return build_songs(conn, [row])[0]
     finally:
         conn.close()
+
+
+# ---------- 곡 삭제 ----------
+def can_delete(conn, request, created_by):
+    """관리자(파딱·핑딱·root)와 그 곡을 등록한 사람(createdBy 닉네임)만(사용자 결정, 2026-10-02).
+    '시트 가져오기' 로 들어온 곡이나 등록자가 비어 있는 옛 곡은 관리자만 지운다."""
+    if admin.rank(admin.role_of(conn, request)) >= admin.rank('pink'):
+        return True
+    me = admin.nickname_of(request)
+    return bool(me) and me == (created_by or '').strip()
+
+
+@router.delete('/songs/{song_id}')
+def delete_song(song_id: int, request: Request):
+    """파트·지원·댓글·셋리스트·합주 기록은 곡에 매여 함께 지워진다(ON DELETE CASCADE)."""
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT "createdBy" FROM songs WHERE "id"=%s', (song_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, '곡을 찾을 수 없습니다.')
+        if not can_delete(conn, request, row['createdBy']):
+            raise HTTPException(403, '관리자나 곡을 등록한 사람만 지울 수 있습니다.')
+        conn.execute('DELETE FROM songs WHERE "id"=%s', (song_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    imageserve.forget('thumb', song_id)
+    return {'ok': True}
