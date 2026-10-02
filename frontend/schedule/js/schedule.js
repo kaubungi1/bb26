@@ -855,7 +855,7 @@ function renderPlayable() {
     `<div class="ps-song-title">${escapeHtml(s.title)}</div>` +
     `<div class="ps-song-sub">${escapeHtml(s.artist || '')}${songTag(s)}</div></td>`;
   const stageRow = (s) => (s.songId === stageSongId && s.roles.length
-    ? `<tr class="ps-stage-row"><td colspan="${span}">${stageBlock(s)}</td></tr>` : '');
+    ? `<tr class="ps-stage-row"><td colspan="${span}">${stageBlock(stageSong(s.songId) || s)}</td></tr>` : '');
 
   if (locked) {
     /* 셋리스트 — 사람은 이름으로 쓴다(정해진 사람은 읽어야 한다). 좁은 화면에서는 칸이 좁아 얼굴 칩만.
@@ -933,13 +933,34 @@ function renderPlayable() {
 
 /* 무대 한 판. 머리글이 곧 접기 단추다 — 곡 이름과 충족 수가 이미 거기 있어서
    접기만 따로 둘 자리를 새로 만들 이유가 없다(§9.2). 접으면 이 한 줄만 남는다. */
+/* 무대에 올릴 곡 자료. 셋리스트 곡이면 대기실 사람을 빼고 세우고(그날 실제로 치는 사람), 빠진 사람은 bench 로.
+   충족 수도 그 기준으로 다시 센다 — 대기실로 보내 파트가 비면 무대에서도 빈 자리로 보인다(2026-10-03).
+   아직 셋리스트에 없는 곡은 지원했고 오는 사람 그대로다. */
+function stageSong(id) {
+  const p = playable && playable.songs.find((x) => x.songId === id);
+  if (!p) return null;
+  const item = pollEvent && pollEvent.status === 'confirmed' ? pollEvent.songs.find((x) => x.songId === id) : null;
+  const skips = item ? item.skips || [] : [];
+  if (!skips.length) return p;
+  const bench = [];
+  const roles = p.roles.map((r) => {
+    const members = r.members.filter((n) => {
+      const out = skips.some((k) => k.role === r.role && k.nickname === n);
+      if (out && !bench.includes(n)) bench.push(n);
+      return !out;
+    });
+    return { ...r, members, ok: members.length > 0 };
+  });
+  return { ...p, roles, filled: roles.filter((r) => r.ok).length, bench };
+}
+
 function stageBlock(s) {
   return `<button type="button" class="ps-stage-head" data-stage-fold aria-expanded="${stageOpen}">`
     + `<b>${escapeHtml(s.title)}</b>`
     + `<span class="ps-stage-fill">${s.filled}<i>/${s.needed}</i></span>`
     + `<span class="ps-stage-caret">${stageOpen ? '접기 ▴' : '펼치기 ▾'}</span>`
     + `</button>`
-    + (stageOpen ? stageHtml(s.roles) : '');
+    + (stageOpen ? stageHtml(s.roles, s.bench) : '');
 }
 
 /* 표 안의 무대와 옆 칸의 무대는 같은 것을 가리키므로 같이 접힌다.
@@ -952,7 +973,7 @@ function toggleStage(host) {
 }
 
 function renderStage() {
-  const s = playable && stageSongId ? playable.songs.find((x) => x.songId === stageSongId) : null;
+  const s = stageSongId ? stageSong(stageSongId) : null;
   playableStageEl.innerHTML = s ? stageBlock(s) : '';
   /* 무대는 옆 칸과 표 안 두 곳에 그려진다. stageTalk 이 보이는 쪽을 알아서 찾는다. */
   stageTalk(!!stageSongId);

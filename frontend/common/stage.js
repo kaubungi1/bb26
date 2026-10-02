@@ -91,8 +91,9 @@ function stageSpot(slot, role) {
     + `</div>`;
 }
 
-/* 무대 하나. roles 는 playable 응답의 songs[].roles 를 그대로 넘기면 된다. */
-function stageHtml(roles) {
+/* 무대 하나. roles 는 playable 응답의 songs[].roles 를 그대로 넘기면 된다.
+   bench(닉네임 목록)를 주면 왼쪽 아래 빈 구석에 '대기실' 로 흐리게 적는다 — 셋리스트에서 그날 안 치는 사람. */
+function stageHtml(roles, bench) {
   const bySlot = {};
   const loose = [];
   (roles || []).forEach((r) => {
@@ -107,7 +108,9 @@ function stageHtml(roles) {
       `<span class="stage-extra-item"><b>${escapeHtml(r.label || r.role)}</b>`
       + `${(r.members || []).map((n) => avatarChip(n)).join('')}</span>`).join('')}</div>`
     : '';
-  return `<div class="stage">${grid}</div>${extra}`;
+  const benchHtml = bench && bench.length
+    ? `<div class="stage-bench"><b>대기실</b>${bench.map((n) => `<span>${escapeHtml(n)}</span>`).join('')}</div>` : '';
+  return `<div class="stage">${grid}${benchHtml}</div>${extra}`;
 }
 
 /* ---------- 말풍선 ----------
