@@ -28,6 +28,11 @@ const inNote = document.getElementById('in-note');
 const pollPark = document.getElementById('poll-park');
 const pollDetail = document.getElementById('poll-detail');
 const pollMeta = document.getElementById('poll-meta');
+const pollDetailHead = document.querySelector('#poll-detail .poll-detail-head');
+const voteToggle = document.getElementById('vote-toggle');
+const voteBox = document.getElementById('vote-box');
+const confirmedPeople = document.getElementById('confirmed-people');
+let voteOpen = false;         /* 확정 일정에서 날짜 투표 기록을 펼쳤는가 */
 const matrixEl = document.getElementById('matrix');
 const weekendOnlyEl = document.getElementById('weekend-only');
 const confirmDateEl = document.getElementById('confirm-date');
@@ -620,6 +625,18 @@ function renderPollView() {
   unconfirmBtn.hidden = !can;
   document.getElementById('edit-event-btn').hidden = !can;
   document.getElementById('poll-delete').hidden = !can;
+  document.getElementById('confirmed-delete').hidden = !can;
+  /* 확정이면 맨 위는 확정 요약이 맡는다(머리 한 줄은 같은 말이라 숨긴다). 날짜 투표 기록은 접는다 */
+  pollDetailHead.hidden = locked;
+  voteToggle.hidden = !locked;
+  voteBox.hidden = locked && !voteOpen;
+  voteToggle.setAttribute('aria-expanded', String(locked && voteOpen));
+  voteToggle.textContent = voteOpen ? '날짜 투표 기록 접기' : '날짜 투표 기록 보기';
+  if (locked) {
+    const people = ev.avails.filter((a) => a.date === ev.date).map((a) => a.nickname);
+    confirmedPeople.innerHTML = `<span class="cp-count">참석 ${people.length}</span>`
+      + (people.length ? people.map((n) => `<span class="cp-name">${escapeHtml(n)}</span>`).join('') : '<span class="muted">아직 없음</span>');
+  }
   if (!can || !locked) document.getElementById('event-edit').hidden = true;
   /* 밴드 행사는 날짜 투표만 한다. 가능 곡·셋리스트가 없다 */
   const band = eventKind(ev) === 'band';
@@ -1047,6 +1064,7 @@ function openPoll(id) {
   stageSongId = null;
   playableScope = 'guild';
   editingGuilds = null;
+  voteOpen = false;
   renderPolls();
   renderPast();
   renderPollView();
@@ -1085,17 +1103,24 @@ pollListEl.addEventListener('click', onOpenClick);
 pastListEl.addEventListener('click', onOpenClick);
 pollListEl.addEventListener('keydown', onOpenKey);
 pastListEl.addEventListener('keydown', onOpenKey);
-document.getElementById('poll-delete').addEventListener('click', async () => {
+voteToggle.addEventListener('click', () => { voteOpen = !voteOpen; renderPollView(); });
+
+/* 삭제는 머리(투표 중)와 확정 요약(확정) 두 자리에 있다. 하는 일은 같다 */
+async function deleteEvent(btn) {
   if (!pollEvent) return;
-  if (!confirm(`${pollEvent.title} 조율을 삭제할까요?`)) return;
+  if (!confirm(`${pollEvent.title} 일정을 삭제할까요?`)) return;
   const id = pollEvent.id;
-  const ok = await Writes.commit(document.getElementById('poll-delete'), `event:${id}`,
+  const ok = await Writes.commit(btn, `event:${id}`,
     () => api.del(`/events/${id}?nickname=${encodeURIComponent(Nick.get())}`).then(() => true));
   if (!ok) return;
   closePoll();
   events = events.filter((x) => x.id !== id);   /* 목록 전체를 다시 받지 않고 바로 뺀다 */
   renderPolls();
   renderPast();
+}
+['poll-delete', 'confirmed-delete'].forEach((bid) => {
+  const b = document.getElementById(bid);
+  b.addEventListener('click', () => deleteEvent(b));
 });
 
 weekendOnlyEl.addEventListener('change', () => {

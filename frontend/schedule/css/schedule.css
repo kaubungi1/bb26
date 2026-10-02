@@ -835,3 +835,21 @@
 /* 확정 일정 정보 고치기 — 확정 칸 바로 아래에 펼친다 */
 .event-edit { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 4px; padding: 12px; background: #f5f9fb; }
 .event-edit input { min-height: 38px; }
+
+/* --- 확정 요약(2026-10-02): 펼치면 맨 위. 날짜·시간·장소 한 줄, 참석자 이름, 버튼 --- */
+.poll-detail .confirmed-bar { margin: 2px 0 10px; align-items: flex-start; }
+.confirmed-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.confirmed-people { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.confirmed-people .cp-count { font-size: 11.5px; font-weight: 800; color: var(--teal-deep); margin-right: 2px; }
+.confirmed-actions { flex-wrap: wrap; justify-content: flex-end; }
+/* 날짜 투표 기록 접기 단추 — 글자 하나, 상자 없음 */
+.vote-toggle { display: block; margin: 8px 0 4px; padding: 6px 0; border: 0; background: none; box-shadow: none;
+  font-size: 12.5px; font-weight: 800; color: var(--ink-muted); min-height: 0; }
+.vote-toggle::before { content: '▸ '; }
+.vote-toggle[aria-expanded="true"]::before { content: '▾ '; }
+.vote-toggle:hover { color: var(--ink); }
+#vote-box[hidden] { display: none; }
+@media (max-width: 600px) {
+  .poll-detail .confirmed-bar { flex-direction: column; }
+  .confirmed-actions { justify-content: flex-start; }
+}
