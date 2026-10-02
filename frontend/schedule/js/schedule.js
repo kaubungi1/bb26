@@ -42,9 +42,7 @@ const confirmPlaceEl = document.getElementById('confirm-place');
 const confirmBtn = document.getElementById('confirm-btn');
 const confirmBar = document.getElementById('confirm-bar');
 const confirmedBar = document.getElementById('confirmed-bar');
-const confirmedDetail = document.getElementById('confirmed-detail');
 const unconfirmBtn = document.getElementById('unconfirm-btn');
-const addMemberBtn = document.getElementById('add-member-btn');
 const playableSection = document.getElementById('playable-section');
 const playableListEl = document.getElementById('playable-list');
 const playableStageEl = document.getElementById('playable-stage');
@@ -59,8 +57,6 @@ function psMatch(s, q) {
   if ([s.title, s.titleKo, s.artist].some((v) => (v || '').toLowerCase().includes(q))) return true;
   return s.roles.some((r) => r.members.some((n) => n.toLowerCase().includes(q)));
 }
-const setlistSection = document.getElementById('setlist-section');
-const setlistEl = document.getElementById('setlist');
 const pollHintEl = document.getElementById('poll-hint');
 const NICK_MAX = 20;
 
@@ -430,6 +426,7 @@ function matrixMembers() {
   const names = [];
   pollEvent.avails.forEach((a) => { if (!names.includes(a.nickname)) names.push(a.nickname); });
   const list = names.map((n) => ({ name: n, mine: n === currentUser, placeholder: false }));
+  if (pollEvent.status === 'confirmed') return list;      /* 확정 뒤에는 기록만 본다(참가는 요약의 단추) */
   if (currentUser && !names.includes(currentUser)) list.push({ name: currentUser, mine: true, placeholder: false });
   if (!currentUser) list.push({ name: '', mine: true, placeholder: true });
   return list;
@@ -477,11 +474,12 @@ function renderMatrix() {
     html += `<tr class="${cls.join(' ')}">`;
     // 날짜 칸을 누르면 아래 '되는 곡' 표가 그 날짜 기준으로 바뀐다
     html += `<td class="date-cell"${locked ? '' : ` data-pick-date="${dr.date}"`}>${monthDay(dr.date)} <span class="dow${dow === '일' ? ' sunday' : ''}${dow === '토' ? ' saturday' : ''}">(${dow})</span><span class="date-cnt"><span>${cnt}명</span></span>${isFixed ? '<span class="date-fixed"><span>확정</span></span>' : ''}${locked || !canManage(ev) ? '' : `<button type="button" class="date-off" data-off-date="${dr.date}" title="이 날짜를 후보에서 빼기" aria-label="${monthDay(dr.date)} 후보에서 빼기">×</button>`}</td>`;
-    const canToggle = !locked || isFixed;
+    /* 조율 중에는 내 열만 누른다. 확정 뒤에는 보기만 한다 — 참가·나가기는 확정 요약의 단추(2026-10-02).
+       전에는 확정일 줄의 남의 칸까지 눌러 넣고 뺄 수 있었다 */
+    const canToggle = !locked;
     members.forEach((m) => {
       const on = m.name && ev.avails.some((a) => a.date === dr.date && a.nickname === m.name);
-      // 조율 중에는 내 열만, 확정 후에는 확정일 행의 모든 열을 조작할 수 있다
-      const editable = canToggle && (m.mine || (isFixed && !!m.name));
+      const editable = canToggle && m.mine;
       const cellCls = ['avail-cell'];
       if (m.mine && canToggle) cellCls.push('mine');
       if (on) cellCls.push('on');
@@ -530,6 +528,8 @@ function renderPollGuilds() {
   const box = document.getElementById('poll-guilds');
   const ev = pollEvent;
   if (!ev || !isUnion(ev)) { box.hidden = true; box.innerHTML = ''; return; }
+  /* 확정 뒤에는 참가 길드가 확정 요약 둘째 줄에 있다. 이 칸은 ⋯ '참가 길드 수정' 으로 편집할 때만 뜬다 */
+  if (ev.status === 'confirmed' && !editingGuilds) { box.hidden = true; box.innerHTML = ''; return; }
   box.hidden = false;
   const admin = AdminSeen.visible();
   if (editingGuilds) {
@@ -584,6 +584,79 @@ document.getElementById('poll-guilds').addEventListener('click', async (e) => {
   }
 });
 
+/* ---------- 확정 요약 ----------
+   첫 줄 날짜·시간(사람들이 제일 먼저 찾는 것) / 둘째 줄 장소·종류·참가 길드 / 메모 / 참석자.
+   단추는 내 상태에 따라 하나: 참가하기(분홍) 또는 나가기(흐림). 지난 일정에는 없다.
+   남을 넣고 빼는 길은 없다(2026-10-02 사용자 결정) — 확정 뒤에는 각자 참가하기·나가기만. */
+function amIn(ev) { return !!currentUser && ev.avails.some((a) => a.date === ev.date && a.nickname === currentUser); }
+
+function renderSummary(ev, when) {
+  document.getElementById('cs-when').innerHTML = `<b>${escapeHtml(when)}</b>`
+    + `<span class="cs-time">${escapeHtml(timeText(ev))}</span>`;
+  const kind = eventKind(ev);
+  const what = kind === 'guild'
+    ? `${EVENT_KIND.guild}${ev.guild ? ' · ' + guildMark(ev.guild, 16, 'cs-gmark') + escapeHtml(ev.guild.name) : ''}`
+    : EVENT_KIND[kind] + (ev.guilds || []).map((g) => ` <span class="cs-guild">${guildMark(g, 16, 'cs-gmark')}${escapeHtml(g.name)}</span>`).join('');
+  document.getElementById('cs-sub').innerHTML = [ev.place ? escapeHtml(ev.place) : '', what].filter(Boolean)
+    .join('<span class="cs-sep">·</span>');
+  const note = document.getElementById('cs-note');
+  note.hidden = !ev.note;
+  note.textContent = ev.note || '';
+
+  const mine = amIn(ev);
+  const people = ev.avails.filter((a) => a.date === ev.date).map((a) => a.nickname)
+    .sort((x, y) => (x === currentUser ? -1 : y === currentUser ? 1 : x.localeCompare(y, 'ko')));
+  confirmedPeople.innerHTML = `<span class="cp-count">참석 <b>${people.length}</b></span>`
+    + (people.length
+      ? people.map((n) => `<span class="cp-name${n === currentUser ? ' me' : ''}">${escapeHtml(n)}</span>`).join('')
+      : '<span class="cp-empty">아직 없음</span>');
+
+  const join = document.getElementById('cs-join');
+  join.hidden = isPast(ev);
+  join.textContent = mine ? '나가기' : '참가하기';
+  join.classList.toggle('pink', !mine);
+  join.classList.toggle('ghost', mine);
+
+  const can = canManage(ev);
+  document.getElementById('cs-menu-wrap').hidden = !can;
+  document.getElementById('cs-guilds-btn').hidden = !(isUnion(ev) && AdminSeen.visible());
+  if (!can) closeCsMenu();
+}
+
+const csMenu = document.getElementById('cs-menu');
+const csMore = document.getElementById('cs-more');
+function closeCsMenu() { csMenu.hidden = true; csMore.setAttribute('aria-expanded', 'false'); }
+csMore.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = csMenu.hidden;
+  csMenu.hidden = !open;
+  csMore.setAttribute('aria-expanded', String(open));
+});
+/* 메뉴 밖을 누르거나 Esc 면 닫는다. 메뉴 안 항목은 각자 할 일을 하고 닫는다 */
+document.addEventListener('click', (e) => { if (!csMenu.hidden && !e.target.closest('.cs-menu-wrap')) closeCsMenu(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !csMenu.hidden) { closeCsMenu(); csMore.focus(); } });
+csMenu.addEventListener('click', () => closeCsMenu());
+
+document.getElementById('cs-join').addEventListener('click', async () => {
+  const ev = pollEvent;
+  if (!ev || ev.status !== 'confirmed' || !ev.date) return;
+  if (!currentUser) {
+    const name = await Nick.ensure();
+    if (!name) return;
+    currentUser = name;
+  }
+  setAvail(ev, ev.date, currentUser, !amIn(ev));
+});
+
+document.getElementById('cs-guilds-btn').addEventListener('click', async () => {
+  const ev = pollEvent;
+  if (!ev) return;
+  await loadGuildList();
+  editingGuilds = new Set(ev.guilds.map((g) => g.id));
+  renderPollGuilds();
+  document.getElementById('poll-guilds').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+});
+
 function renderPollView() {
   const ev = pollEvent;
   if (!ev) return;
@@ -593,8 +666,8 @@ function renderPollView() {
     const d = ev.date ? parseDate(ev.date) : null;
     const when = d ? `${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]})` : '날짜 미정';
     pollMeta.textContent = [when, timeText(ev), ev.place, ev.createdBy].filter(Boolean).join(' · ');
-    confirmedDetail.textContent = `${when} · ${timeText(ev)}${ev.place ? ' · ' + ev.place : ''}`;
-    pollHintEl.textContent = '확정된 일정입니다 · 확정 날짜의 참석 인원만 수정할 수 있습니다';
+    renderSummary(ev, when);
+    pollHintEl.textContent = '확정된 일정의 날짜 투표 기록입니다';
     playableDate = ev.date;
   } else {
     pollMeta.textContent = `후보 ${ev.dates.length}일${f ? ' · ' + monthDay(f) : ''}${l && l !== f ? ' ~ ' + monthDay(l) : ''}${ev.createdBy ? ' · ' + ev.createdBy : ''}`;
@@ -604,29 +677,22 @@ function renderPollView() {
   const can = canManage(ev);
   confirmBar.hidden = locked || !can;
   confirmedBar.hidden = !locked;
-  unconfirmBtn.hidden = !can;
-  document.getElementById('edit-event-btn').hidden = !can;
   document.getElementById('poll-delete').hidden = !can;
-  document.getElementById('confirmed-delete').hidden = !can;
-  /* 확정이면 맨 위는 확정 요약이 맡는다(머리 한 줄은 같은 말이라 숨긴다). 날짜 투표 기록은 접는다 */
+  /* 확정이면 맨 위는 확정 요약이 맡는다(머리 한 줄은 같은 말이라 숨긴다).
+     날짜 투표 기록은 끝난 기록이라 접어서 맨 아래(곡 표 뒤)에 둔다. 조율 중에는 원래 자리(확정 칸 위) */
   pollDetailHead.hidden = locked;
   voteToggle.hidden = !locked;
   voteBox.hidden = locked && !voteOpen;
   voteToggle.setAttribute('aria-expanded', String(locked && voteOpen));
   voteToggle.textContent = voteOpen ? '날짜 투표 기록 접기' : '날짜 투표 기록 보기';
-  if (locked) {
-    const people = ev.avails.filter((a) => a.date === ev.date).map((a) => a.nickname);
-    confirmedPeople.innerHTML = `<span class="cp-count">참석 ${people.length}</span>`
-      + (people.length ? people.map((n) => `<span class="cp-name">${escapeHtml(n)}</span>`).join('') : '<span class="muted">아직 없음</span>');
-  }
+  if (locked) { if (playableSection.nextElementSibling !== voteToggle) playableSection.after(voteToggle, voteBox); }
+  else if (confirmBar.previousElementSibling !== voteBox) confirmBar.before(voteToggle, voteBox);
   if (!can || !locked) document.getElementById('event-edit').hidden = true;
   /* 밴드 행사는 날짜 투표만 한다. 가능 곡·셋리스트가 없다 */
   const band = eventKind(ev) === 'band';
-  setlistSection.hidden = !locked || band;
   playableSection.hidden = !playableDate || band;
   renderPollGuilds();
   renderMatrix();
-  if (locked) renderSetlist();
   renderPsDates();
   syncPlayable();
 }
@@ -636,7 +702,7 @@ function renderPsDates() {
   const ev = pollEvent;
   if (ev.status === 'confirmed') {
     psDatesEl.innerHTML = '';
-    psTitleEl.textContent = '이 인원으로 되는 곡';
+    psTitleEl.textContent = '셋리스트';
     return;
   }
   psTitleEl.textContent = playableDate ? `${monthDay(playableDate)} (${DOW[parseDate(playableDate).getDay()]})이면 되는 곡` : '되는 곡';
@@ -686,10 +752,6 @@ function roleColumns(songs) {
   return [...known, ...extra];
 }
 
-function inSetlist(songId) {
-  return !!pollEvent && pollEvent.songs.some((s) => s.songId === songId);
-}
-
 /* 곡 옆 소속 표시(셋리스트·가능 곡 같이 씀). 알약 배지 대신, 정보가 있을 때만 작은 문장(2026-10-02).
    길드 합주는 곡이 거의 다 그 길드 것이라 줄마다 같은 배지가 붙어 아무 말도 안 했다.
      길드 합주          그 길드 곡은 없음. '전체' 범위에서 섞인 다른 길드 곡은 문장, 프리길드 곡은 '프리길드'
@@ -722,23 +784,26 @@ function songTag(s) {
 function renderPlayable() {
   if (!playable) { showLoading(playableListEl); return; }
   const all = playable.songs;
-  const locked = pollEvent.status === 'confirmed';
+  const ev = pollEvent;
+  const locked = ev.status === 'confirmed';
   /* 길드 일정이면 범위 칩을 세운다. 길드 곡만 / 전체. 정기합주·정기공연은 길드연합이라 범위 칩이 없다 —
      참가 길드 곡 + 프리길드 곡이고, 참가하지 않은 길드의 곡은 그날 프리길드로 보인다(서버 asFree). */
-  const union = isUnion(pollEvent);
-  const g = union ? null : pollEvent.guild;
+  const union = isUnion(ev);
+  const g = union ? null : ev.guild;
   psScopeEl.hidden = !g;
   psScopeEl.querySelectorAll('[data-scope]').forEach((b) => {
     const on = b.dataset.scope === playableScope;
     b.classList.toggle('is-on', on);
     b.setAttribute('aria-pressed', on);
   });
-  const scoped = g && playableScope === 'guild' ? all.filter((s) => s.guildId === g.id) : all;
+  /* 확정 뒤에는 표 위쪽이 셋리스트다. 셋리스트 곡은 범위·검색·'3개 이상' 과 상관없이 늘 위에 선다 */
+  const setIds = locked ? new Set(ev.songs.map((x) => x.songId)) : new Set();
+  const rest = all.filter((s) => !setIds.has(s.songId));
+  const scoped = g && playableScope === 'guild' ? rest.filter((s) => s.guildId === g.id) : rest;
   /* 검색 중에는 '3개 이상만' 을 무시한다 — 찾는 곡은 충족이 낮아도 보여야 셋리스트에 넣는다 */
   const pool = psQuery ? scoped.filter((s) => psMatch(s, psQuery)) : scoped;
   /* 참석자가 없으면 충족도가 전부 0 이다. 조율 중이면 볼 것이 없지만, 확정 뒤에는 셋리스트를
-     먼저 짜야 할 수 있다 — 전에는 표가 아예 안 떠서 ＋ 를 누를 곳이 없었다(쿠로 제보, 2026-09-16).
-     그래서 확정된 일정이면 곡 전체를 ＋ 와 함께 보여 준다. */
+     먼저 짜야 할 수 있다 — 그래서 확정된 일정이면 곡 전체를 ＋ 와 함께 보여 준다(쿠로 제보, 2026-09-16). */
   const nobody = !playable.attendees.length;
   if (nobody && !locked) {
     playableListEl.innerHTML = `<p class="muted empty-msg">이 날짜에 가능한 사람이 아직 없습니다.</p>`;
@@ -751,35 +816,83 @@ function renderPlayable() {
   psToggleBtn.hidden = nobody || !!psQuery || (playableAll ? pool.length === 0 : hidden <= 0);
   psToggleBtn.textContent = playableAll ? `${MIN_FILLED}개 이상만 보기` : `전체 보기 (+${hidden}곡)`;
 
-  if (!shown.length && psQuery) {
-    playableListEl.innerHTML = `<p class="muted empty-msg">'${escapeHtml(psQuery)}' 에 맞는 곡이 없습니다.</p>`;
-    playableStageEl.innerHTML = '';
-    return;
-  }
-  if (!shown.length) {
-    const what = g && playableScope === 'guild' ? '이 길드 곡 중 ' : '';
-    playableListEl.innerHTML = `<p class="muted empty-msg">${nobody ? `${what}곡이 없습니다.` : `${what}${MIN_FILLED}개 세션 이상 채워지는 곡이 없습니다.`}</p>`;
+  const what = g && playableScope === 'guild' ? '이 길드 곡 중 ' : '';
+  const emptyMsg = psQuery ? `'${escapeHtml(psQuery)}' 에 맞는 곡이 없습니다.`
+    : nobody ? `${what}곡이 없습니다.` : `${what}${MIN_FILLED}개 세션 이상 채워지는 곡이 없습니다.`;
+  if (!locked && !shown.length) {
+    playableListEl.innerHTML = `<p class="muted empty-msg">${emptyMsg}</p>`;
     playableStageEl.innerHTML = '';
     return;
   }
 
-  /* 무대에 올릴 곡. 아무것도 안 고른 상태면 맨 위 곡이 이미 서 있다.
-     홈이 첫 자켓을 자동으로 고르는 것과 같은 규칙이다. */
-  if (!shown.some((x) => x.songId === stageSongId)) stageSongId = shown[0].songId;
+  /* 셋리스트 줄의 자료. 되는 곡 표에 없는 곡(켜 둔 파트가 없는 곡)도 제목만으로 선다 */
+  const setRows = locked ? ev.songs.map((item) => {
+    const p = all.find((x) => x.songId === item.songId);
+    return p ? { ...p, skips: item.skips || [] }
+      : { songId: item.songId, title: item.title, artist: item.artist, guild: item.guild, roles: [], skips: item.skips || [] };
+  }) : [];
+
+  /* 무대에 올릴 곡. 아무것도 안 고른 상태면 맨 위 곡(셋리스트 첫 곡, 없으면 되는 곡 첫 줄)이 서 있다 */
+  const visible = [...setRows, ...shown];
+  if (!visible.some((x) => x.songId === stageSongId)) stageSongId = visible.length ? visible[0].songId : null;
 
   const cols = roleColumns(all);
-  let html = `<table class="ps-table"><thead><tr>`;
-  html += `<th class="ps-score-head">충족</th><th class="ps-song-head">곡</th>`;
+  const span = cols.length + 2 + (locked ? 2 : 0);
+  let html = `<table class="ps-table${locked ? ' has-setlist' : ''}"><thead><tr>`;
+  html += `<th class="ps-score-head">${locked ? '' : '충족'}</th><th class="ps-song-head">곡</th>`;
   cols.forEach((r) => {
     const short = ROLE_SHORT[r] || r;
     html += `<th class="ps-role-head" title="${escapeHtml(r)}">` +
       `<span class="ps-role-short">${escapeHtml(short)}</span>` +
       `<span class="ps-role-full">${escapeHtml(r)}</span></th>`;
   });
-  /* 확정 후에만 서는 ＋ 열. 파트 칸과 폭이 달라서(30 vs 32) 클래스를 나눈다 —
+  /* 확정 후에만 서는 대기실 열과 ✓·＋ 열. 파트 칸과 폭이 달라서 클래스를 나눈다 —
      table-layout:fixed 가 첫 줄에 적힌 폭만 보기 때문이다. */
-  if (locked) html += `<th class="ps-act-head"></th>`;
+  if (locked) html += `<th class="ps-bench-head">대기실</th><th class="ps-act-head"></th>`;
   html += `</tr></thead><tbody>`;
+
+  const songCell = (s) => `<td class="ps-song" title="${escapeHtml(s.title)}${s.artist ? ' · ' + escapeHtml(s.artist) : ''}">` +
+    `<div class="ps-song-title">${escapeHtml(s.title)}</div>` +
+    `<div class="ps-song-sub">${escapeHtml(s.artist || '')}${songTag(s)}</div></td>`;
+  const stageRow = (s) => (s.songId === stageSongId && s.roles.length
+    ? `<tr class="ps-stage-row"><td colspan="${span}">${stageBlock(s)}</td></tr>` : '');
+
+  if (locked) {
+    /* 셋리스트 — 사람은 이름으로 쓴다(정해진 사람은 읽어야 한다). 좁은 화면에서는 칸이 좁아 얼굴 칩만.
+       이름을 누르면 같은 줄 대기실로, 대기실 이름을 누르면 원래 파트로 */
+    const me = Nick.get();
+    const person = (s, role, n, bench) => {
+      const merc = isMercHere(s, n);
+      const tip = `${n} · ${bench ? `${role}로 돌리기` : '대기실로'}${merc ? ' · 용병' : ''}`;
+      return `<button type="button" class="sl-name${n === me ? ' me' : ''}${merc ? ' merc' : ''}"`
+        + ` data-skip-song="${s.songId}" data-skip-role="${escapeHtml(role)}" data-skip-nick="${escapeHtml(n)}"`
+        + ` data-skip-on="${bench ? '0' : '1'}" title="${escapeHtml(tip)}">`
+        + `${avatarChip(n)}<span class="sl-pname">${escapeHtml(n)}</span></button>`;
+    };
+    html += `<tr class="ps-group"><td colspan="${span}">셋리스트 <b>${setRows.length}</b>곡</td></tr>`;
+    if (!setRows.length) {
+      html += `<tr class="ps-empty"><td colspan="${span}">아직 곡이 없습니다. 아래 곡의 ＋ 를 누르면 여기로 올라옵니다.</td></tr>`;
+    }
+    setRows.forEach((s, i) => {
+      const benched = (role, n) => s.skips.some((k) => k.role === role && k.nickname === n);
+      const byRole = {};
+      s.roles.forEach((r) => { byRole[r.role] = r; });
+      const bench = [];
+      s.roles.forEach((r) => r.members.forEach((n) => { if (benched(r.role, n)) bench.push([r.role, n]); }));
+      html += `<tr class="ps-row sl-row${s.songId === stageSongId ? ' is-stage' : ''}" data-song="${s.songId}">`
+        + `<td class="ps-score"><span class="sl-no"><span>${i + 1}</span></span></td>` + songCell(s);
+      cols.forEach((role) => {
+        const r = byRole[role];
+        const playing = r ? r.members.filter((n) => !benched(role, n)) : [];
+        html += `<td class="ps-cell sl-cell">${playing.map((n) => person(s, role, n, false)).join('')}</td>`;
+      });
+      html += `<td class="ps-cell sl-bench">${bench.map(([role, n]) => person(s, role, n, true)).join('')}</td>`
+        + `<td class="ps-cell act"><button type="button" class="ps-add is-on" data-set-song="${s.songId}" title="셋리스트에서 빼기">✓</button></td></tr>`;
+      html += stageRow(s);
+    });
+    html += `<tr class="ps-group"><td colspan="${span}">더 넣을 수 있는 곡 <span>이 인원으로 되는 곡</span></td></tr>`;
+    if (!shown.length) html += `<tr class="ps-empty"><td colspan="${span}">${emptyMsg}</td></tr>`;
+  }
 
   let lastFilled = null;
   shown.forEach((s) => {
@@ -789,16 +902,11 @@ function renderPlayable() {
     const tier = ratio >= 1 ? 'full' : ratio >= 0.66 ? 'good' : ratio >= 0.5 ? 'half' : 'low';
     const gap = lastFilled !== null && lastFilled !== s.filled ? ' ps-gap' : '';
     lastFilled = s.filled;
-    const picked = inSetlist(s.songId);
-    html += `<tr class="ps-row ${tier}${gap}${picked ? ' picked' : ''}`
-      + `${s.songId === stageSongId ? ' is-stage' : ''}" data-song="${s.songId}">`;
+    html += `<tr class="ps-row ${tier}${gap}${s.songId === stageSongId ? ' is-stage' : ''}" data-song="${s.songId}">`;
     const pct = s.needed ? (s.filled / s.needed) * 100 : 0;
     html += `<td class="ps-score"><strong>${s.filled}</strong><span>/${s.needed}</span>` +
       `<span class="skew-gauge${s.filled === s.needed ? ' full' : ''}">` +
-      `<i style="width:${pct}%"></i></span></td>`;
-    html += `<td class="ps-song" title="${escapeHtml(s.title)}${s.artist ? ' · ' + escapeHtml(s.artist) : ''}">` +
-      `<div class="ps-song-title">${escapeHtml(s.title)}</div>` +
-      `<div class="ps-song-sub">${escapeHtml(s.artist || '')}${songTag(s)}</div></td>`;
+      `<i style="width:${pct}%"></i></span></td>` + songCell(s);
     cols.forEach((role) => {
       const r = byRole[role];
       if (!r) { html += `<td class="ps-cell none"></td>`; return; }
@@ -810,15 +918,13 @@ function renderPlayable() {
           ? `<span class="ps-merc" title="${escapeHtml(n)} · 용병">${avatarChip(n)}</span>` : avatarChip(n))).join('') + `</span></td>`;
     });
     if (locked) {
-      html += `<td class="ps-cell act"><button type="button" class="ps-add${picked ? ' is-on' : ''}" data-set-song="${s.songId}" title="${picked ? '셋리스트에서 빼기' : '셋리스트에 넣기'}">${picked ? '✓' : '＋'}</button></td>`;
+      html += `<td class="ps-cell sl-bench is-blank"></td>`
+        + `<td class="ps-cell act"><button type="button" class="ps-add" data-set-song="${s.songId}" title="셋리스트에 넣기">＋</button></td>`;
     }
     html += `</tr>`;
     /* 좁은 화면에서는 고른 줄 바로 아래에 무대가 펼쳐진다. 넓으면 CSS 가 이 줄을 숨기고
        표 옆의 고정 자리를 쓴다. 같은 내용이라 둘 중 하나만 보인다. */
-    if (s.songId === stageSongId) {
-      const span = cols.length + 2 + (locked ? 1 : 0);
-      html += `<tr class="ps-stage-row"><td colspan="${span}">${stageBlock(s)}</td></tr>`;
-    }
+    html += stageRow(s);
   });
   html += `</tbody></table>`;
   playableListEl.innerHTML = html;
@@ -872,6 +978,11 @@ playableListEl.addEventListener('click', async (e) => {
   /* 접기 단추가 먼저다. 이 단추는 표 안의 무대 줄(.ps-stage-row)에 있고
      그 줄은 .ps-row 가 아니라서 아래 곡 고르기에는 안 걸리지만, 순서를 분명히 둔다. */
   if (e.target.closest('[data-stage-fold]')) { toggleStage(playableListEl); return; }
+  const sk = e.target.closest('[data-skip-song]');
+  if (sk && pollEvent) {
+    setSkip(pollEvent, Number(sk.dataset.skipSong), sk.dataset.skipRole, sk.dataset.skipNick, sk.dataset.skipOn === '1');
+    return;
+  }
   const btn = e.target.closest('[data-set-song]');
   if (!btn) {
     /* 줄을 누르면 그 곡이 무대에 오른다 */
@@ -891,13 +1002,11 @@ playableListEl.addEventListener('click', async (e) => {
 async function toggleSetSong(ev, id) {
   const cur = ev.songs.find((x) => x.songId === id);
   if (cur) {
-    /* 빼기는 한 번 묻는다. 서버가 그 곡의 라인업도 같이 지우므로 손으로 넣은 사람이 사라지고,
-       다시 넣어도 자동으로 채워지는 사람만 돌아온다. 라인업이 비어도 똑같이 묻는다 — 언제는 묻고
-       언제는 안 물으면 그게 더 헷갈린다. */
-    const n = new Set(cur.lineup.map((l) => l.nickname)).size;
+    /* 곡 빼기는 한 번 묻는다. 대기실과 달리 되돌리려면 표에서 곡을 다시 찾아 넣어야 한다.
+       그 곡의 대기실 기록은 서버가 같이 지운다 */
     const ok = await confirmModal({
       title: `'${cur.title}' 빼기`,
-      body: n ? `라인업 <b>${n}명</b>도 함께 지워집니다.` : '셋리스트에서 뺍니다.',
+      body: '셋리스트에서 뺍니다.',
       confirm: '빼기', danger: true,
     });
     if (!ok || !ev.songs.some((x) => x.songId === id)) return;
@@ -906,154 +1015,29 @@ async function toggleSetSong(ev, id) {
     const p = playable && playable.songs.find((x) => x.songId === id);
     ev.songs = [...ev.songs, {
       songId: id, order: ev.songs.length, note: null,
-      title: p ? p.title : '', artist: p ? p.artist : '', guild: p ? p.guild : null,
-      lineup: p ? p.roles.flatMap((r) => r.members.map((n) => ({ role: r.role, nickname: n }))) : [],
+      title: p ? p.title : '', artist: p ? p.artist : '', guild: p ? p.guild : null, skips: [],
     }];
   }
-  renderSetlist();
   renderPlayable();
   const songIds = ev.songs.map((x) => x.songId);
   Writes.run(`setlist:${ev.id}`, () => api.put(`/events/${ev.id}/songs`, { songIds }))
     .catch((err) => { api.forgetPolls(); alert(err.message); });
 }
 
-/* ---------- 셋리스트 · 라인업 ---------- */
-function renderSetlist() {
-  const ev = pollEvent;
-  if (!ev.songs.length) {
-    setlistEl.innerHTML = `<p class="muted empty-msg">아직 곡이 없습니다. 아래 표에서 ＋ 를 눌러 넣으세요.</p>`;
-    return;
-  }
-  const me = Nick.get();
-  setlistEl.innerHTML = ev.songs.map((s, i) => {
-    /* 파트별로 묶되, 예전에 약어로 들어간 줄(V·EG1·D …)은 표준 파트로 읽어 같은 자리에 세운다.
-       빼기는 저장된 값 그대로 보내야 하므로 이름마다 원래 파트를 단다. */
-    const byRole = {};
-    s.lineup.forEach((l) => { (byRole[stdRole(l.role)] = byRole[stdRole(l.role)] || []).push(l); });
-    const roles = ROLE_ORDER.filter((r) => byRole[r]).concat(Object.keys(byRole).filter((r) => !ROLE_ORDER.includes(r)));
-    const cells = roles.map((r) => `
-      <span class="sl-role">
-        <span class="sl-role-name">${escapeHtml(ROLE_SHORT[r] || r)}</span>
-        ${byRole[r].map((l) => `<span class="sl-name${l.nickname === me ? ' me' : ''}${isMercHere(s, l.nickname) ? ' merc' : ''}"${isMercHere(s, l.nickname) ? ` title="용병 · ${escapeHtml(s.guild.name)} 길드원 아님"` : ''} data-lineup-nick="${escapeHtml(l.nickname)}" data-lineup-role="${escapeHtml(l.role)}" data-lineup-song="${s.songId}">${escapeHtml(l.nickname)}</span>`).join('')}
-      </span>`).join('');
-    return `
-      <div class="sl-item">
-        <span class="sl-no"><span>${i + 1}</span></span>
-        <div class="sl-info">
-          <div class="sl-title">${escapeHtml(s.title)}${songTag(s)}</div>
-          <div class="sl-lineup">${cells}<button type="button" class="sl-add" data-lineup-add="${s.songId}" title="라인업에 사람 넣기">＋</button>`
-          /* 빼기는 그 곡의 라인업 끝에. 줄 오른쪽 끝(800px 떨어진 곳)에 있어 줄마다 가운데가 비었다 */
-          + `<button type="button" class="sl-remove" data-set-song="${s.songId}">빼기</button></div>
-        </div>
-      </div>`;
-  }).join('');
-}
+/* ---------- 셋리스트 ----------
+   셋리스트는 되는 곡 표의 위쪽이다(2026-10-02). 곡마다 이름은 '그 곡 지원자 중 그날 참석자' 이고
+   손으로 넣지 않는다 — 땜빵은 그 사람이 곡에 지원한다. 한 파트에 여럿이면 안 치는 사람을 대기실로 보낸다. */
 
-setlistEl.addEventListener('click', async (e) => {
-  const ev = pollEvent;
-  if (!ev) return;
-  const rm = e.target.closest('[data-set-song]');
-  if (rm) {
-    toggleSetSong(ev, Number(rm.dataset.setSong));
-    return;
-  }
-  const nick = e.target.closest('[data-lineup-nick]');
-  if (nick) {
-    const name = nick.dataset.lineupNick, role = nick.dataset.lineupRole;
-    if (!confirm(`${name}님을 ${stdRole(role)}에서 뺄까요?`)) return;
-    setLineup(ev, Number(nick.dataset.lineupSong), role, name, false);
-    return;
-  }
-  const add = e.target.closest('[data-lineup-add]');
-  if (add) {
-    const pick = await pickLineup(ev, Number(add.dataset.lineupAdd));
-    if (pick) setLineup(ev, Number(add.dataset.lineupAdd), pick.role, pick.name, true);
-  }
-});
-
-/* 저장된 파트 값을 표준 여섯 중 하나로 읽는다. 약어(V·EG1·BG·KY·D)는 common.js ROLE_SHORT 를 거꾸로 본다.
-   어느 쪽인지 모르는 값(EG 등)은 그대로 둔다 — 표준 뒤에 따로 선다. */
-function stdRole(r) {
-  const t = String(r || '').trim();
-  if (ROLE_ORDER.includes(t)) return t;
-  return Object.keys(ROLE_SHORT).find((k) => ROLE_SHORT[k] === t.toUpperCase()) || t;
-}
-
-/* 라인업에 사람 넣기. 파트는 표준 여섯 칩 중에서만 고른다(타이핑하면 'D'·'드럼' 이 갈렸다).
-   사람은 그 파트에 지원하고 그날 오는 사람을 먼저 보여 주고, 명단에 없는 표기도 쳐 넣을 수 있다. */
-async function pickLineup(ev, songId) {
-  const song = ev.songs.find((x) => x.songId === songId);
-  const names = await roster();
-  /* 그날 되는 곡 표가 이 곡을 알고 있으면(확정일 기준) 파트별 '지원 + 참석' 을 쓴다 */
-  const known = playable && playable.date === ev.date ? playable.songs.find((x) => x.songId === songId) : null;
-  const labelOf = (r) => known?.roles.find((x) => x.role === r)?.label || '';
-  const wantOf = (r) => known?.roles.find((x) => x.role === r)?.members || [];
-  return new Promise((resolve) => {
-    let role = '';
-    const backdrop = document.createElement('div');
-    backdrop.className = 'modal-backdrop';
-    backdrop.innerHTML = `
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="lu-title">
-        <h3 class="modal-title" id="lu-title">${escapeHtml(song ? song.title : '')}</h3>
-        <form class="modal-form lu-form">
-          <div class="chip-set lu-roles" role="group" aria-label="파트">
-            ${ROLE_ORDER.map((r) => `<button type="button" class="chip" data-lu-role="${escapeHtml(r)}" aria-pressed="false">${escapeHtml(ROLE_SHORT[r] || r)}${labelOf(r) ? ` <i>${escapeHtml(labelOf(r))}</i>` : ''}</button>`).join('')}
-          </div>
-          <div class="chip-set lu-want" hidden></div>
-          <input name="who" list="lu-names" placeholder="닉네임" maxlength="40" autocomplete="off" />
-          <datalist id="lu-names">${names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join('')}</datalist>
-          <p class="form-error" role="alert" hidden></p>
-          <button type="submit" class="pink">넣기</button>
-          <button type="button" class="ghost" data-cancel>취소</button>
-        </form>
-      </div>`;
-    const close = (v) => { document.removeEventListener('keydown', onKey); backdrop.remove(); resolve(v); };
-    const onKey = (e) => { if (e.key === 'Escape') close(null); };
-    document.addEventListener('keydown', onKey);
-    const form = backdrop.querySelector('form');
-    const want = backdrop.querySelector('.lu-want');
-    const err = backdrop.querySelector('.form-error');
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop || e.target.closest('[data-cancel]')) return close(null);
-      const r = e.target.closest('[data-lu-role]');
-      if (r) {
-        role = r.dataset.luRole;
-        backdrop.querySelectorAll('[data-lu-role]').forEach((b) => {
-          b.classList.toggle('is-on', b === r);
-          b.setAttribute('aria-pressed', b === r);
-        });
-        /* 이 파트에 지원했고 그날 오는 사람. 누르면 이름 칸에 들어간다. */
-        const list = wantOf(role);
-        want.hidden = !list.length;
-        want.innerHTML = list.map((n) => `<button type="button" class="chip" data-lu-name="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('');
-        err.hidden = true;
-        return;
-      }
-      const n = e.target.closest('[data-lu-name]');
-      if (n) { form.elements.who.value = n.dataset.luName; form.elements.who.focus(); }
-    });
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const name = form.elements.who.value.trim();
-      if (!role || !name) { err.textContent = !role ? '파트를 고르세요.' : '닉네임을 넣으세요.'; err.hidden = false; return; }
-      close({ role, name });
-    });
-    document.body.appendChild(backdrop);
-  });
-}
-
-/* 라인업 한 칸. 누르는 즉시 바꾸고 서버에 보낸다(common.js Writes).
-   실패하면 알리고, 쓰기가 끝날 때 서버의 실제 상태로 되돌아간다. */
-function setLineup(ev, songId, role, nickname, on) {
+/* 대기실로 보내기·되돌리기. 누르는 즉시 바꾸고 서버에 보낸다(common.js Writes) — 켜고 끄는 동작이라 묻지 않는다.
+   셋리스트와 같은 줄에 세운다. 방금 넣은 곡이 저장되기 전에 가면 서버가 '셋리스트에 없는 곡' 으로 거절한다. */
+function setSkip(ev, songId, role, nickname, on) {
   const item = ev.songs.find((x) => x.songId === songId);
   if (!item) return;
-  item.lineup = item.lineup.filter((l) => !(l.role === role && l.nickname === nickname));
-  if (on) item.lineup.push({ role, nickname });
-  renderSetlist();
-  /* 셋리스트와 같은 줄에 세운다. 방금 넣은 곡의 라인업이 셋리스트 저장보다 먼저 가면
-     서버가 '셋리스트에 없는 곡' 으로 거절한다. */
+  item.skips = (item.skips || []).filter((k) => !(k.role === role && k.nickname === nickname));
+  if (on) item.skips.push({ role, nickname });
+  renderPlayable();
   Writes.run(`setlist:${ev.id}`,
-    () => api.post(`/events/${ev.id}/songs/${songId}/lineup`, { role, nickname, on }))
+    () => api.post(`/events/${ev.id}/songs/${songId}/skip`, { role, nickname, on }))
     .catch((err) => { api.forgetPolls(); alert(err.message); });
 }
 
@@ -1187,19 +1171,13 @@ matrixEl.addEventListener('click', async (e) => {
   const td = e.target.closest('[data-toggle]');
   if (!td) return;
   const on = td.classList.contains('on');
-  let who = td.dataset.member || '';
-  if (who && who !== currentUser) {
-    const msg = on ? `${who}님을 참석자에서 뺄까요?` : `${who}님을 참석자에 넣을까요?`;
-    if (!confirm(msg)) return;
-  } else {
-    if (!currentUser) {
-      const name = await Nick.ensure();
-      if (!name) return;
-      currentUser = name;
-    }
-    who = currentUser;
+  /* 누를 수 있는 칸은 내 열뿐이다(renderMatrix). 닉네임이 없으면 먼저 묻는다 */
+  if (!currentUser) {
+    const name = await Nick.ensure();
+    if (!name) return;
+    currentUser = name;
   }
-  setAvail(pollEvent, td.dataset.toggle, who, !on);
+  setAvail(pollEvent, td.dataset.toggle, currentUser, !on);
 });
 
 /* 참석 칸. 누르는 즉시 칸을 바꾸고 서버에 보낸다(common.js Writes). 전에는 응답과 일정 전체를
@@ -1228,24 +1206,6 @@ confirmBtn.addEventListener('click', async () => {
   renderPolls();
   renderPast();
   renderPollView();
-});
-
-addMemberBtn.addEventListener('click', async () => {
-  const ev = pollEvent;
-  if (!ev || ev.status !== 'confirmed' || !ev.date) return;
-  const input = prompt('합주에 추가할 멤버 닉네임을 입력하세요.');
-  if (input === null) return;
-  const name = input.trim();
-  if (!name) return;
-  if (name.length > NICK_MAX) {
-    alert(`닉네임은 ${NICK_MAX}자까지 입력할 수 있습니다.`);
-    return;
-  }
-  if (ev.avails.some((a) => a.date === ev.date && a.nickname === name)) {
-    alert(`${name}님은 이미 참석 중입니다.`);
-    return;
-  }
-  setAvail(ev, ev.date, name, true);
 });
 
 unconfirmBtn.addEventListener('click', async () => {

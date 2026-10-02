@@ -66,7 +66,8 @@ function stageSpot(slot, role) {
   const people = role.members || [];
   /* 표기(label)는 지원 기록에 붙는 것이라 이 응답에는 없다. 여기서는 닉네임을 쓴다. */
   const bodies = people.map((n) => avatarChip(n)).join('');
-  const names = people.map((n) => escapeHtml(n)).join(' · ');
+  /* 한 자리에 여럿이면 한 줄에 한 명. ' · ' 로 이으면 좁은 자리에서 아무 데서나 꺾여 누가 누군지 흐려졌다 */
+  const names = people.map((n) => `<span>${escapeHtml(n)}</span>`).join('');
   const title = role.label || role.role;
   const side = STAGE_SIDE[slot];
   /* 말풍선을 누구 위에 띄울지 고르려면 자리마다 누가 섰는지가 필요하다.

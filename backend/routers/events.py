@@ -1,4 +1,4 @@
-"""일정. 날짜 투표 → 확정 → 셋리스트와 라인업 저장. 길드 합주도 같은 달력에 놓인다.
+"""일정. 날짜 투표 → 확정 → 셋리스트 저장. 길드 합주도 같은 달력에 놓인다.
 
 종류(kind, 2026-10-02 사용자 결정)
   regular  정기합주   길드연합. 참가 길드 여럿(eventGuilds). 관리자만 만든다.
@@ -9,7 +9,12 @@
 참가 길드 바꾸기는 /api/admin/events/{id}/guilds (관리자만, 확정 뒤에도).
 
 다루기(확정·해제·정보 수정·삭제)는 만들 수 있는 사람과 같다: 길드 합주는 그 길드 멤버와 관리자,
-나머지는 관리자. 참석 체크·셋리스트·라인업은 참여 기록이라 누구나 한다(사용자 결정, 2026-10-02)."""
+나머지는 관리자. 참석 체크·셋리스트는 참여 기록이라 누구나 한다(사용자 결정, 2026-10-02).
+
+라인업(곡마다 누가 치나)은 따로 적지 않는다(2026-10-02 사용자 결정). 그 곡 지원자 중 그날 참석자가 곧 라인업이다 —
+화면이 되는 곡 표(/playable)에서 읽는다. 땜빵은 그 사람이 곡에 지원한다. 예전에 적어 둔 eventLineups 는
+지우지 않고 남겨 두되 읽지도 쓰지도 않는다.
+한 파트에 지원자가 여럿이면 그날 안 치는 사람을 대기실로 보낸다(eventLineupSkips, 누구나). 넣기는 없다."""
 from datetime import date as _date
 from datetime import timedelta
 
@@ -18,7 +23,7 @@ from fastapi import APIRouter, HTTPException, Request
 from db import get_db
 import admin
 import listcache
-from helpers import PART_ROLES, attach_guilds, guild_brief, resolve_guild_id
+from helpers import attach_guilds, guild_brief, resolve_guild_id
 
 router = APIRouter()
 
@@ -31,7 +36,7 @@ UNION_KINDS = ('regular', 'concert')     # 참가 길드가 여럿인 길드연�
 
 # ---------- 직렬화 ----------
 def _setlists(conn, event_ids):
-    """eventId -> [ {songId, order, note, title, artist, guild, lineup:[{role,nickname}]} ]"""
+    """eventId -> [ {songId, order, note, title, artist, guild, skips:[{role,nickname}]} ]"""
     out = {eid: [] for eid in event_ids}
     if not event_ids:
         return out
@@ -44,16 +49,15 @@ def _setlists(conn, event_ids):
     items = [dict(r) for r in rows]
     attach_guilds(conn, items)
     for it in items:
-        it['lineup'] = []
+        it['skips'] = []
         out[it['eventId']].append(it)
-    lineups = conn.execute(
-        f'SELECT "eventId", "songId", "role", "nickname" FROM eventLineups '
+    for k in conn.execute(
+        f'SELECT "eventId", "songId", "role", "nickname" FROM eventLineupSkips '
         f'WHERE "eventId" IN ({ph}) ORDER BY "id"', event_ids
-    ).fetchall()
-    for l in lineups:
-        for it in out[l['eventId']]:
-            if it['songId'] == l['songId']:
-                it['lineup'].append({'role': l['role'], 'nickname': l['nickname']})
+    ).fetchall():
+        for it in out[k['eventId']]:
+            if it['songId'] == k['songId']:
+                it['skips'].append({'role': k['role'], 'nickname': k['nickname']})
     return out
 
 
@@ -531,10 +535,10 @@ def playable_songs(event_id: int, date: str | None = None):
     return result
 
 
-# ---------- 셋리스트·라인업 ----------
+# ---------- 셋리스트 ----------
 @router.put('/{event_id}/songs')
 def set_songs(event_id: int, body: dict):
-    """셋리스트를 통째로 바꾼다. 새로 들어온 곡은 '그날 참석자 ∩ 지원자'로 라인업을 미리 채운다."""
+    """셋리스트를 통째로 바꾼다. 라인업은 저장하지 않는다(지원자 ∩ 그날 참석자, 모듈 설명)."""
     try:
         song_ids = list(dict.fromkeys(int(i) for i in (body.get('songIds') or [])))
     except (TypeError, ValueError):
@@ -556,26 +560,14 @@ def set_songs(event_id: int, body: dict):
     if removed:
         ph = ','.join('%s' for _ in removed)
         conn.execute(f'DELETE FROM eventSongs WHERE "eventId"=%s AND "songId" IN ({ph})', [event_id, *removed])
-        conn.execute(f'DELETE FROM eventLineups WHERE "eventId"=%s AND "songId" IN ({ph})', [event_id, *removed])
+        conn.execute(f'DELETE FROM eventLineupSkips WHERE "eventId"=%s AND "songId" IN ({ph})', [event_id, *removed])
 
-    att = _attendees(conn, event_id, event['date'])
-    songs = _song_map(conn) if (wanted - existing) else {}
     for order, song_id in enumerate(song_ids):
         conn.execute(
             'INSERT INTO eventSongs ("eventId","songId","order") VALUES (%s,%s,%s) '
             'ON CONFLICT ("eventId","songId") DO UPDATE SET "order"=EXCLUDED."order"',
             (event_id, song_id, order),
         )
-        if song_id in existing:
-            continue
-        for sess in songs.get(song_id, {}).get('sessions', {}).values():
-            for n in sess['supports']:
-                if n in att:
-                    conn.execute(
-                        'INSERT INTO eventLineups ("eventId","songId","role","nickname") '
-                        'VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING',
-                        (event_id, song_id, sess['role'], n),
-                    )
     conn.commit()
     row = conn.execute('SELECT * FROM events WHERE "id"=%s', (event_id,)).fetchone()
     result = serialize_event(conn, row)
@@ -583,15 +575,15 @@ def set_songs(event_id: int, body: dict):
     return result
 
 
-@router.post('/{event_id}/songs/{song_id}/lineup')
-def toggle_lineup(event_id: int, song_id: int, body: dict):
-    """라인업 한 칸. 지원 여부와 상관없이 그날 실제로 친 사람을 적는다.
-    on(true/false)을 보내면 그 상태로 맞춘다 — 같은 요청을 두 번 보내도 결과가 같다(화면이 누르는 즉시
-    칸을 바꾸고 보내기 때문). on 이 없으면 예전처럼 뒤집는다(배포 직후의 옛 화면용)."""
+@router.post('/{event_id}/songs/{song_id}/skip')
+def toggle_skip(event_id: int, song_id: int, body: dict):
+    """셋리스트 대기실. on=true 면 그 사람을 이 곡의 그 파트에서 대기실로, false 면 원래 파트로.
+    상태를 보내는 방식이라 같은 요청을 두 번 보내도 결과가 같다(화면은 누르는 즉시 바꾸고 보낸다)."""
     role = (body.get('role') or '').strip()
     nickname = (body.get('nickname') or '').strip()
-    if not role or not nickname:
-        raise HTTPException(400, 'role과 nickname은 필수입니다.')
+    on = body.get('on')
+    if not role or not nickname or not isinstance(on, bool):
+        raise HTTPException(400, 'role·nickname·on(true/false)이 필요합니다.')
     conn = get_db()
     _load(conn, event_id)
     if not conn.execute(
@@ -599,24 +591,14 @@ def toggle_lineup(event_id: int, song_id: int, body: dict):
     ).fetchone():
         conn.close()
         raise HTTPException(400, '셋리스트에 없는 곡입니다.')
-    want = body.get('on')
-    cur = conn.execute(
-        'DELETE FROM eventLineups WHERE "eventId"=%s AND "songId"=%s AND "role"=%s AND "nickname"=%s',
-        (event_id, song_id, role, nickname),
-    )
-    on = want if isinstance(want, bool) else cur.rowcount == 0
-    # 넣을 때는 표준 여섯 파트만 받는다. 전에는 파트를 글로 쳐 넣어 'D'·'EG'·'드럼' 이 섞였고
-    # 순서도 어긋났다. 곡마다 붙인 별칭(니지카 등)은 sessions.label 이 맡는다 — 표시만 바꾼다.
-    # 빼기는 막지 않는다. 예전에 약어로 들어간 줄도 지울 수 있어야 한다.
-    if on and role not in PART_ROLES:
-        conn.rollback()
-        conn.close()
-        raise HTTPException(400, f'파트는 {"·".join(PART_ROLES)} 중 하나입니다.')
     if on:
         conn.execute(
-            'INSERT INTO eventLineups ("eventId","songId","role","nickname") VALUES (%s,%s,%s,%s)',
-            (event_id, song_id, role, nickname),
-        )
+            'INSERT INTO eventLineupSkips ("eventId","songId","role","nickname") VALUES (%s,%s,%s,%s) '
+            'ON CONFLICT DO NOTHING', (event_id, song_id, role, nickname))
+    else:
+        conn.execute(
+            'DELETE FROM eventLineupSkips WHERE "eventId"=%s AND "songId"=%s AND "role"=%s AND "nickname"=%s',
+            (event_id, song_id, role, nickname))
     conn.commit()
     conn.close()
     return {'on': on}

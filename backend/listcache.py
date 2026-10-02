@@ -29,7 +29,8 @@ from db import get_db
 
 # 목록이 읽는 테이블. 트리거의 TG_TABLE_NAME 은 소문자다.
 SONGS = ('songs', 'sessions', 'sessionsupports', 'events', 'eventsongs', 'guilds')
-EVENTS = ('events', 'eventdates', 'eventavails', 'eventsongs', 'eventlineups', 'songs', 'guilds', 'eventguilds')
+EVENTS = ('events', 'eventdates', 'eventavails', 'eventsongs', 'eventlineups', 'songs', 'guilds', 'eventguilds',
+          'eventlineupskips')
 MEMBERS = ('members', 'guildmembers', 'guilds', 'sessions', 'sessionsupports', 'songs')
 GUILDS = ('guilds', 'guildmembers')
 

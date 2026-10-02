@@ -199,7 +199,7 @@ CREATE TABLE IF NOT EXISTS songComments (
 # pairs 는 뺀다 — 악보 넘길 때마다 써서 잦고, 어느 목록도 읽지 않는다.
 CHANGE_TRACKED = ('songs', 'sessions', 'sessionSupports', 'songComments', 'sheets', 'events', 'eventDates',
                   'eventAvails', 'eventSongs', 'eventLineups', 'guilds', 'guildMembers', 'guildDrawings',
-                  'members', 'eventGuilds')
+                  'members', 'eventGuilds', 'eventLineupSkips')
 
 MIGRATIONS = [
     'CREATE INDEX IF NOT EXISTS idx_songcomments_song ON songComments ("songId", "id")',
@@ -244,6 +244,13 @@ MIGRATIONS = [
     '"eventId" INTEGER NOT NULL REFERENCES events("id") ON DELETE CASCADE, '
     '"guildId" INTEGER NOT NULL REFERENCES guilds("id") ON DELETE CASCADE, UNIQUE ("eventId", "guildId"))',
     'CREATE INDEX IF NOT EXISTS idx_eventguilds_guild ON eventGuilds("guildId")',
+    # 셋리스트 대기실(2026-10-02). 라인업은 '지원자 ∩ 그날 참석자' 로 계산하고, 그중 이 곡에서 안 치는 사람만 적는다.
+    # 한 파트에 지원자가 여럿일 때 쓴다. 지우면 원래 파트로 돌아간다(routers/events.py).
+    'CREATE TABLE IF NOT EXISTS eventLineupSkips ("id" SERIAL PRIMARY KEY, '
+    '"eventId" INTEGER NOT NULL REFERENCES events("id") ON DELETE CASCADE, '
+    '"songId" INTEGER NOT NULL REFERENCES songs("id") ON DELETE CASCADE, '
+    '"role" TEXT NOT NULL, "nickname" TEXT NOT NULL, "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(), '
+    'UNIQUE ("eventId", "songId", "role", "nickname"))',
     # 종류가 없던 옛 일정: 길드가 있으면 길드 합주, 없으면 정기합주(2026-10-02 기준 9개·2개). 빈 것에만 한 번.
     "UPDATE events SET \"kind\" = CASE WHEN \"guildId\" IS NULL THEN 'regular' ELSE 'guild' END WHERE \"kind\" IS NULL",
 

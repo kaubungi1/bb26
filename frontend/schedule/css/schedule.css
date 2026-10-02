@@ -241,34 +241,59 @@
 }
 .date-fixed > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
 
-/* --- 확정 안내 바 --- */
+/* --- 확정 요약(2026-10-02) ---
+   격자 하나로 넓은 화면과 폰을 같이 다룬다. .cs-top·.cs-acts 는 묶음일 뿐이라 display:contents 로 풀어
+   안의 단추가 격자 칸에 바로 선다.
+     넓은 화면  [날짜·시간      ][참가하기][⋯]      폰  [날짜·시간 ][⋯]
+                [장소·종류·참가 길드          ]          [장소·종류·길드]
+                [메모                         ]          [메모          ]
+                [참석 n  이름 이름 …          ]          [  참가하기    ]
+                                                         [참석 n 이름 … ] */
 .confirmed-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "when join more" "sub sub sub" "note note note" "people people people";
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
+  column-gap: 6px;
+  padding: 14px 16px 12px;
   background: linear-gradient(135deg, rgba(46, 230, 212, 0.2), rgba(34, 184, 230, 0.12));
   border-radius: 0;
 }
-.confirmed-info { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; font-weight: 700; }
-.confirmed-badge {
-  flex: 0 0 auto;
-  font-size: 10px;
-  font-weight: 800;
-  color: var(--on-ink);
-  background: var(--ink-fill);
-  transform: skewX(var(--skew));
-  border-radius: 0;
-  padding: 3px 10px;
+.cs-top, .cs-acts { display: contents; }
+.cs-when { grid-area: when; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; min-width: 0; }
+.cs-when b { font-size: 18px; font-weight: 800; color: var(--ink); }
+.cs-time { font-size: 15px; font-weight: 800; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.cs-join { grid-area: join; min-height: 36px; padding: 6px 18px; font-size: 13.5px; }
+.cs-menu-wrap { grid-area: more; position: relative; }
+.cs-more { width: 34px; height: 34px; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none;
+  box-shadow: none; font-size: 18px; line-height: 1; color: var(--ink-muted); }
+.cs-more:hover, .cs-more[aria-expanded="true"] { background: rgba(255, 255, 255, 0.6); color: var(--ink); filter: none; box-shadow: none; }
+.cs-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 150px; display: flex;
+  flex-direction: column; padding: 4px 0; background: #fff; border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(22, 40, 47, 0.14); }
+.cs-menu button { min-height: 0; padding: 9px 14px; border: 0; border-radius: 0; background: none; box-shadow: none;
+  text-align: left; font-size: 13px; font-weight: 700; color: var(--ink); }
+.cs-menu button:hover { background: var(--teal-soft); filter: none; box-shadow: none; }
+.cs-menu button.is-danger { color: #ef4444; }
+.cs-sub { grid-area: sub; display: flex; flex-wrap: wrap; align-items: center; margin-top: 3px; font-size: 13px;
+  font-weight: 700; color: var(--ink-muted); }
+.cs-sep { margin: 0 7px; color: var(--ink-faint); }
+.cs-guild { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; color: var(--ink); }
+.guild-mark.cs-gmark { display: inline-flex; vertical-align: middle; line-height: 0; margin: 0 3px 0 4px; }
+.cs-note { grid-area: note; margin-top: 4px; font-size: 12.5px; color: var(--ink-muted); white-space: pre-line; }
+.cs-people { grid-area: people; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 11px;
+  padding-top: 10px; border-top: 1px solid rgba(22, 40, 47, 0.09); font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.cs-people .cp-count { margin-right: 4px; font-size: 12px; font-weight: 800; color: var(--ink-muted); }
+.cs-people .cp-count b { font-size: 14px; color: var(--teal-deep); }
+.cs-people .cp-name.me { color: var(--teal-deep); font-weight: 800; }
+.cs-people .cp-empty { color: var(--ink-faint); }
+@media (max-width: 600px) {
+  .confirmed-bar { grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "when more" "sub sub" "note note" "join join" "people people"; }
+  .cs-when { flex-direction: column; gap: 0; }
+  .cs-join { width: 100%; margin-top: 10px; }
 }
-.confirmed-badge > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
-.confirmed-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
-.confirmed-bar button { flex: 0 0 auto; }
-/* 확정일 행: 남의 칸도 조작 가능하다는 걸 커서/호버로 알림 */
-.matrix tr.fixed .avail-cell[data-toggle] { cursor: pointer; }
-.matrix tr.fixed .avail-cell[data-toggle]:not(.on):hover { background: rgba(0, 184, 173, 0.12); }
-.matrix tr.fixed .avail-cell[data-toggle].on:hover { opacity: 0.75; }
+
 .matrix tr.fixed .avail-cell:not(.on) .avail-check { color: var(--ink-muted); font-weight: 700; }
 
 /* --- 참석 인원 기준 가능 곡 --- */
@@ -479,16 +504,8 @@
 .ps-add.is-on { border-style: solid; border-color: transparent; background: var(--accent); color: var(--on-accent); }
 .ps-row.picked .ps-song-title { color: var(--teal-deep); }
 
-/* 셋리스트 */
-.setlist { display: flex; flex-direction: column; }
-.sl-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--line);
-}
-.sl-item:last-child { border-bottom: none; }
+/* 셋리스트 — 파트별 표 + 대기실 열(2026-10-02) */
+.setlist { display: block; }
 .sl-no {
   flex: none;
   width: 24px;
@@ -504,30 +521,35 @@
   font-weight: 800;
 }
 .sl-no > span { transform: skewX(calc(var(--skew) * -1)); }
-.sl-info { flex: 1; min-width: 0; }
-.sl-title { font-weight: 700; font-size: 14.5px; }
-.sl-lineup { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 4px; }
-.sl-role { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
-.sl-role-name { font-weight: 800; color: var(--ink-muted); }
-.sl-name { font-weight: 600; cursor: pointer; }
+
+/* 합친 표의 셋리스트 부분(2026-10-02) — 되는 곡 표(.ps-table)의 위쪽이다.
+   묶음 머리 줄 둘: '셋리스트 n곡' / '더 넣을 수 있는 곡'. 셋리스트 줄의 사람은 단추다(누르면 대기실 ↔ 파트).
+   넓은 화면(720px~)은 칸이 62px 라 이름을 쓰고, 좁으면 칸이 30px 라 얼굴 칩만 쓴다. */
+.ps-table tr.ps-group td { padding: 14px 4px 6px; text-align: left; font-size: 12px; font-weight: 800; color: var(--ink);
+  border-bottom: 2px solid var(--ink); background: #fff; position: static; }
+.ps-table tr.ps-group td b { color: var(--teal-deep); }
+.ps-table tr.ps-group td span { margin-left: 6px; font-weight: 700; color: var(--ink-faint); }
+.ps-table tr.ps-empty td { padding: 14px 4px; text-align: left; font-size: 12.5px; color: var(--ink-faint); white-space: normal; position: static; }
+.ps-table th.ps-bench-head { width: 30px; padding: 9px 2px; color: var(--ink-faint); }
+.ps-table td.ps-score .sl-no { margin-left: 2px; }
+.ps-table td.sl-bench { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+.ps-table td.sl-cell, .ps-table td.sl-bench { vertical-align: middle; }
+.sl-name { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 0; margin: 0;
+  padding: 1px 0; border: 0; border-radius: 0; background: none; box-shadow: none; font: inherit; font-weight: 700;
+  color: var(--ink); cursor: pointer; }
+.sl-name:hover { background: none; box-shadow: none; filter: none; color: var(--pink); }
+.sl-name .avatar-chip { width: 20px; height: 20px; font-size: 10px; }
+.sl-pname { display: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sl-name.me { color: var(--teal-deep); }
-.sl-name:hover { text-decoration: line-through; color: var(--pink); }
-.sl-add {
-  width: 22px;
-  height: 22px;
-  min-height: 0;
-  padding: 0;
-  border: 1px dashed var(--border);
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink-muted);
-  font-size: 13px;
-  line-height: 1;
-  box-shadow: none;
-  cursor: pointer;
+.sl-name.merc { color: var(--merc); }
+.sl-bench .sl-name { color: var(--ink-faint); opacity: 0.75; }
+.sl-bench .sl-name:hover { color: var(--teal-deep); opacity: 1; }
+@media (min-width: 720px) {
+  .ps-table th.ps-bench-head { width: 62px; padding: 9px 4px; }
+  .sl-name .avatar-chip { display: none; }
+  .sl-pname { display: block; }
+  .sl-name { font-size: 12.5px; }
 }
-.sl-add:hover { border-color: var(--teal); color: var(--teal-deep); background: transparent; box-shadow: none; }
-.sl-item .ghost { flex-shrink: 0; min-height: 30px; padding: 3px 10px; font-size: 12px; }
 
 /* --- 되는 곡 · 합주실 --- */
 /* 넓은 화면은 왼쪽이 표, 오른쪽이 무대다. 좁은 화면은 고른 줄 바로 아래에 무대가
@@ -541,7 +563,7 @@
 .ps-stage { display: none; }
 /* 머리글이 곧 접기 단추다. common.css 의 전역 `button` 이 min-height:46px · 틸 그라디언트 ·
    그림자 · 15px 글자를 걸고 있어서, 되돌리지 않으면 머리글이 민트색 큰 버튼이 된다.
-   .ps-add · .sl-add · .g-fold 가 같은 이유로 같은 일을 한다. */
+   .ps-add · .g-fold 가 같은 이유로 같은 일을 한다. */
 .ps-stage-head {
   display: flex;
   align-items: baseline;
@@ -839,28 +861,15 @@
 .event-edit { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 4px; padding: 12px; background: #f5f9fb; }
 .event-edit input { min-height: 38px; }
 
-/* --- 확정 요약(2026-10-02): 펼치면 맨 위. 날짜·시간·장소 한 줄, 참석자 이름, 버튼 --- */
-.poll-detail .confirmed-bar { margin: 2px 0 10px; align-items: flex-start; }
-.confirmed-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.confirmed-people { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12.5px; font-weight: 700; color: var(--ink); }
-.confirmed-people .cp-count { font-size: 11.5px; font-weight: 800; color: var(--teal-deep); margin-right: 2px; }
-.confirmed-actions { flex-wrap: wrap; justify-content: flex-end; }
 /* 날짜 투표 기록 접기 단추 — 글자 하나, 상자 없음 */
-.vote-toggle { display: block; margin: 0 0 8px; padding: 4px 0; border: 0; background: none; box-shadow: none;
+.vote-toggle { display: block; margin: 14px 0 8px; padding: 4px 0; border: 0; background: none; box-shadow: none;
   font-size: 12.5px; font-weight: 800; color: var(--ink-muted); min-height: 0; text-align: left; }
 .vote-toggle::before { content: '▸ '; }
 .vote-toggle[aria-expanded="true"]::before { content: '▾ '; }
 .vote-toggle:hover { color: var(--ink); }
 #vote-box[hidden] { display: none; }
-@media (max-width: 600px) {
-  .poll-detail .confirmed-bar { flex-direction: column; }
-  .confirmed-actions { justify-content: flex-start; }
-}
+.poll-detail .confirmed-bar { margin: 2px 0 12px; }
 
-/* 셋리스트의 빼기 — 라인업 끝, 글자 하나 */
-.sl-remove { border: 0; background: none; box-shadow: none; min-height: 0; padding: 0 2px; margin-left: 4px;
-  font-size: 11.5px; font-weight: 700; color: var(--ink-faint); }
-.sl-remove:hover { color: var(--pink); }
 /* 곡 옆 작은 문장(songTag) */
 .guild-mark.song-tag-mark { display: inline-flex; vertical-align: middle; margin-left: 4px; line-height: 0; }
 

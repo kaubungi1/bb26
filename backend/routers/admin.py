@@ -20,6 +20,7 @@ router = APIRouter()
 MEMBER_TRACES = (
     ('sessionSupports', '세션 지원'),
     ('eventLineups', '일정 편성'),
+    ('eventLineupSkips', '셋리스트 대기실'),
     ('eventAvails', '가능 날짜'),
     ('guildMembers', '길드 소속'),
     ('guildDrawings', '낙서'),
