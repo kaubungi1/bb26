@@ -673,16 +673,8 @@
 /* 카드 한 장이 1200px 을 다 쓰면 제목과 인원 사이가 800px 빈다.
    곡 페이지가 1000px 부터 두 열인 것과 같은 규칙이다.
    다만 펼친 항목은 두 칸을 다 쓴다 — 매트릭스와 무대가 반 폭이면 못 본다. */
-@media (min-width: 1000px) {
-  .poll-list {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 12px 20px;
-    align-items: start;
-  }
-  .poll-entry { margin: 0; }
-  .poll-entry.is-open { grid-column: 1 / -1; }
-}
+/* 2026-10-02: 두 열을 그만뒀다. 눈이 지그재그로 움직여 시간순이 안 읽혔다. 일정표는 한 열이고,
+   넓은 화면에서는 한 줄을 가로로 넓게 쓴다(날짜 · 문장 · 제목 두 줄 · 인원). */
 
 /* --- 후보 요일 고르기 (일정 만들기 모달) --- */
 /* 기간만 주면 10/3~10/31 이 29일이 된다. 요일을 고르면 9일이 된다. */
@@ -778,3 +770,22 @@
 .poll-guilds-acts { display: flex; gap: 6px; width: 100%; }
 .ps-free { font-size: 10.5px; font-weight: 800; color: var(--ink-faint); }
 .kind-fixed { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-size: 13px; font-weight: 800; color: var(--ink); }
+
+/* --- 일정표 (2026-10-02) --- */
+/* 묶음 머리: 날짜 정하는 중 / 10월 / 11월 … */
+.sched-group { margin: 22px 0 8px; padding-bottom: 6px; border-bottom: 1.5px solid var(--line-2);
+  font-size: 13px; font-weight: 800; color: var(--ink-muted); letter-spacing: -0.01em; }
+.sched-group:first-child { margin-top: 0; }
+/* 왼쪽 날짜 칸. 일은 크게, 요일은 작게. 주말은 요일만 색을 바꾼다 */
+.sched-date { flex: none; width: 46px; display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.sched-date b { font-size: 26px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.sched-date small { font-size: 11.5px; font-weight: 700; color: var(--ink-faint); }
+.sched-date.is-weekend small { color: var(--teal-deep); }
+.sched-date.is-poll small { font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* 제목 아래 두 줄: 종류 · 소속 / 시간 · 장소 · 곡 수 */
+.poll-item-meta + .poll-item-meta { margin-top: 2px; }
+.poll-item-meta .guild-mark.event-guild { margin-left: 2px; }
+@media (max-width: 600px) {
+  .sched-date { width: 34px; }
+  .sched-date b { font-size: 21px; }
+}

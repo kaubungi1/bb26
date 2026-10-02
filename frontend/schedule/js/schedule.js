@@ -101,8 +101,6 @@ function isWeekend(iso) {
 function todayStr() { return toDateStr(new Date()); }
 
 /* 길드 밖(메인)에서만 배지를 단다. 길드 안에서는 전부 그 길드 것이다. */
-/* 상태 글자 옆 꼬리표. 종류·참가 길드는 eventcard.js 가 정한다(홈과 같은 모양) */
-function badge(ev) { return eventTag(ev); }
 const isUnion = (ev) => ['regular', 'concert'].includes(eventKind(ev));
 
 /* 상세 안의 글자·시간·날짜 칸에 커서가 있는가. 체크박스(주말만)는 누르고 끝이라 뺀다. */
@@ -178,55 +176,93 @@ function pollEntry(e, head) {
     + `<div class="poll-slot" data-slot="${e.id}"></div></div>`;
 }
 
-function pollHead(e) {
-  const open = e.id === openId;
-  if (e.status === 'confirmed') {
-    const cnt = e.avails.filter((a) => a.date === e.date).length;
-    const meta = [e.date ? monthDay(e.date) + ' (' + DOW[parseDate(e.date).getDay()] + ')' : '', timeText(e), e.place]
-      .filter(Boolean).map(escapeHtml).join(' · ');
-    const songs = e.songs.length ? ` · ${e.songs.length}곡` : '';
-    return `
-      <div class="poll-item" data-open-poll="${e.id}" role="button" tabindex="0" aria-expanded="${open}">
-        ${eventSymbol(e)}
-        <div class="poll-item-info">
-          <small class="poll-item-status is-confirmed">일정 확정 ${badge(e)}</small>
-          <div class="poll-item-title">${escapeHtml(e.title)}</div>
-          <div class="poll-item-meta">${meta}${songs}</div>
-        </div>
-        <span class="poll-item-count">참석 ${cnt}명</span>
-      </div>`;
+/* ---------- 일정표 (2026-10-02) ----------
+   한 열, 시간순, 날짜가 맨 앞에 크게. 2열 카드는 눈이 지그재그로 움직여 순서가 안 읽혔고,
+   날짜가 셋째 줄 작은 글씨라 '언제 무엇이 있나' 를 보려는 화면의 위계가 거꾸로였다.
+   날짜 투표 중인 일정은 맨 위 '날짜 정하는 중' 에 모은다(후보가 수십 일이라 날짜 자리에 못 선다).
+   확정 일정은 달마다 묶는다. 길드는 왼쪽 문장 하나로만 — 알약 배지는 같은 것을 두 번 말했다. */
+function monthLabel(iso) {
+  const [y, m] = iso.split('-').map(Number);
+  return y === new Date().getFullYear() ? `${m}월` : `${y}년 ${m}월`;
+}
+
+/* 종류 · 소속. 길드 합주는 길드 이름, 정기합주·정기공연은 참가 길드 문장, 밴드 행사는 종류만 */
+function kindLine(e) {
+  const kind = eventKind(e);
+  const label = EVENT_KIND[kind];
+  if (kind === 'guild') return `${label}${e.guild && !Site.slug ? ' · ' + escapeHtml(e.guild.name) : ''}`;
+  if (kind === 'band') return label;
+  const crests = (e.guilds || []).map((g) => guildMark(g, 16, 'event-guild')).join('');
+  return `${label}${crests ? ' ' + crests : ''}`;
+}
+
+/* 왼쪽 날짜 칸. 확정이면 일과 요일, 투표 중이면 후보 기간 */
+function dateCell(e) {
+  if (e.status === 'confirmed' && e.date) {
+    const d = parseDate(e.date);
+    const wk = d.getDay();
+    return `<span class="sched-date${wk === 0 || wk === 6 ? ' is-weekend' : ''}"><b>${d.getDate()}</b><small>${DOW[wk]}</small></span>`;
   }
   const f = firstDate(e), l = lastDate(e);
-  const best = Math.max(0, ...e.dates.map((dr) => e.avails.filter((a) => a.date === dr.date).length));
+  return `<span class="sched-date is-poll"><small>${f ? monthDay(f) : ''}</small><small>${l && l !== f ? '~' + monthDay(l) : ''}</small></span>`;
+}
+
+function pollHead(e) {
+  const open = e.id === openId;
+  let when, count;
+  if (e.status === 'confirmed') {
+    const cnt = e.avails.filter((a) => a.date === e.date).length;
+    when = [timeText(e), e.place, e.songs.length ? `${e.songs.length}곡` : ''].filter(Boolean).map(escapeHtml).join(' · ');
+    count = `<span class="poll-item-count">${isPast(e) ? '' : '참석 '}${cnt}명</span>`;
+  } else {
+    const best = Math.max(0, ...e.dates.map((dr) => e.avails.filter((a) => a.date === dr.date).length));
+    when = `후보 ${e.dates.length}일${e.createdBy ? ' · ' + escapeHtml(e.createdBy) : ''}`;
+    count = `<span class="poll-item-count${best > 0 ? ' max' : ''}">최다 ${best}명</span>`;
+  }
   return `
       <div class="poll-item" data-open-poll="${e.id}" role="button" tabindex="0" aria-expanded="${open}">
+        ${dateCell(e)}
         ${eventSymbol(e)}
         <div class="poll-item-info">
-          <small class="poll-item-status">날짜 투표 중 ${badge(e)}</small>
           <div class="poll-item-title">${escapeHtml(e.title)}</div>
-          <div class="poll-item-meta">${f ? monthDay(f) : ''}${l && l !== f ? ' ~ ' + monthDay(l) : ''} · ${e.dates.length}일${e.createdBy ? ' · ' + escapeHtml(e.createdBy) : ''}</div>
+          <div class="poll-item-meta">${kindLine(e)}</div>
+          <div class="poll-item-meta">${when}</div>
         </div>
-        <span class="poll-item-count${best > 0 ? ' max' : ''}">최다 ${best}명</span>
+        ${count}
       </div>`;
 }
 
+/* 묶음 머리를 끼워 가며 그린다. key(e) 가 바뀌는 자리에 머리가 선다 */
+function grouped(list, key, label) {
+  let last = null;
+  return list.map((e) => {
+    const k = key(e);
+    const head = k !== last ? `<div class="sched-group">${escapeHtml(label(e))}</div>` : '';
+    last = k;
+    return head + pollEntry(e, pollHead(e));
+  }).join('');
+}
+
 function renderPolls() {
-  const sortKey = (e) => (e.status === 'confirmed' ? e.date : firstDate(e)) || '9999';
-  const list = events.filter((e) => !isPast(e)).sort((a, b) => {
-    if (a.status !== b.status) return a.status === 'poll' ? -1 : 1;
-    const ka = sortKey(a), kb = sortKey(b);
-    return ka < kb ? -1 : ka > kb ? 1 : b.id - a.id;
-  });
+  const upcoming = events.filter((e) => !isPast(e));
+  const polls = upcoming.filter((e) => e.status !== 'confirmed')
+    .sort((a, b) => {
+      const fa = firstDate(a) || '9999', fb = firstDate(b) || '9999';
+      return fa < fb ? -1 : fa > fb ? 1 : b.id - a.id;
+    });
+  const fixed = upcoming.filter((e) => e.status === 'confirmed')
+    .sort((a, b) => ((a.date || '9999') < (b.date || '9999') ? -1 : (a.date || '9999') > (b.date || '9999') ? 1 : a.id - b.id));
   /* 제목 옆 숫자. 곡 페이지의 #song-count 와 같은 자리다. */
   const countEl = document.getElementById('event-count');
-  if (countEl) countEl.textContent = list.length || '';
-  if (!list.length) {
+  if (countEl) countEl.textContent = upcoming.length || '';
+  if (!upcoming.length) {
     parkDetail();
     pollListEl.innerHTML = `<p class="muted empty-msg">등록된 일정이 없습니다.</p>`;
     lastPollsHtml = '';
     return;
   }
-  const html = list.map((e) => pollEntry(e, pollHead(e))).join('');
+  const html = (polls.length ? `<div class="sched-group">날짜 정하는 중</div>` + polls.map((e) => pollEntry(e, pollHead(e))).join('') : '')
+    + grouped(fixed, (e) => (e.date || '').slice(0, 7), (e) => (e.date ? monthLabel(e.date) : '날짜 미정'));
   /* 내용이 그대로면 손대지 않는다. 다시 그리면 펼쳐 둔 상세가 뜯긴다. */
   if (html !== lastPollsHtml) {
     parkDetail();
@@ -236,25 +272,12 @@ function renderPolls() {
   placeDetail();
 }
 
-/* ---------- 지난 합주 — 확정일이 지난 일정과 그날의 셋리스트 ---------- */
+/* ---------- 지난 합주 — 확정일이 지난 일정. 최근 것이 위, 달마다 묶는다 ---------- */
 function renderPast() {
-  const list = events.filter(isPast).sort((a, b) => (a.date < b.date ? 1 : -1));
+  const list = events.filter(isPast).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.id - a.id));
   pastCardEl.hidden = list.length === 0;
   if (!list.length) { lastPastHtml = ''; return; }
-  const html = list.map((e) => {
-    const cnt = e.avails.filter((a) => a.date === e.date).length;
-    const titles = e.songs.map((s) => escapeHtml(s.title)).join(' · ');
-    return pollEntry(e, `
-      <div class="poll-item" data-open-poll="${e.id}" role="button" tabindex="0" aria-expanded="${e.id === openId}">
-        ${eventSymbol(e)}
-        <div class="poll-item-info">
-          <small class="poll-item-status is-past">${monthDay(e.date)} 합주 ${badge(e)}</small>
-          <div class="poll-item-title">${escapeHtml(e.title)}</div>
-          <div class="poll-item-meta">${titles || '셋리스트 없음'}</div>
-        </div>
-        <span class="poll-item-count">${cnt}명</span>
-      </div>`);
-  }).join('');
+  const html = grouped(list, (e) => e.date.slice(0, 7), (e) => monthLabel(e.date));
   if (html !== lastPastHtml) {
     parkDetail();
     pastListEl.innerHTML = html;
