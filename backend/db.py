@@ -328,6 +328,7 @@ class _TimedConnection(psycopg.Connection):
 def get_db():
     if not DATABASE_URL:
         raise RuntimeError('DATABASE_URL 환경변수를 설정하세요 (예: postgres://...)')
+    metrics.touch_db()            # 이 순간 Neon 이 깨어 있어야 한다. 어느 API 가 깨웠는지 분 단위로 남긴다
     t = time.perf_counter()
     try:
         # 요청마다 새로 연결한다. 연결(TLS·인증)도 기다리는 시간이라 같이 잰다.

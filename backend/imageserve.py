@@ -24,6 +24,7 @@ from urllib.parse import quote
 
 from fastapi import HTTPException, Request, Response
 
+import metrics
 from db import get_db
 
 # 저장된 그림을 일괄로 다시 만들 때(크기·화질을 바꿔 전부 재처리) 올린다.
@@ -138,8 +139,11 @@ def serve(request: Request, kind, key, version_of, load, media_type, missing, pr
     v = request.query_params.get('v')
     hit = _get(ck)
     if hit is not None and v and hit[0] == v:
+        metrics.count(f'image.{kind}.memory')
         return _reply(request, ck, hit[0], hit[1], media_type, private)
 
+    # 여기부터는 DB 에 묻는다(버전 확인). 원본까지 읽으면 .load 도 센다.
+    metrics.count(f'image.{kind}.db')
     conn = get_db()
     try:
         version = version_of(conn)
@@ -151,6 +155,7 @@ def serve(request: Request, kind, key, version_of, load, media_type, missing, pr
         # 브라우저가 이미 이 버전을 갖고 있으면 원본을 읽지 않는다.
         if request.headers.get('if-none-match') == f'"{kind}-{version}"':
             return _reply(request, ck, version, b'', media_type, private)
+        metrics.count(f'image.{kind}.load')
         data = load(conn)
     finally:
         conn.close()

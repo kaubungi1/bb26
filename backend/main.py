@@ -135,6 +135,23 @@ def _route_name(scope, tally):
     return '(unmatched)' if scope['path'].startswith('/api/') else '(static)'
 
 
+def _classify(scope, start, tally):
+    """응답이 시작될 때 종류를 적는다. /api 가 아닌 요청(정적 파일·HTML)은 누가 무엇을 받았는지도 적는다
+    — 새벽에도 시간당 수백 건씩 오는 정적 요청의 정체를 보려고. IP 는 적지 않는다."""
+    headers = {k.lower(): v for k, v in start.get('headers', [])}
+    tally.kind = metrics.response_kind(
+        start['status'],
+        headers.get(b'content-type', b'').decode('latin-1'),
+        headers.get(b'content-encoding', b'').decode('latin-1'),
+    )
+    path = scope.get('path', '')
+    if not path.startswith('/api/'):
+        ua = dict(scope.get('headers', [])).get(b'user-agent', b'').decode('latin-1')
+        tally.client = metrics.client_of(ua)
+        # 길드 주소는 슬러그마다 갈라지지 않게 묶는다
+        tally.path = '/guild/{slug}/' + path.split('/', 3)[3] if path.startswith('/guild/') and path.count('/') >= 3 else path
+
+
 class TrafficMeter:
     """응답 본문 바이트, 그 요청 동안 DB 에서 받은 바이트, 처리 시간을 metrics 에 적는다.
     다른 미들웨어보다 바깥에 둔다 — 나중에 압축을 넣으면 압축된 크기가 잡혀야 한다.
@@ -156,6 +173,7 @@ class TrafficMeter:
             nonlocal answered
             if message['type'] == 'http.response.start' and answered is None:
                 answered = time.perf_counter()
+                _classify(scope, message, tally)
             elif message['type'] == 'http.response.body':
                 tally.out += len(message.get('body', b''))
             await send(message)
