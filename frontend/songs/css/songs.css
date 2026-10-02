@@ -346,7 +346,7 @@
 /* 움직임을 줄여 달라고 한 사람에게는 걸지 않는다. JS 도 같은 조건으로 막는다. */
 @media (prefers-reduced-motion: reduce) { .songs .song-title.is-roll > span { animation: none; } }
 .songs .song-meta { display: flex; align-items: center; gap: 6px; margin-top: 1px; font-size: 11.5px; }
-.songs .song-artist { color: var(--ink-faint); font-size: 11.5px;
+.songs .song-artist { color: var(--ink-faint); font-size: 11.5px; font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 자켓. 줄 높이를 늘리지 않는 크기다. 누르면 유튜브로 간다. */
@@ -444,8 +444,8 @@
 
 /* 마지막 합주일·등록자는 배경으로 물러난다 */
 .songs .song-by { color: var(--ink-faint); font-size: 11px; font-weight: 700; }
-/* 둘째 줄의 보조 정보라 아티스트와 같은 크기·굵기로 맞춘다(전에는 700 이라 아티스트보다 진했다, 2026-10-02) */
-.songs .song-played { color: var(--ink-faint); font-size: 11.5px; font-weight: inherit; }
+/* 둘째 줄(아티스트 · 마지막 합주일)은 한 모양 — 11.5px, 700. 사용자가 굵은 쪽이 낫다고 해서 그쪽으로 맞췄다(2026-10-02) */
+.songs .song-played { color: var(--ink-faint); font-size: 11.5px; font-weight: 700; }
 .songs .meta-sep { color: #c3d2de; }
 
 /* ---------- 쓰지 않는 자리 ---------- */
