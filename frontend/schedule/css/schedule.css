@@ -808,17 +808,20 @@
 .sched-row .poll-item-count { grid-area: count; text-align: right; }
 
 /* 좁은 화면: 종류·시간은 제목 아래 한 줄로 접는다 */
+/* 좁은 화면: 세 줄로 편다 — 제목·인원 / 종류·소속 / 시간·장소·곡. 자르지 않고 꺾는다.
+   두 줄에 몰았더니 종류와 시간이 한 줄에서 말줄임으로 잘려 정보가 꽤 사라졌다(사용자, 2026-10-02). */
 @media (max-width: 760px) {
   .schedule .poll-list .poll-item.sched-row {
-    grid-template-columns: 52px 32px minmax(0, 1fr) auto; column-gap: 10px; row-gap: 2px; padding: 9px 12px;
-    grid-template-areas: "date sym title count" "date sym meta meta";
+    grid-template-columns: 52px 32px minmax(0, 1fr) auto; column-gap: 10px; row-gap: 2px; padding: 10px 12px;
+    grid-template-areas: "date sym title count" "date sym kind kind" "date sym when when";
+    align-items: start;
   }
   .sched-row .event-symbol { width: 32px; height: 32px; }
   .sched-row .event-symbol.is-site img { width: 32px; }
-  .sched-row .sched-date { font-size: 12.5px; white-space: normal; line-height: 1.2; }
-  .sched-row .sched-meta { display: flex; grid-area: meta; gap: 6px; min-width: 0; }
-  .sched-row .sched-when::before { content: '·'; margin-right: 6px; color: var(--ink-faint); }
-  .sched-row .poll-item-title { font-size: 14px; }
+  .sched-row .sched-date { font-size: 12.5px; white-space: normal; line-height: 1.25; padding-top: 2px; }
+  .sched-row .poll-item-title { font-size: 14px; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+  .sched-row .sched-kind, .sched-row .sched-when { white-space: normal; overflow: visible; }
+  .sched-row .poll-item-count { padding-top: 2px; }
 }
 
 /* 종류 구분(2026-10-02). 흔한 길드 합주는 흰 줄 그대로, 드문 밴드 전체 일정만 옅은 배경과 같은 색 글자로 떠오른다.
@@ -843,8 +846,8 @@
 .confirmed-people .cp-count { font-size: 11.5px; font-weight: 800; color: var(--teal-deep); margin-right: 2px; }
 .confirmed-actions { flex-wrap: wrap; justify-content: flex-end; }
 /* 날짜 투표 기록 접기 단추 — 글자 하나, 상자 없음 */
-.vote-toggle { display: block; margin: 8px 0 4px; padding: 6px 0; border: 0; background: none; box-shadow: none;
-  font-size: 12.5px; font-weight: 800; color: var(--ink-muted); min-height: 0; }
+.vote-toggle { display: block; margin: 0 0 8px; padding: 4px 0; border: 0; background: none; box-shadow: none;
+  font-size: 12.5px; font-weight: 800; color: var(--ink-muted); min-height: 0; text-align: left; }
 .vote-toggle::before { content: '▸ '; }
 .vote-toggle[aria-expanded="true"]::before { content: '▾ '; }
 .vote-toggle:hover { color: var(--ink); }
@@ -853,3 +856,10 @@
   .poll-detail .confirmed-bar { flex-direction: column; }
   .confirmed-actions { justify-content: flex-start; }
 }
+
+/* 셋리스트의 빼기 — 라인업 끝, 글자 하나 */
+.sl-remove { border: 0; background: none; box-shadow: none; min-height: 0; padding: 0 2px; margin-left: 4px;
+  font-size: 11.5px; font-weight: 700; color: var(--ink-faint); }
+.sl-remove:hover { color: var(--pink); }
+/* 곡 옆 작은 문장(songTag) */
+.guild-mark.song-tag-mark { display: inline-flex; vertical-align: middle; margin-left: 4px; line-height: 0; }

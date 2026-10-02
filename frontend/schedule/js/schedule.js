@@ -331,7 +331,7 @@ function renderKindPick() {
   const single = allowed.length === 1;
   const fixed = document.getElementById('kind-fixed');
   fixed.hidden = !single;
-  if (single) fixed.innerHTML = `${EVENT_KIND[pickedKind]}${pickedKind === 'guild' && Site.info ? ' ' + guildBadge(Site.info) : ''}`;
+  if (single) fixed.innerHTML = `${EVENT_KIND[pickedKind]}${pickedKind === 'guild' && Site.info ? ' · ' + guildMark(Site.info, 16) + ' ' + escapeHtml(Site.info.name) : ''}`;
   document.getElementById('add-title').textContent = `＋ ${EVENT_KIND[pickedKind] || '일정'} 후보 만들기`;
   kindPick.querySelectorAll('[data-kind]').forEach((b) => {
     b.hidden = single || !allowed.includes(b.dataset.kind);
@@ -708,10 +708,21 @@ function inSetlist(songId) {
   return !!pollEvent && pollEvent.songs.some((s) => s.songId === songId);
 }
 
-/* 가능 곡 한 줄의 소속 표시. 정기합주에서 그날 프리길드로 보는 곡은 프리길드로 적는다 */
-function songWhere(s, union) {
-  if (union && s.asFree) return ` <span class="ps-free">${FREE_GUILD}</span>`;
-  if (s.guild && (union || !Site.slug)) return ' ' + guildBadge(s.guild);
+/* 곡 옆 소속 표시(셋리스트·가능 곡 같이 씀). 알약 배지 대신, 정보가 있을 때만 작은 문장(2026-10-02).
+   길드 합주는 곡이 거의 다 그 길드 것이라 줄마다 같은 배지가 붙어 아무 말도 안 했다.
+     길드 합주          그 길드 곡은 없음. '전체' 범위에서 섞인 다른 길드 곡은 문장, 프리길드 곡은 '프리길드'
+     정기합주·정기공연  참가 길드 곡은 문장. 그날 프리길드로 보는 곡(참가 안 한 길드)·프리길드 곡은 '프리길드'
+   셋리스트 자료에는 asFree 가 없어서 참가 길드 목록으로 같은 규칙을 여기서 센다(서버 _playable 과 같음). */
+function songTag(s) {
+  const ev = pollEvent;
+  if (!ev) return '';
+  if (isUnion(ev)) {
+    const free = s.asFree ?? (!!s.guild && !(ev.guilds || []).some((g) => g.id === s.guild.id));
+    if (free || !s.guild) return ` <span class="ps-free">${FREE_GUILD}</span>`;
+    return ' ' + guildMark(s.guild, 16, 'song-tag-mark');
+  }
+  if (!s.guild) return ` <span class="ps-free">${FREE_GUILD}</span>`;   /* 그 길드 곡과 구별되게 */
+  if (s.guild.id !== ev.guildId) return ' ' + guildMark(s.guild, 16, 'song-tag-mark');
   return '';
 }
 
@@ -787,7 +798,7 @@ function renderPlayable() {
       `<i style="width:${pct}%"></i></span></td>`;
     html += `<td class="ps-song" title="${escapeHtml(s.title)}${s.artist ? ' · ' + escapeHtml(s.artist) : ''}">` +
       `<div class="ps-song-title">${escapeHtml(s.title)}</div>` +
-      `<div class="ps-song-sub">${escapeHtml(s.artist || '')}${songWhere(s, union)}</div></td>`;
+      `<div class="ps-song-sub">${escapeHtml(s.artist || '')}${songTag(s)}</div></td>`;
     cols.forEach((role) => {
       const r = byRole[role];
       if (!r) { html += `<td class="ps-cell none"></td>`; return; }
@@ -928,10 +939,11 @@ function renderSetlist() {
       <div class="sl-item">
         <span class="sl-no"><span>${i + 1}</span></span>
         <div class="sl-info">
-          <div class="sl-title">${escapeHtml(s.title)} ${!Site.slug ? guildBadge(s.guild) : ''}</div>
-          <div class="sl-lineup">${cells}<button type="button" class="sl-add" data-lineup-add="${s.songId}" title="라인업에 사람 넣기">＋</button></div>
+          <div class="sl-title">${escapeHtml(s.title)}${songTag(s)}</div>
+          <div class="sl-lineup">${cells}<button type="button" class="sl-add" data-lineup-add="${s.songId}" title="라인업에 사람 넣기">＋</button>`
+          /* 빼기는 그 곡의 라인업 끝에. 줄 오른쪽 끝(800px 떨어진 곳)에 있어 줄마다 가운데가 비었다 */
+          + `<button type="button" class="sl-remove" data-set-song="${s.songId}">빼기</button></div>
         </div>
-        <button type="button" class="ghost" data-set-song="${s.songId}">빼기</button>
       </div>`;
   }).join('');
 }
