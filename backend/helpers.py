@@ -98,7 +98,7 @@ def attach_guilds(conn, rows):
 # 곡을 읽을 때 쓰는 컬럼 목록. thumb 은 뺀다.
 # 이미지가 장당 100KB 라 SELECT * 로 읽으면 목록 한 번에 15MB 를 끌어온다.
 # 화면은 /api/songs/{id}/thumb 주소로 따로 받으므로 여기 실을 이유가 없다.
-SONG_COLS = ('SELECT "id","title","artist","category","youtubeUrl","status","isCandidate",'
+SONG_COLS = ('SELECT "id","title","titleKo","artist","category","youtubeUrl","status","isCandidate",'
              '"note","createdBy","createdAt","updatedAt","tags","guildId",'
              '"bumpedBy","bumpedAt","bumpNote","thumbVideoId",'
              '(thumb IS NOT NULL) AS "hasThumbBlob" FROM songs')

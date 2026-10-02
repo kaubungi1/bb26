@@ -1,17 +1,41 @@
-"""곡. 풀은 하나이고 길드는 꼬리표다. 끌올은 전체에서 한 곡만 30분 독점."""
+"""곡. 모든 곡은 길드 하나 또는 무길드에 속한다. 끌올은 전체에서 한 곡만 30분 독점.
+
+같은 곡을 여러 길드가 하면 길드마다 따로 둔다 — 지원자 명단이 섞이지 않게(사용자 결정, 2026-10-02).
+같은 소속 안의 중복, 길드에 있는 곡의 무길드 등록은 막는다(songmatch.py).
+소속을 바꾸는 것(이전)은 여기가 아니라 /api/admin/songs/{id}/guild 에서 한다 — 관리자·길드장만 된다."""
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from db import get_db
 
 import imageserve
 import listcache
+import songmatch
 import thumbs
-from helpers import PART_ROLES, SONG_COLS, build_songs, guild_where, norm_tag, resolve_guild_id
+from helpers import (PART_ROLES, SONG_COLS, attach_guilds, build_songs, guild_where, norm_tag,
+                     resolve_guild_id)
 
 router = APIRouter()
 
 BUMP_MINUTES = 30
 NOTE_MAX = 60
+TITLE_MAX = 120
+
+
+def _title_ko(body):
+    """한국어 번역은 선택이다. 비우면 None."""
+    return (str(body.get('titleKo') or '').strip()[:TITLE_MAX]) or None
+
+
+def _check_duplicate(conn, title, title_ko, url, guild_id, not_same, exclude=None, already=()):
+    """중복 규칙에 걸리면 409. 본문의 candidates 로 화면이 '혹시 이 곡인가요?' 를 그린다.
+    already: 수정 전부터 부딪히던 곡 id. 수정은 '새로' 생기는 중복만 막는다 — 정리 전의 중복 쌍(2026-10-02 기준
+    38쌍)이 번역 한 줄 고치는 것까지 막으면 안 된다. 원래 있던 중복은 관리자 병합으로 정리한다."""
+    found = songmatch.conflicts(songmatch.find(conn, title, title_ko, url, exclude), guild_id, not_same)
+    found = [f for f in found if f['id'] not in already]
+    if found:
+        attach_guilds(conn, found)
+        conn.close()
+        raise HTTPException(409, songmatch.duplicate_error(found))
 
 _BUMP_ACTIVE = f'"bumpedAt" > now() - interval \'{BUMP_MINUTES} minutes\''
 _BUMP_COLS = (
@@ -53,19 +77,34 @@ def get_bump():
     return cur
 
 
+@router.get('/similar')
+def similar_songs(title: str = '', titleKo: str = '', youtubeUrl: str = '', exclude: int | None = None):
+    """입력하는 동안 '혹시 이 곡인가요?' 후보. 폴링이 아니다 — 입력이 멈출 때 한 번씩 부른다.
+    여기서는 막지 않고 후보만 준다. 어느 소속과 부딪히는지는 화면이 고른 길드로 따진다(conflicts 와 같은 규칙)."""
+    if not (title.strip() or titleKo.strip() or youtubeUrl.strip()):
+        return []
+    conn = get_db()
+    try:
+        return attach_guilds(conn, songmatch.find(conn, title, titleKo, youtubeUrl, exclude))
+    finally:
+        conn.close()
+
+
 @router.post('')
 def create_song(body: dict, background: BackgroundTasks):
-    title = (body.get('title') or '').strip()
+    title = (body.get('title') or '').strip()[:TITLE_MAX]
     artist = (body.get('artist') or '').strip()
     if not title or not artist:
         raise HTTPException(400, 'title과 artist는 필수입니다.')
+    title_ko = _title_ko(body)
     conn = get_db()
     guild_id = resolve_guild_id(conn, body)
+    _check_duplicate(conn, title, title_ko, body.get('youtubeUrl'), guild_id, body.get('notSame'))
     cur = conn.execute(
-        'INSERT INTO songs (title, artist, category, "tags", "youtubeUrl", status, "isCandidate", note, "createdBy", "guildId") '
-        'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING "id"',
+        'INSERT INTO songs (title, "titleKo", artist, category, "tags", "youtubeUrl", status, "isCandidate", note, '
+        '"createdBy", "guildId") VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING "id"',
         (
-            title, artist, body.get('category'), norm_tag(body.get('tags')), body.get('youtubeUrl'),
+            title, title_ko, artist, body.get('category'), norm_tag(body.get('tags')), body.get('youtubeUrl'),
             body.get('status') or 'candidate', 1 if body.get('isCandidate') else 0,
             body.get('note'), body.get('createdBy'), guild_id,
         ),
@@ -105,22 +144,45 @@ def get_song(song_id: int):
 
 @router.put('/{song_id}')
 def update_song(song_id: int, body: dict, background: BackgroundTasks):
+    if 'guildId' in body or 'guildSlug' in body:
+        # 소속 변경은 권한을 따지는 이전 API 로만 한다. 여기서 받으면 누구나 옮길 수 있게 된다.
+        raise HTTPException(400, '길드는 곡 정보 창의 길드 칸(관리자·길드장)에서 바꿉니다.')
     conn = get_db()
-    before = conn.execute('SELECT "thumbVideoId" v FROM songs WHERE "id"=%s', (song_id,)).fetchone()
+    before = conn.execute('SELECT "thumbVideoId" v, "title", "titleKo", "youtubeUrl", "guildId" '
+                          'FROM songs WHERE "id"=%s', (song_id,)).fetchone()
+    if not before:
+        conn.close()
+        raise HTTPException(404, '곡을 찾을 수 없습니다.')
+    if 'title' in body and not str(body['title'] or '').strip():
+        conn.close()
+        raise HTTPException(400, '원제는 비울 수 없습니다.')
+    # 제목·주소를 바꾸면 그 소속에 같은 곡이 생길 수 있다. 바꾼 뒤의 모습으로 따지되, 바꾸기 전부터
+    # 부딪히던 곡은 빼고 새로 생기는 것만 막는다.
+    if any(k in body for k in ('title', 'titleKo', 'youtubeUrl')):
+        already = {f['id'] for f in songmatch.conflicts(
+            songmatch.find(conn, before['title'], before['titleKo'], before['youtubeUrl'], song_id), before['guildId'])}
+        _check_duplicate(
+            conn,
+            str(body.get('title', before['title']) or '').strip(),
+            _title_ko(body) if 'titleKo' in body else before['titleKo'],
+            body.get('youtubeUrl', before['youtubeUrl']),
+            before['guildId'], body.get('notSame'), exclude=song_id, already=already,
+        )
     fields = []
     values = []
-    for key in ('title', 'artist', 'category', 'tags', 'youtubeUrl', 'status', 'isCandidate', 'note'):
+    for key in ('title', 'titleKo', 'artist', 'category', 'tags', 'youtubeUrl', 'status', 'isCandidate', 'note'):
         if key in body:
             value = body[key]
             if key == 'isCandidate':
                 value = 1 if value else 0
             elif key == 'tags':
                 value = norm_tag(value)
+            elif key == 'titleKo':
+                value = _title_ko(body)
+            elif key == 'title':
+                value = str(value).strip()[:TITLE_MAX]
             fields.append(f'"{key}"=%s')
             values.append(value)
-    if 'guildId' in body or 'guildSlug' in body:
-        fields.append('"guildId"=%s')
-        values.append(resolve_guild_id(conn, body))
     if not fields:
         conn.close()
         raise HTTPException(400, '수정할 내용이 없습니다.')

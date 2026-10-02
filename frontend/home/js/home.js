@@ -27,7 +27,7 @@ const dateSpan=ds=>{const a=ds.map(d=>d.date).sort();return a.length>3?`${a[0].s
 const tone=songTone;
 function mix(){const weights=Array.from({length:5},()=>.2+Math.random()),genres={},groups={};songs.forEach(s=>{genres[s.genre]??=.2+Math.random();groups[s.guild?.slug||'none']??=.2+Math.random()});songs.forEach(s=>{const terms=[s.age===null?0:1/(1+s.age/14),genres[s.genre],groups[s.guild?.slug||'none'],s.empty.length/Math.max(1,s.sessions.length),.2+Math.random()].map((v,i)=>v*weights[i]);scores[s.id]=-Math.log(Math.max(Math.random(),.000001))/terms.reduce((a,b)=>a+b,0);randomScores[s.id]=Math.random();reasons[s.id]=['최근 등록 반영','장르 혼합','길드 혼합','미지원 파트 반영','무작위 발견'][terms.indexOf(Math.max(...terms))]});persist()}
 /* 곡으로도 사람으로도 찾는다. 닉네임과 시트 표기를 둘 다 본다 — 곡 페이지와 같은 규칙. */
-function hit(s,q){return [s.title,s.artist,s.createdBy].some(t=>(t||'').toLowerCase().includes(q))
+function hit(s,q){return [s.title,s.titleKo,s.artist,s.createdBy].some(t=>(t||'').toLowerCase().includes(q))
   ||s.sessions.some(p=>p.supports.some(a=>(a.nickname||'').toLowerCase().includes(q)||(a.label||'').toLowerCase().includes(q)))}
 const DIRECTED=['name','new'];   /* 방향을 뒤집을 수 있는 정렬 */
 function list(){const a=songs.filter(s=>(!prefs.query||hit(s,prefs.query.toLowerCase()))&&(!prefs.genres.length||prefs.genres.includes(s.genre))&&(!prefs.guilds.length||prefs.guilds.includes(s.guild?.slug||'none'))&&(!prefs.part||s.empty.includes(prefs.part))&&(prefs.period==='all'||s.age!==null&&s.age<=Number(prefs.period)));/* 방향은 곡명순·최근 등록에만 있다. 추천·무작위는 뒤집을 순서 자체가 없다. */
@@ -58,7 +58,7 @@ function jacket(s){const parts=ordered(s),me=Nick.get();
  const shot=s.hasThumb
   ? `<img class="jk-img" src="${s.thumbUrl||`/api/songs/${s.id}/thumb`}" alt="" loading="lazy" decoding="async">`
   : `<span class="jk-mark" aria-hidden="true">${esc(bigLetter(s))}</span>`;
- return `<div class="jacket genre-${tone(s)}"><div class="jk-shot"><span class="jk-genre"><span>${esc(shortGenre(s.genre))}</span></span>${!Site.slug&&s.guild?`<span class="jk-guild">${guildBadge(s.guild)}</span>`:''}${shot}${jkBump(s)}</div><div class="jk-band"><b>${esc(s.title)}</b><small>${esc(s.artist||'')}</small></div><div class="slots" aria-hidden="true">${parts.map(p=>`<i class="slot ${me&&p.supports.some(x=>x.nickname===me)?'mine':p.supports.length?'on':'off'}"><em>${esc(abbr(p.role))}</em><u>${p.supports.length}</u></i>`).join('')}</div></div>`}
+ return `<div class="jacket genre-${tone(s)}"><div class="jk-shot"><span class="jk-genre"><span>${esc(shortGenre(s.genre))}</span></span>${!Site.slug&&s.guild?`<span class="jk-guild">${guildBadge(s.guild)}</span>`:''}${shot}${jkBump(s)}</div><div class="jk-band"><b title="${esc(s.titleKo||'')}">${esc(s.title)}</b><small>${esc(s.artist||'')}</small></div><div class="slots" aria-hidden="true">${parts.map(p=>`<i class="slot ${me&&p.supports.some(x=>x.nickname===me)?'mine':p.supports.length?'on':'off'}"><em>${esc(abbr(p.role))}</em><u>${p.supports.length}</u></i>`).join('')}</div></div>`}
 /* 섬네일이 없을 때 깔 글자. 가나·한자·영숫자만 쓴다. 한글은 건너뛴다. */
 const bigLetter=songLetter;
 function detail(s){const me=Nick.get(),parts=ordered(s);return `<section class="now"><div class="now-slots">${parts.map(p=>slot(p,me,s)).join('')||'<span class="muted">등록된 파트 없음</span>'}</div>${murmur(s)}</section>`}

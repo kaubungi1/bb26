@@ -7,8 +7,10 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 import admin
 import imageserve
+import songmatch
 from db import get_db
 from guildtheme import cache_clear
+from helpers import SONG_COLS, attach_guilds, build_songs, resolve_guild_id
 
 router = APIRouter()
 
@@ -158,3 +160,54 @@ def delete_guild(slug: str, request: Request):
     # 서버가 HTML 에 박아 보내는 테마가 메모리에 남아 있다(guildtheme.py).
     cache_clear()
     return {'ok': True}
+
+
+# ---------- 곡 이전(소속 바꾸기) ----------
+def _leader_of(conn, guild_id):
+    if guild_id is None:
+        return None
+    row = conn.execute('SELECT "leader" FROM guilds WHERE "id"=%s', (guild_id,)).fetchone()
+    return (row['leader'] or '').strip() if row else None
+
+
+def can_move(conn, request, from_gid, to_gid):
+    """관리자(파딱·핑딱·root)는 언제나. 길드장은 자기 길드 곡을 내보낼 때,
+    그리고 무길드 곡을 자기 길드로 가져올 때(사용자 결정, 2026-10-02). 길드장은 guilds.leader 닉네임이다."""
+    if admin.rank(admin.role_of(conn, request)) >= admin.rank('pink'):
+        return True
+    me = admin.nickname_of(request)
+    if not me:
+        return False
+    if from_gid is not None:
+        return me == _leader_of(conn, from_gid)
+    return me == _leader_of(conn, to_gid)
+
+
+@router.post('/songs/{song_id}/guild')
+def move_song(song_id: int, body: dict, request: Request):
+    """곡의 소속을 바꾼다. 지원자·댓글·합주 기록은 곡에 붙어 있어 그대로 따라간다.
+    길드원이 아닌 지원자는 화면에서 용병으로 보인다(명단으로 계산하므로 따로 할 일이 없다).
+    옮겨 갈 곳에 같은 곡이 이미 있으면 막는다 — 그때는 관리자가 병합한다."""
+    conn = get_db()
+    try:
+        song = conn.execute('SELECT "id","title","titleKo","youtubeUrl","guildId" FROM songs WHERE "id"=%s',
+                            (song_id,)).fetchone()
+        if not song:
+            raise HTTPException(404, '곡을 찾을 수 없습니다.')
+        target = resolve_guild_id(conn, body)          # 비우면 무길드
+        if target != song['guildId']:
+            if not can_move(conn, request, song['guildId'], target):
+                raise HTTPException(403, '관리자나 길드장만 길드를 옮길 수 있습니다.')
+            found = songmatch.conflicts(
+                songmatch.find(conn, song['title'], song['titleKo'], song['youtubeUrl'], exclude=song_id), target)
+            if found:
+                attach_guilds(conn, found)
+                err = songmatch.duplicate_error(found)
+                err['message'] = '옮길 곳에 같은 곡이 이미 있습니다. 관리자에게 두 곡 병합을 부탁해 주세요.'
+                raise HTTPException(409, err)
+            conn.execute('UPDATE songs SET "guildId"=%s, "updatedAt"=now() WHERE "id"=%s', (target, song_id))
+            conn.commit()
+        row = conn.execute(f'{SONG_COLS} WHERE "id"=%s', (song_id,)).fetchone()
+        return build_songs(conn, [row])[0]
+    finally:
+        conn.close()

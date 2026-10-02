@@ -77,13 +77,13 @@ function matchesGuild(song) {
   return !!song.guild && song.guild.slug === guildFilter;
 }
 
-/* 검색은 제목·아티스트·업로더 중 하나라도 부분 일치하면 된다. 대소문자는 가리지 않는다. */
+/* 검색은 원제·번역·아티스트·업로더 중 하나라도 부분 일치하면 된다. 대소문자는 가리지 않는다. */
 /* 곡으로도 사람으로도 찾는다. "눈보라" 를 치면 눈보라가 들어간 곡이 나온다.
    닉네임과 시트 표기를 둘 다 본다. 화면에 "3개월뒤쯤의식빵" 이라 적혀 있어도
    "식빵" 으로 걸리고, 표기가 "sikbbang" 이어도 닉네임 "식빵" 으로 걸린다. */
 function matchesQuery(song) {
   if (!query) return true;
-  if ([song.title, song.artist, song.createdBy].some((v) => (v || '').toLowerCase().includes(query))) return true;
+  if ([song.title, song.titleKo, song.artist, song.createdBy].some((v) => (v || '').toLowerCase().includes(query))) return true;
   return song.sessions.some((s) => s.supports.some(
     (sp) => (sp.nickname || '').toLowerCase().includes(query) || (sp.label || '').toLowerCase().includes(query)));
 }
@@ -307,7 +307,9 @@ function monthDay(iso) {
 /* 제목 아래 한 줄: 아티스트 · 마지막 합주.
    유튜브는 자켓이 맡고, 충원 현황은 줄 오른쪽 끝으로 뺐다. */
 function metaLine(song) {
+  /* 한국어 번역은 원제 줄을 비워 두려고 둘째 줄 맨 앞에 둔다. 최종 모양은 디자인 단계에서 다시 본다. */
   const parts = [`<span class="song-artist">${escapeHtml(song.artist)}</span>`];
+  if (song.titleKo) parts.unshift(`<span class="song-ko">${escapeHtml(song.titleKo)}</span>`);
   if (song.lastPlayed) parts.push(`<span class="song-played" data-peek="마지막 합주">${icon('history', 12)} ${monthDay(song.lastPlayed)}</span>`);
   return parts.join('<span class="meta-sep">·</span>');
 }

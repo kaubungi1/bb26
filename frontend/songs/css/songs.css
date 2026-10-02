@@ -326,6 +326,9 @@
 .songs .song-meta { display: flex; align-items: center; gap: 6px; margin-top: 1px; font-size: 11.5px; }
 .songs .song-artist { color: var(--ink-faint); font-size: 11.5px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 한국어 번역. 아티스트보다 앞, 같은 크기. 길면 먼저 줄어든다 */
+.songs .song-ko { color: var(--ink-soft, var(--ink-faint)); font-size: 11.5px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
 
 /* 자켓. 줄 높이를 늘리지 않는 크기다. 누르면 유튜브로 간다. */
 .songs .song-thumb { flex: none; display: block; width: 56px; height: 32px; overflow: hidden;

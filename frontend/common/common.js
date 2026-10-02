@@ -206,7 +206,7 @@ const api = {
       headers: prev ? { 'If-None-Match': prev.etag } : {},
     });
     if (res.status === 304 && prev) return { changed: false, data: prev.data };
-    if (!res.ok) throw new Error(await apiError(res));
+    if (!res.ok) throw await apiFailure(res);
     const data = await res.json();
     const etag = res.headers.get('ETag');
     if (etag) pollCache.set(url, { etag, data });
@@ -217,7 +217,7 @@ const api = {
   forgetPolls() { pollCache.clear(); },
   async get(url) {
     const res = await fetch('/api' + url);
-    if (!res.ok) throw new Error(await apiError(res));
+    if (!res.ok) throw await apiFailure(res);
     return res.json();
   },
   async post(url, body) {
@@ -228,12 +228,12 @@ const api = {
       body: isForm ? body : JSON.stringify(body),
       keepalive: !isForm,   /* 요청 도중 탭을 닫아도 전송을 마친다. 64KB 제한이 있어 사진에는 걸지 않는다 */
     });
-    if (!res.ok) throw new Error(await apiError(res));
+    if (!res.ok) throw await apiFailure(res);
     return res.status === 204 ? undefined : res.json();
   },
   async del(url) {
     const res = await fetch('/api' + url, { method: 'DELETE', keepalive: true });
-    if (!res.ok) throw new Error(await apiError(res));
+    if (!res.ok) throw await apiFailure(res);
   },
   async put(url, body) {
     const res = await fetch('/api' + url, {
@@ -242,18 +242,28 @@ const api = {
       body: JSON.stringify(body),
       keepalive: true,
     });
-    if (!res.ok) throw new Error(await apiError(res));
+    if (!res.ok) throw await apiFailure(res);
     return res.json();
   },
 };
 
 /* FastAPI 는 {detail: 문자열 | 객체} 로 실패를 알린다. 사람이 읽을 문장만 꺼낸다. */
-async function apiError(res) {
-  const data = await res.json().catch(() => ({}));
+function apiMessage(data) {
   const d = data.detail ?? data.error;
   if (typeof d === 'string') return d;
   if (d && typeof d.message === 'string') return d.message;
   return '요청 실패';
+}
+async function apiError(res) {
+  return apiMessage(await res.json().catch(() => ({})));
+}
+/* 던질 오류. 문장 말고도 상태와 본문을 싣는다 — 곡 중복(409)처럼 화면이 본문을 써야 하는 실패가 있다. */
+async function apiFailure(res) {
+  const data = await res.json().catch(() => ({}));
+  const err = new Error(apiMessage(data));
+  err.status = res.status;
+  err.detail = data.detail;
+  return err;
 }
 
 const Nick = {
