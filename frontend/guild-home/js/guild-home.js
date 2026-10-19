@@ -148,6 +148,20 @@ function nextPractice() {
         ${more}</div></section>`;
   }
   const days = e.dates.map((d) => d.date).filter((d) => d >= today()).sort();
+  /* 정기합주·정기공연은 길드가 투표한다(2026-10-19). 사람 수 대신 우리 길드가 찍은 날만 ✓.
+     길드장(과 관리자)만 눌러 우리 길드 표를 켜고 끈다. 다른 길드원에게는 보기만 — 누를 것이 없다. */
+  if (['regular', 'concert'].includes(e.kind)) {
+    const canVote = !!me && (me === guild.leader || AdminSeen.visible());
+    const ours = (d) => (e.guildAvails || []).some((a) => a.date === d && a.guildId === guild.id);
+    const marked = days.filter(ours).length;
+    const note = canVote ? `길드 투표 · 우리 길드가 되는 날을 눌러 주세요` : `길드 투표 · 길드장(${esc(guild.leader || '없음')})이 길드 이름으로 찍습니다`;
+    return `<section class="next-practice is-poll" data-event="${e.id}">
+    <div class="np-head">${head}<p class="np-when">${note} · ${days.length}일 중 ${marked}일</p></div>
+    <div class="np-days">${days.map((d) => (canVote
+      ? `<button type="button" class="np-day${ours(d) ? ' is-on' : ''}" data-gavail="${esc(d)}" aria-pressed="${ours(d)}">${dayLabel(d)}</button>`
+      : `<span class="np-day is-static${ours(d) ? ' is-on' : ''}">${dayLabel(d)}${ours(d) ? '<i>✓</i>' : ''}</span>`)).join('')}</div>
+    <div class="np-act">${more}</div></section>`;
+  }
   return `<section class="next-practice is-poll" data-event="${e.id}">
     <div class="np-head">${head}<p class="np-when">날짜 투표 중 · ${days.length}일 중 되는 날</p></div>
     <div class="np-days">${days.map((d) => {
@@ -339,6 +353,25 @@ $('#screen').addEventListener('click', async (e) => {
   }
   /* 참석·지원은 누르는 즉시 칸을 바꾸고 서버에 보낸다(common.js Writes). 기다리지 않으므로
      busy 로 다른 버튼을 막지 않는다. 같은 칸을 연달아 누르면 Writes 가 순서대로 보낸다. */
+  /* 정기합주 길드 투표 한 칸 — 길드장·관리자에게만 이 단추가 있다(nextPractice). 서버도 같은 규칙으로 막는다 */
+  if (b.dataset.gavail) {
+    const me = await Nick.ensure();
+    if (!me) return;
+    const ev = events.find((x) => x.id === Number(b.closest('[data-event]').dataset.event));
+    const day = b.dataset.gavail;
+    const on = !(ev.guildAvails || []).some((a) => a.date === day && a.guildId === guild.id);
+    ev.guildAvails = (ev.guildAvails || []).filter((a) => !(a.date === day && a.guildId === guild.id));
+    if (on) ev.guildAvails.push({ date: day, guildId: guild.id });
+    render();
+    Writes.run(`gavail:${ev.id}:${day}:${guild.id}`,
+      () => api.post(`/events/${ev.id}/guild-avail/toggle`, { date: day, guildId: guild.id, nickname: me, checked: on }))
+      .catch((err) => {
+        api.forgetPolls();
+        $('#guild-error').textContent = err.message;
+        $('#guild-error').hidden = false;
+      });
+    return;
+  }
   if (b.dataset.avail || b.dataset.support) {
     const me = await Nick.ensure();
     if (!me) return;

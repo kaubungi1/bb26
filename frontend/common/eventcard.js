@@ -67,7 +67,8 @@ function eventDateHtml(e) {
     const [, lm, ld] = l.split('-').map(Number);
     range += '–' + (lm === fm ? `${ld}` : evMonthDay(l));
   }
-  return `<span class="sched-date">${evYearMark(f)}${range}</span>`;
+  /* 아직 정해지지 않은 날짜다 — 기간은 흐리게(CSS), 아래 작게 '투표 중'(2026-10-19) */
+  return `<span class="sched-date is-poll">${evYearMark(f)}${range}<em>투표 중</em></span>`;
 }
 function eventKindText(e) {
   const kind = eventKind(e);

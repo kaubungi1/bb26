@@ -199,7 +199,7 @@ CREATE TABLE IF NOT EXISTS songComments (
 # pairs 는 뺀다 — 악보 넘길 때마다 써서 잦고, 어느 목록도 읽지 않는다.
 CHANGE_TRACKED = ('songs', 'sessions', 'sessionSupports', 'songComments', 'sheets', 'events', 'eventDates',
                   'eventAvails', 'eventSongs', 'eventLineups', 'guilds', 'guildMembers', 'guildDrawings',
-                  'members', 'eventGuilds', 'eventLineupSkips')
+                  'members', 'eventGuilds', 'eventLineupSkips', 'eventGuildAvails')
 
 MIGRATIONS = [
     'CREATE INDEX IF NOT EXISTS idx_songcomments_song ON songComments ("songId", "id")',
@@ -251,6 +251,14 @@ MIGRATIONS = [
     '"songId" INTEGER NOT NULL REFERENCES songs("id") ON DELETE CASCADE, '
     '"role" TEXT NOT NULL, "nickname" TEXT NOT NULL, "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(), '
     'UNIQUE ("eventId", "songId", "role", "nickname"))',
+    # 정기합주·정기공연의 날짜 투표(2026-10-19). 사람이 아니라 참가 길드가 찍는다 — 길드장(또는 관리자)이 길드 이름으로.
+    # nickname 은 누가 찍었는지 남기는 기록일 뿐 표의 주인은 길드다. 확정 뒤 참석은 지금처럼 사람마다(eventAvails).
+    'CREATE TABLE IF NOT EXISTS eventGuildAvails ("id" SERIAL PRIMARY KEY, '
+    '"eventId" INTEGER NOT NULL REFERENCES events("id") ON DELETE CASCADE, '
+    '"date" TEXT NOT NULL, '
+    '"guildId" INTEGER NOT NULL REFERENCES guilds("id") ON DELETE CASCADE, '
+    '"nickname" TEXT, "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(), '
+    'UNIQUE ("eventId", "date", "guildId"))',
     # 종류가 없던 옛 일정: 길드가 있으면 길드 합주, 없으면 정기합주(2026-10-02 기준 9개·2개). 빈 것에만 한 번.
     "UPDATE events SET \"kind\" = CASE WHEN \"guildId\" IS NULL THEN 'regular' ELSE 'guild' END WHERE \"kind\" IS NULL",
 

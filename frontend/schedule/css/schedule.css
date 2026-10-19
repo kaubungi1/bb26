@@ -884,3 +884,18 @@
 
 /* 용병 표시(2026-10-02) — 곡 화면과 같은 호박색(--merc). 이름은 .merc(common.css), 얼굴 칩은 호박색 테 */
 .ps-merc { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 2px var(--merc, #f59e0b); }
+
+/* 정기합주·정기공연 길드 투표(2026-10-19) — 열 머리에 길드 문장 */
+.matrix th.guild-col { white-space: nowrap; }
+.guild-mark.mx-gmark { display: inline-flex; vertical-align: middle; line-height: 0; margin-right: 4px; }
+
+/* 날짜 정하는 중 ↔ 확정(2026-10-19). 확정만 진하게, 정하는 중은 흐리게 '아직' 이 읽히게.
+   묶음은 점선 상자, 날짜 기간은 흐린 색 + 아래 '투표 중', 오른쪽 숫자는 회색(확정의 '참석 n명' 만 청록) */
+.schedule .poll-list .sched-pending { margin: 8px; border: 1.5px dashed color-mix(in srgb, var(--teal) 45%, transparent); }
+.schedule .poll-list .sched-pending .poll-entry:last-child { border-bottom: 0; }
+.sched-group.is-pending { background: none; color: var(--ink); }
+.sched-group.is-pending b { margin-left: 4px; color: var(--teal-deep); }
+.sched-row.is-poll .sched-date { color: var(--ink-muted); line-height: 1.25; }
+.sched-date em { display: block; margin-top: 1px; font-style: normal; font-size: 10.5px; font-weight: 800;
+  letter-spacing: 0.02em; color: var(--ink-faint); }
+.sched-row.is-poll .poll-item-count { color: var(--ink-faint); }

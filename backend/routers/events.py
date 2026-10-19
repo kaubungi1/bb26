@@ -14,7 +14,10 @@
 라인업(곡마다 누가 치나)은 따로 적지 않는다(2026-10-02 사용자 결정). 그 곡 지원자 중 그날 참석자가 곧 라인업이다 —
 화면이 되는 곡 표(/playable)에서 읽는다. 땜빵은 그 사람이 곡에 지원한다. 예전에 적어 둔 eventLineups 는
 지우지 않고 남겨 두되 읽지도 쓰지도 않는다.
-한 파트에 지원자가 여럿이면 그날 안 치는 사람을 대기실로 보낸다(eventLineupSkips, 누구나). 넣기는 없다."""
+한 파트에 지원자가 여럿이면 그날 안 치는 사람을 대기실로 보낸다(eventLineupSkips, 누구나). 넣기는 없다.
+
+정기합주·정기공연의 날짜 투표는 길드 단위다(2026-10-19 사용자 결정). 참가 길드의 길드장(guilds.leader)이
+길드 이름으로 찍고(eventGuildAvails), 관리자는 어느 길드든 대신 찍는다. 확정 뒤 참석은 사람마다 참가하기."""
 from datetime import date as _date
 from datetime import timedelta
 
@@ -70,6 +73,7 @@ def serialize_events(conn, rows):
     for e in events:
         e['dates'] = []
         e['avails'] = []
+        e['guildAvails'] = []
     for d in conn.execute(
         f'SELECT * FROM eventDates WHERE "eventId" IN ({ph}) ORDER BY "date"', ids
     ).fetchall():
@@ -82,6 +86,12 @@ def serialize_events(conn, rows):
         for e in events:
             if e['id'] == a['eventId']:
                 e['avails'].append(dict(a))
+    for a in conn.execute(
+        f'SELECT "eventId","date","guildId" FROM eventGuildAvails WHERE "eventId" IN ({ph}) ORDER BY "date"', ids
+    ).fetchall():
+        for e in events:
+            if e['id'] == a['eventId']:
+                e['guildAvails'].append({'date': a['date'], 'guildId': a['guildId']})
     setlists = _setlists(conn, ids)
     for e in events:
         e['songs'] = setlists.get(e['id'], [])
@@ -89,15 +99,20 @@ def serialize_events(conn, rows):
         if not e.get('kind'):
             e['kind'] = 'guild' if e.get('guildId') else 'regular'
     for g in conn.execute(
-        f'SELECT eg."eventId", g."id", g."slug", g."name", g."color", g."style", '
+        f'SELECT eg."eventId", g."id", g."slug", g."name", g."color", g."style", g."leader", '
         f'(g."image" IS NOT NULL) AS "hasImage", g."imageUpdatedAt" '
         f'FROM eventGuilds eg JOIN guilds g ON g."id"=eg."guildId" WHERE eg."eventId" IN ({ph}) ORDER BY g."name"', ids
     ).fetchall():
         for e in events:
             if e['id'] == g['eventId']:
-                e['guilds'].append(guild_brief(g))
+                # 길드장은 날짜 투표에서 그 길드 열을 누를 사람이다(화면이 처음부터 그 열만 열어 준다)
+                e['guilds'].append({**guild_brief(g), 'leader': g['leader']})
     attach_guilds(conn, events)
     return events
+
+
+def _kind(event):
+    return event.get('kind') or ('guild' if event.get('guildId') else 'regular')
 
 
 def can_manage(conn, event, who):
@@ -321,6 +336,9 @@ def toggle_avail(event_id: int, body: dict):
     if event['status'] == 'confirmed' and day != event['date']:
         conn.close()
         raise HTTPException(400, '확정된 일정은 확정 날짜의 인원만 변경할 수 있습니다.')
+    if event['status'] != 'confirmed' and _kind(event) in UNION_KINDS:
+        conn.close()
+        raise HTTPException(400, '정기합주·정기공연의 날짜 투표는 길드장이 길드 이름으로 합니다.')
     date_row = conn.execute(
         'SELECT * FROM eventDates WHERE "eventId"=%s AND "date"=%s AND "active"', (event_id, day)
     ).fetchone()
@@ -356,6 +374,48 @@ def toggle_avail(event_id: int, body: dict):
     conn.commit()
     conn.close()
     return {'checked': True}
+
+
+@router.post('/{event_id}/guild-avail/toggle')
+def toggle_guild_avail(event_id: int, body: dict):
+    """정기합주·정기공연 날짜 투표 한 칸. 그 길드의 길드장이나 관리자만(2026-10-19).
+    checked(true/false) 상태로 맞춘다 — 같은 요청을 두 번 보내도 결과가 같다."""
+    day = (body.get('date') or '').strip()
+    who = (body.get('nickname') or '').strip()
+    want = body.get('checked')
+    try:
+        gid = int(body.get('guildId'))
+    except (TypeError, ValueError):
+        raise HTTPException(400, 'guildId 가 올바르지 않습니다.')
+    if not day or not isinstance(want, bool):
+        raise HTTPException(400, 'date 와 checked(true/false)가 필요합니다.')
+    conn = get_db()
+    try:
+        event = _load(conn, event_id)
+        if _kind(event) not in UNION_KINDS:
+            raise HTTPException(400, '길드 투표는 정기합주·정기공연에만 있습니다.')
+        if event['status'] == 'confirmed':
+            raise HTTPException(400, '확정된 일정입니다. 참석은 각자 참가하기로 합니다.')
+        g = conn.execute(
+            'SELECT g."leader" FROM eventGuilds eg JOIN guilds g ON g."id"=eg."guildId" '
+            'WHERE eg."eventId"=%s AND eg."guildId"=%s', (event_id, gid)).fetchone()
+        if not g:
+            raise HTTPException(400, '이 일정의 참가 길드가 아닙니다.')
+        if not who or (who != (g['leader'] or '').strip() and not admin.is_admin_nick(conn, who)):
+            raise HTTPException(403, '그 길드의 길드장(또는 관리자)만 길드 이름으로 투표할 수 있습니다.')
+        if not conn.execute('SELECT 1 FROM eventDates WHERE "eventId"=%s AND "date"=%s AND "active"',
+                            (event_id, day)).fetchone():
+            raise HTTPException(400, '후보에 없거나 꺼 둔 날짜입니다.')
+        if want:
+            conn.execute('INSERT INTO eventGuildAvails ("eventId","date","guildId","nickname") VALUES (%s,%s,%s,%s) '
+                         'ON CONFLICT ("eventId","date","guildId") DO NOTHING', (event_id, day, gid, who))
+        else:
+            conn.execute('DELETE FROM eventGuildAvails WHERE "eventId"=%s AND "date"=%s AND "guildId"=%s',
+                         (event_id, day, gid))
+        conn.commit()
+        return {'checked': want}
+    finally:
+        conn.close()
 
 
 # ---------- 확정·해제 ----------

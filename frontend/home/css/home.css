@@ -411,3 +411,9 @@
 .home .meeting.kind-concert>div>small{color:var(--pink);font-weight:800}
 .home .meeting.kind-band>div>small{color:color-mix(in srgb,#7c5cd6 70%,var(--ink));font-weight:800}
 @media(max-width:600px){.home .meeting .sched-date{width:52px;font-size:12.5px;white-space:normal}.home .meeting>b{display:none}}
+
+/* 날짜 정하는 중은 흐리게(일정표와 같은 규칙, 2026-10-19). 기간 아래 작게 '투표 중' */
+.home .meeting.is-poll{outline:1.5px dashed color-mix(in srgb,var(--teal) 45%,transparent);outline-offset:-1.5px}
+.home .meeting .sched-date.is-poll{color:var(--ink-muted);line-height:1.25}
+.home .meeting .sched-date em{display:block;margin-top:1px;font-style:normal;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:var(--ink-faint)}
+.home .meeting.is-poll>b{color:var(--ink-faint)}

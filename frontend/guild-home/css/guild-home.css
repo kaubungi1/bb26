@@ -132,6 +132,10 @@
 .guild .np-day.is-on { background: var(--accent); color: var(--on-accent); }
 .guild .np-day i { font-style: normal; margin-left: 6px; opacity: 0.6; }
 .guild .np-day.is-on i { opacity: 0.78; }
+/* 정기합주 길드 투표를 보기만 하는 길드원 — 누를 수 없는 날짜 칸(2026-10-19) */
+.guild .np-day.is-static { display: inline-flex; align-items: center; cursor: default; }
+.guild .np-day.is-static:hover { background: inherit; color: inherit; }
+.guild .np-day.is-static.is-on:hover { background: var(--accent); color: var(--on-accent); }
 .guild .next-practice.is-none .g-cta { color: var(--on-accent); }
 
 /* ---------- 파티창 ---------- */

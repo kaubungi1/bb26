@@ -199,6 +199,18 @@ function monthLabel(iso) {
 const kindLine = (e) => eventKindText(e);
 const dateCell = (e) => eventDateHtml(e);
 
+/* ---------- 날짜 투표의 주인 ----------
+   정기합주·정기공연은 투표 중일 때 길드가 찍는다(길드장이 길드 이름으로, 관리자는 대신 — 2026-10-19).
+   그 밖의 일정과 확정 뒤 참석은 사람마다다. 숫자를 세는 곳은 모두 votesOn·voteUnit 을 거친다. */
+function guildVote(e) { return isUnion(e) && e.status !== 'confirmed'; }
+function votesOn(e, day) {
+  return guildVote(e) ? (e.guildAvails || []).filter((a) => a.date === day).length
+    : e.avails.filter((a) => a.date === day).length;
+}
+function voteUnit(e) { return guildVote(e) ? '길드' : '명'; }
+/* 이 길드 열을 내가 누를 수 있는가. 서버 toggle_guild_avail 과 같은 규칙 */
+function canVoteGuild(e, g) { const me = Nick.get(); return !!me && (me === g.leader || canManage(e)); }
+
 function pollHead(e) {
   const open = e.id === openId;
   let when, count;
@@ -207,13 +219,13 @@ function pollHead(e) {
     when = [timeText(e), e.place, e.songs.length ? `${e.songs.length}곡` : ''].filter(Boolean).map(escapeHtml).join(' · ');
     count = `<span class="poll-item-count">${isPast(e) ? '' : '참석 '}${cnt}명</span>`;
   } else {
-    const best = Math.max(0, ...e.dates.map((dr) => e.avails.filter((a) => a.date === dr.date).length));
+    const best = Math.max(0, ...e.dates.map((dr) => votesOn(e, dr.date)));
     when = `후보 ${e.dates.length}일${e.createdBy ? ' · ' + escapeHtml(e.createdBy) : ''}`;
-    count = `<span class="poll-item-count${best > 0 ? ' max' : ''}">최다 ${best}명</span>`;
+    count = `<span class="poll-item-count${best > 0 ? ' max' : ''}">최다 ${best}${voteUnit(e)}</span>`;
   }
   /* 열: 날짜 | 문장 | 제목 | 종류·소속 | 시간·장소·곡 | 인원. 좁으면 종류·시간이 제목 아래 한 줄로 접힌다(CSS) */
   return `
-      <div class="poll-item sched-row kind-${eventKind(e)}" data-open-poll="${e.id}" role="button" tabindex="0" aria-expanded="${open}">
+      <div class="poll-item sched-row kind-${eventKind(e)}${e.status === 'confirmed' ? '' : ' is-poll'}" data-open-poll="${e.id}" role="button" tabindex="0" aria-expanded="${open}">
         ${dateCell(e)}
         ${eventSymbol(e)}
         <div class="poll-item-title">${escapeHtml(e.title)}</div>
@@ -251,7 +263,9 @@ function renderPolls() {
     lastPollsHtml = '';
     return;
   }
-  const html = (polls.length ? `<div class="sched-group">날짜 정하는 중</div>` + polls.map((e) => pollEntry(e, pollHead(e))).join('') : '')
+  /* 정하는 중인 일정은 점선 상자에 따로 모은다 — 확정 일정과 같은 줄 모양이라 구분이 안 됐다(2026-10-19) */
+  const html = (polls.length ? `<div class="sched-pending"><div class="sched-group is-pending">날짜 정하는 중 <b>${polls.length}</b></div>`
+    + polls.map((e) => pollEntry(e, pollHead(e))).join('') + `</div>` : '')
     + grouped(fixed, (e) => (e.date || '').slice(0, 7), (e) => (e.date ? monthLabel(e.date) : '날짜 미정'));
   /* 내용이 그대로면 손대지 않는다. 다시 그리면 펼쳐 둔 상세가 뜯긴다. */
   if (html !== lastPollsHtml) {
@@ -423,6 +437,9 @@ function putEvent(ev) {
 
 /* ---------- 조율 매트릭스 ---------- */
 function matrixMembers() {
+  if (guildVote(pollEvent)) {
+    return (pollEvent.guilds || []).map((g) => ({ guild: g, name: g.name, mine: canVoteGuild(pollEvent, g), placeholder: false }));
+  }
   const names = [];
   pollEvent.avails.forEach((a) => { if (!names.includes(a.nickname)) names.push(a.nickname); });
   const list = names.map((n) => ({ name: n, mine: n === currentUser, placeholder: false }));
@@ -432,7 +449,7 @@ function matrixMembers() {
   return list;
 }
 
-function countAvail(day) { return pollEvent.avails.filter((a) => a.date === day).length; }
+function countAvail(day) { return votesOn(pollEvent, day); }
 
 function bestDate(ev) {
   const counts = ev.dates.map((dr) => countAvail(dr.date));
@@ -456,8 +473,10 @@ function renderMatrix() {
   let html = `<table class="matrix"><thead><tr><th class="date-head">후보 날짜</th>`;
   members.forEach((m) => {
     const label = m.placeholder ? '＋ 참여' : m.name;
-    html += `<th class="member-col${m.mine ? ' mine' : ''}">${escapeHtml(label)}</th>`;
+    html += `<th class="member-col${m.mine ? ' mine' : ''}${m.guild ? ' guild-col' : ''}"${m.guild ? ` title="길드장 ${escapeHtml(m.guild.leader || '없음')}"` : ''}>`
+      + `${m.guild ? guildMark(m.guild, 16, 'mx-gmark') : ''}${escapeHtml(label)}</th>`;
   });
+  const unit = voteUnit(ev);
   html += `</tr></thead><tbody>`;
 
   dates.forEach((dr, i) => {
@@ -473,17 +492,21 @@ function renderMatrix() {
     if (!locked && dr.date === playableDate) cls.push('picked');
     html += `<tr class="${cls.join(' ')}">`;
     // 날짜 칸을 누르면 아래 '되는 곡' 표가 그 날짜 기준으로 바뀐다
-    html += `<td class="date-cell"${locked ? '' : ` data-pick-date="${dr.date}"`}>${monthDay(dr.date)} <span class="dow${dow === '일' ? ' sunday' : ''}${dow === '토' ? ' saturday' : ''}">(${dow})</span><span class="date-cnt"><span>${cnt}명</span></span>${isFixed ? '<span class="date-fixed"><span>확정</span></span>' : ''}${locked || !canManage(ev) ? '' : `<button type="button" class="date-off" data-off-date="${dr.date}" title="이 날짜를 후보에서 빼기" aria-label="${monthDay(dr.date)} 후보에서 빼기">×</button>`}</td>`;
+    /* 날짜 칸을 누르면 그날 되는 곡이 바뀐다. 길드 투표 중에는 되는 곡을 안 보이므로 누를 것이 없다 */
+    html += `<td class="date-cell"${locked || guildVote(ev) ? '' : ` data-pick-date="${dr.date}"`}>${monthDay(dr.date)} <span class="dow${dow === '일' ? ' sunday' : ''}${dow === '토' ? ' saturday' : ''}">(${dow})</span><span class="date-cnt"><span>${cnt}${unit}</span></span>${isFixed ? '<span class="date-fixed"><span>확정</span></span>' : ''}${locked || !canManage(ev) ? '' : `<button type="button" class="date-off" data-off-date="${dr.date}" title="이 날짜를 후보에서 빼기" aria-label="${monthDay(dr.date)} 후보에서 빼기">×</button>`}</td>`;
     /* 조율 중에는 내 열만 누른다. 확정 뒤에는 보기만 한다 — 참가·나가기는 확정 요약의 단추(2026-10-02).
        전에는 확정일 줄의 남의 칸까지 눌러 넣고 뺄 수 있었다 */
     const canToggle = !locked;
     members.forEach((m) => {
-      const on = m.name && ev.avails.some((a) => a.date === dr.date && a.nickname === m.name);
+      const on = m.guild
+        ? (ev.guildAvails || []).some((a) => a.date === dr.date && a.guildId === m.guild.id)
+        : m.name && ev.avails.some((a) => a.date === dr.date && a.nickname === m.name);
       const editable = canToggle && m.mine;
       const cellCls = ['avail-cell'];
       if (m.mine && canToggle) cellCls.push('mine');
       if (on) cellCls.push('on');
-      const toggle = editable ? ` data-toggle="${dr.date}" data-member="${escapeHtml(m.name)}"` : '';
+      const toggle = editable
+        ? ` data-toggle="${dr.date}" data-member="${escapeHtml(m.name)}"${m.guild ? ` data-guild="${m.guild.id}"` : ''}` : '';
       const content = on ? '✓' : (m.placeholder && canToggle) || (editable && !m.mine) ? '＋' : '';
       html += `<td class="${cellCls.join(' ')}"${toggle}><span class="avail-check">${content}</span></td>`;
     });
@@ -497,15 +520,15 @@ function renderMatrix() {
     const can = canManage(ev);
     html += `<p class="dates-off">후보에서 뺀 날짜 ${off.map((dr) => (can
       ? `<button type="button" data-on-date="${dr.date}" title="다시 후보로">${monthDay(dr.date)}
-       <i>${countAvail(dr.date)}명</i> ↩</button>`
-      : `<span class="date-off-text">${monthDay(dr.date)} <i>${countAvail(dr.date)}명</i></span>`)).join('')}</p>`;
+       <i>${countAvail(dr.date)}${voteUnit(ev)}</i> ↩</button>`
+      : `<span class="date-off-text">${monthDay(dr.date)} <i>${countAvail(dr.date)}${voteUnit(ev)}</i></span>`)).join('')}</p>`;
   }
   matrixEl.innerHTML = html;
 
   if (locked) return;
   const prev = confirmDateEl.value;
   confirmDateEl.innerHTML = dates.map((dr) =>
-    `<option value="${dr.date}"${dr.date === bestDay ? ' selected' : ''}>${monthDay(dr.date)} (${DOW[parseDate(dr.date).getDay()]}) · ${countAvail(dr.date)}명</option>`
+    `<option value="${dr.date}"${dr.date === bestDay ? ' selected' : ''}>${monthDay(dr.date)} (${DOW[parseDate(dr.date).getDay()]}) · ${countAvail(dr.date)}${voteUnit(pollEvent)}</option>`
   ).join('');
   if (prev) confirmDateEl.value = prev;
 }
@@ -671,7 +694,9 @@ function renderPollView() {
     playableDate = ev.date;
   } else {
     pollMeta.textContent = `후보 ${ev.dates.length}일${f ? ' · ' + monthDay(f) : ''}${l && l !== f ? ' ~ ' + monthDay(l) : ''}${ev.createdBy ? ' · ' + ev.createdBy : ''}`;
-    pollHintEl.textContent = '내 열(점선)을 탭해 가능 표시 · 날짜를 탭하면 그날 되는 곡';
+    pollHintEl.textContent = guildVote(ev)
+      ? '길드장이 자기 길드 열(점선)을 탭해 가능 표시 · 확정되면 각자 참가하기'
+      : '내 열(점선)을 탭해 가능 표시 · 날짜를 탭하면 그날 되는 곡';
     if (!playableDate || !ev.dates.some((dr) => dr.date === playableDate)) playableDate = bestDate(ev);
   }
   const can = canManage(ev);
@@ -690,7 +715,8 @@ function renderPollView() {
   if (!can || !locked) document.getElementById('event-edit').hidden = true;
   /* 밴드 행사는 날짜 투표만 한다. 가능 곡·셋리스트가 없다 */
   const band = eventKind(ev) === 'band';
-  playableSection.hidden = !playableDate || band;
+  /* 길드 투표 중에는 '그날 누가 오는지' 를 모른다 — 되는 곡은 확정 뒤 참가하기 기준으로 보인다 */
+  playableSection.hidden = !playableDate || band || guildVote(ev);
   renderPollGuilds();
   renderMatrix();
   renderPsDates();
@@ -1192,7 +1218,9 @@ matrixEl.addEventListener('click', async (e) => {
   const td = e.target.closest('[data-toggle]');
   if (!td) return;
   const on = td.classList.contains('on');
-  /* 누를 수 있는 칸은 내 열뿐이다(renderMatrix). 닉네임이 없으면 먼저 묻는다 */
+  /* 누를 수 있는 칸은 내 열뿐이다(renderMatrix). 닉네임이 없으면 먼저 묻는다.
+     길드 열이면 그 길드 표를 바꾼다(길드장·관리자만 그 칸이 열려 있다) */
+  if (td.dataset.guild) { setGuildAvail(pollEvent, td.dataset.toggle, Number(td.dataset.guild), !on); return; }
   if (!currentUser) {
     const name = await Nick.ensure();
     if (!name) return;
@@ -1203,6 +1231,17 @@ matrixEl.addEventListener('click', async (e) => {
 
 /* 참석 칸. 누르는 즉시 칸을 바꾸고 서버에 보낸다(common.js Writes). 전에는 응답과 일정 전체를
    다시 받은 뒤에야 칸이 바뀌었다. 실패하면 알리고, 쓰기가 끝날 때 서버의 실제 상태로 되돌아간다. */
+/* 길드 투표 한 칸. 누르는 즉시 바꾸고 서버에 보낸다(Writes.run) — 상태를 보내므로 두 번 가도 같다 */
+function setGuildAvail(ev, day, guildId, on) {
+  ev.guildAvails = (ev.guildAvails || []).filter((a) => !(a.date === day && a.guildId === guildId));
+  if (on) ev.guildAvails.push({ date: day, guildId });
+  renderPollView();
+  renderPolls();
+  Writes.run(`gavail:${ev.id}:${day}:${guildId}`,
+    () => api.post(`/events/${ev.id}/guild-avail/toggle`, { date: day, guildId, nickname: Nick.get(), checked: on }))
+    .catch((err) => { api.forgetPolls(); alert(err.message); });
+}
+
 function setAvail(ev, day, who, on) {
   ev.avails = ev.avails.filter((a) => !(a.date === day && a.nickname === who));
   if (on) ev.avails.push({ eventId: ev.id, date: day, nickname: who });
