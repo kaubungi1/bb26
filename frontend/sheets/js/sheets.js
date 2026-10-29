@@ -36,7 +36,9 @@ const FOLDER_SVG = '<svg viewBox="0 0 64 48" aria-hidden="true"><path d="M4 10a4
 let folders = [];            /* 모든 폴더 {id,name,parentId,count,folders} */
 let rootCount = 0;
 let cur = null;              /* 보는 폴더 id. null = 맨 위 */
-let sheets = [];             /* 보는 폴더의 악보. 검색 중이면 결과 */
+let sheets = [];             /* 모든 악보(글자 정보만, 그림은 보일 때만). 폴더 이동·검색은 이 안에서 — 서버를 안 거쳐 즉시 */
+const TEMP = -1;             /* 서버가 번호를 주기 전의 새 폴더 */
+let creating = null;         /* 새 폴더 만들기 요청. 이름을 확정할 때 이걸 기다린다 */
 let query = '';
 let selected = new Set();    /* 'f:3' | 's:12' */
 let renaming = null;         /* 그 자리에서 이름 고치는 폴더 id */
@@ -75,6 +77,26 @@ const splitKeys = (keys) => ({
   sheets: keys.filter((k) => k.startsWith('s:')).map((k) => Number(k.slice(2))),
   folders: keys.filter((k) => k.startsWith('f:')).map((k) => Number(k.slice(2))),
 });
+const norm = (t) => String(t || '').toLowerCase();
+const byName = (a, b) => norm(a.title ?? a.name).localeCompare(norm(b.title ?? b.name)) || a.id - b.id;
+/* 보는 폴더의 악보(검색 중이면 제목·아티스트로 전체에서) */
+function viewSheets() {
+  const q = norm(query);
+  return (query ? sheets.filter((s) => norm(s.title).includes(q) || norm(s.artist).includes(q))
+    : sheets.filter((s) => (s.folderId ?? null) === (cur ?? null))).slice().sort(byName);
+}
+/* 폴더의 개수는 서버 값이 아니라 손에 든 자료로 센다 — 옮기자마자 숫자가 맞아야 한다 */
+function recount() {
+  folders.forEach((f) => { f.count = sheets.filter((s) => s.folderId === f.id).length; f.folders = childrenOf(f.id).length; });
+  rootCount = sheets.filter((s) => s.folderId == null).length;
+  folders.sort(byName);
+}
+/* 폴더는 주소(?f=번호)와 방문 기록에 남는다 — 뒤로가기·가장자리 쓸기가 한 단계 위로, 새로고침해도 그 폴더 */
+function urlFor(id) {
+  const u = new URL(location.href);
+  if (id === null) u.searchParams.delete('f'); else u.searchParams.set('f', String(id));
+  return u.pathname + u.search;
+}
 const fmtSize = (b) => (!b ? '' : b >= 1048576 ? (b / 1048576).toFixed(1) + 'MB' : Math.round(b / 1024) + 'KB');
 
 let statusTimer = null;
@@ -89,15 +111,11 @@ function say(text, keep) {
 let refreshSeq = 0;
 async function refresh() {
   const seq = ++refreshSeq;
-  const params = new URLSearchParams();
-  if (query) params.set('q', query);
-  else params.set('folder', cur === null ? 'root' : String(cur));
-  const [rows, fl] = await Promise.all([api.get('/sheets?' + params), api.get('/sheets/folders')]);
+  const [rows, fl] = await Promise.all([api.get('/sheets'), api.get('/sheets/folders')]);
   if (seq !== refreshSeq) return;       /* 뒤늦게 온 이전 응답은 버린다 */
   sheets = rows;
   folders = fl.folders;
-  rootCount = fl.rootCount;
-  if (cur !== null && !folderById(cur)) cur = null;      /* 남이 지운 폴더에 서 있었다 */
+  if (cur !== null && !folderById(cur)) { cur = null; history.replaceState(null, '', urlFor(null)); }   /* 남이 지운 폴더에 서 있었다 */
   selected = new Set([...selected].filter((k) => {
     const { sheets: s, folders: f } = splitKeys([k]);
     return s.length ? sheetById(s[0]) : folderById(f[0]);
@@ -106,6 +124,7 @@ async function refresh() {
 }
 
 function paint() {
+  recount();
   /* 경로. 맨 위는 '악보'. 검색 중이면 경로 대신 검색어 */
   if (query) {
     crumbsEl.innerHTML = `<span class="crumb is-cur">검색 “${escapeHtml(query)}”</span>`
@@ -118,7 +137,7 @@ function paint() {
         + `<button type="button" class="crumb${last ? ' is-cur' : ''}" data-crumb="${f.id === null ? 'root' : f.id}">${escapeHtml(f.name)}</button>`;
     }).join('');
   }
-  $('list-count').textContent = rootCount + folders.reduce((n, f) => n + f.count, 0) || '';
+  $('list-count').textContent = sheets.length || '';
 
   const q = query.toLowerCase();
   const fList = query ? folders.filter((f) => f.name.toLowerCase().includes(q)) : childrenOf(cur);
@@ -133,7 +152,7 @@ function paint() {
     return `<div class="tile folder${selected.has(key) ? ' is-sel' : ''}" data-f="${f.id}" draggable="true" tabindex="0" role="button" aria-label="${escapeHtml(f.name)} 폴더">`
       + check(key) + `<span class="tile-icon">${FOLDER_SVG}</span>${name}<small>${sub}</small>${pathHtml(f.parentId)}</div>`;
   }).join('');
-  html += sheets.map((s) => {
+  html += viewSheets().map((s) => {
     const key = 's:' + s.id;
     const sub = [s.artist, s.pages ? s.pages + '쪽' : '', fmtSize(s.sizeBytes)].filter(Boolean).map(escapeHtml).join(' · ');
     return `<div class="tile sheet${selected.has(key) ? ' is-sel' : ''}" data-s="${s.id}" draggable="true" tabindex="0" role="button" aria-label="${escapeHtml(s.title || '제목 없음')}">`
@@ -154,14 +173,21 @@ function paint() {
   }
 }
 
-function enter(id) {
+function enter(id, fromHistory) {
   cur = id;
   query = '';
   searchEl.value = '';
   selected.clear();
   renaming = null;
-  refresh().catch(console.error);
+  if (!fromHistory) history.pushState({ f: id }, '', urlFor(id));
+  paint();
 }
+addEventListener('popstate', () => {
+  const f = new URLSearchParams(location.search).get('f');
+  enter(f && folderById(Number(f)) ? Number(f) : null, true);
+});
+/* 들어올 때 주소에 폴더가 있으면 거기서 시작한다(받은 뒤 없는 폴더면 refresh 가 맨 위로 돌린다) */
+cur = Number(new URLSearchParams(location.search).get('f')) || null;
 
 /* ---------- 누르기 · 고르기 ---------- */
 let suppressClick = false;        /* 길게 눌러 메뉴를 띄운 직후의 click 은 버린다 */
@@ -185,7 +211,7 @@ gridEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tile.click(); }
 });
 crumbsEl.addEventListener('click', (e) => {
-  if (e.target.closest('[data-clear-search]')) { query = ''; searchEl.value = ''; refresh().catch(console.error); return; }
+  if (e.target.closest('[data-clear-search]')) { query = ''; searchEl.value = ''; paint(); return; }
   const c = e.target.closest('[data-crumb]');
   if (c) enter(c.dataset.crumb === 'root' ? null : Number(c.dataset.crumb));
 });
@@ -197,8 +223,8 @@ searchEl.addEventListener('input', () => {
   searchTimer = setTimeout(() => {
     query = searchEl.value.trim();
     renaming = null;
-    refresh().catch(console.error);
-  }, 250);
+    paint();
+  }, 150);
 });
 
 /* ---------- 그 자리에서 이름 고치기 ---------- */
@@ -213,14 +239,21 @@ gridEl.addEventListener('focusout', (e) => {
   if (inp && renaming !== null) commitRename(inp);      /* 탐색기처럼 밖을 누르면 그대로 확정 */
 });
 async function commitRename(inp) {
-  const id = renaming;
+  let id = renaming;
   const name = inp.value.trim();
   renaming = null;
   const f = folderById(id);
   if (!f || !name || name === f.name) { paint(); return; }
+  const before = f.name;
+  f.name = name;
+  paint();                                   /* 먼저 보여 준다 */
+  if (id === TEMP) {
+    const made = await creating;             /* 새 폴더는 서버 번호가 와야 이름을 보낼 수 있다 */
+    if (!made) return;
+    id = made.id;
+  }
   const ok = await Writes.commit(null, 'folders', () => api.put('/sheets/folders/' + id, { name }), (err) => say(err.message));
-  if (ok) f.name = name;
-  refresh().catch(console.error);
+  if (!ok) { f.name = before; paint(); refresh().catch(console.error); }
 }
 
 /* ---------- 우클릭 · 길게 누르기 메뉴 ---------- */
@@ -307,26 +340,41 @@ ctxEl.addEventListener('click', async (e) => {
 
 /* ---------- 동작 ---------- */
 async function newFolder() {
-  const made = await Writes.commit(null, 'folders',
-    () => api.post('/sheets/folders', { parentId: cur, createdBy: Nick.get() || null }), (err) => say(err.message));
-  if (!made) return;
-  renaming = made.id;          /* 탐색기처럼 '새 폴더' 로 생기자마자 이름을 고친다 */
-  await refresh();
+  if (creating) return;                      /* 번호 기다리는 새 폴더가 이미 있다 */
+  folders.push({ id: TEMP, name: '새 폴더', parentId: cur, count: 0, folders: 0 });
+  renaming = TEMP;                           /* 탐색기처럼 '새 폴더' 로 바로 생기고 그 자리에서 이름을 고친다 */
+  paint();
+  creating = Writes.commit(null, 'folders',
+    () => api.post('/sheets/folders', { parentId: cur, createdBy: Nick.get() || null }), (err) => say(err.message))
+    .then((made) => {
+      creating = null;
+      const f = folderById(TEMP);
+      if (!made) { folders = folders.filter((x) => x.id !== TEMP); if (renaming === TEMP) renaming = null; paint(); return null; }
+      if (f) f.id = made.id;
+      if (renaming === TEMP) renaming = made.id;
+      /* 이름을 치는 중이면 다시 그리지 않는다(입력이 날아간다) — 타일의 번호만 바꾼다 */
+      const tile = gridEl.querySelector('[data-f="' + TEMP + '"]');
+      if (tile) tile.dataset.f = String(made.id);
+      if (renaming === null) paint();
+      return made;
+    });
 }
 
 async function move(keys, folderId) {
   const { sheets: sIds, folders: fIds } = splitKeys(keys);
   const target = folderId === null ? '악보(맨 위)' : (folderById(folderId) || {}).name || '폴더';
   if (fIds.some((id) => folderId !== null && descendants(id).has(folderId))) { say('폴더를 자기 안으로 옮길 수는 없습니다.'); return; }
+  sIds.forEach((id) => { const s = sheetById(id); if (s) s.folderId = folderId; });      /* 먼저 옮겨 보여 준다 */
+  fIds.forEach((id) => { const f = folderById(id); if (f) f.parentId = folderId; });
+  selected.clear();
+  say(`${keys.length}개 → ${target}`);
+  paint();
   const ok = await Writes.commit(null, 'sheets:move', async () => {
     if (sIds.length) await api.post('/sheets/bulk', { ids: sIds, folderId });
     for (const id of fIds) await api.put('/sheets/folders/' + id, { parentId: folderId });
     return true;
   }, (err) => say(err.message));
-  if (!ok) return;
-  selected.clear();
-  say(`${keys.length}개 → ${target}`);
-  refresh().catch(console.error);
+  if (!ok) refresh().catch(console.error);          /* 실패하면 서버 상태로 되돌린다 */
 }
 
 /* 폴더 고르기 창 — 끌기가 어려울 때. 옮기는 폴더와 그 아래는 고를 수 없다 */
@@ -371,14 +419,22 @@ async function deleteKeys(keys) {
     confirm: '삭제', danger: true,
   });
   if (!ok) return;
+  sheets = sheets.filter((s) => !sIds.includes(s.id));                                     /* 먼저 지워 보여 준다 */
+  fIds.forEach((id) => {                                                                    /* 안의 것은 한 단계 위로 */
+    const f = folderById(id);
+    const parent = f ? f.parentId : null;
+    folders.forEach((x) => { if (x.parentId === id) x.parentId = parent; });
+    sheets.forEach((s) => { if (s.folderId === id) s.folderId = parent; });
+  });
+  folders = folders.filter((f) => !fIds.includes(f.id));
+  selected.clear();
+  paint();
   const done = await Writes.commit(null, 'sheets:delete', async () => {
     if (sIds.length) await api.post('/sheets/bulk-delete', { ids: sIds });
     for (const id of fIds) await api.del('/sheets/folders/' + id);
     return true;
   }, (err) => say(err.message));
-  if (!done) return;
-  selected.clear();
-  refresh().catch(console.error);
+  if (!done) refresh().catch(console.error);
 }
 
 async function replaceFile(sheet, file) {
