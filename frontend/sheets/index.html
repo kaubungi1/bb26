@@ -35,8 +35,11 @@
         </div>
       </div>
       <nav class="crumbs" id="crumbs" aria-label="경로"></nav>
-      <p class="ex-status muted" id="ex-status" hidden></p>
-      <p class="ex-select" id="ex-select" hidden><span id="ex-select-n"></span><button type="button" class="ghost mini" id="ex-select-clear">선택 해제</button></p>
+      <!-- 상태·선택 줄은 자리를 늘 비워 둔다 — 생겼다 사라지면 격자가 위아래로 움직인다(2026-10-30 제보) -->
+      <div class="ex-line">
+        <p class="ex-status muted" id="ex-status" hidden></p>
+        <p class="ex-select" id="ex-select" hidden><span id="ex-select-n"></span><button type="button" class="ghost mini" id="ex-select-clear">선택 해제</button></p>
+      </div>
       <div class="ex-grid" id="grid"></div>
     </section>
   </div>

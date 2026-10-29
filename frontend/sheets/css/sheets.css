@@ -32,8 +32,10 @@
 .crumb-clear { min-height: 0; margin-left: 8px; padding: 2px 6px; border: 0; background: none; box-shadow: none;
   color: var(--ink-faint); font-size: 12px; font-weight: 700; }
 .crumb-clear:hover { color: var(--pink); background: none; box-shadow: none; filter: none; }
-.ex-status { margin: 0 0 8px; font-size: 12.5px; font-weight: 700; }
-.ex-select { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 12.5px; font-weight: 800; color: var(--teal-deep); }
+.ex-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; margin: 0 0 4px; }
+.ex-status { margin: 0; font-size: 12.5px; font-weight: 700; }
+.ex-select { display: flex; align-items: center; gap: 10px; margin: 0 0 0 auto; font-size: 12.5px; font-weight: 800; color: var(--teal-deep); }
+.ex-select .ghost.mini { min-height: 26px; padding: 3px 9px; }
 
 /* ---------- 타일 격자 ----------
    폴더가 먼저, 악보가 뒤. 폴더는 아이콘, 악보는 1쪽 그림이 주인공이다.
@@ -48,7 +50,7 @@
   touch-action: manipulation; outline: 2px solid transparent; outline-offset: -2px; }
 .tile:hover { background: #ffffff9c; }
 .tile:focus-visible { outline-color: var(--teal); }
-.tile.is-sel { background: var(--teal-soft); outline-color: var(--teal); }
+.tile.is-sel { background: var(--teal-soft); outline: 1px solid color-mix(in srgb, var(--teal) 55%, transparent); }
 .tile.is-over { background: color-mix(in srgb, var(--teal) 16%, #fff); outline-color: var(--teal-deep); }
 .tile.is-dragging { opacity: 0.45; }
 .tile.is-cut { opacity: 0.5; }                              /* 잘라낸 것 — 붙여넣기 전까지 흐리게 */
@@ -67,8 +69,8 @@
 .tile-check { position: absolute; left: 8px; top: 8px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
   border: 2px solid var(--teal); border-radius: 0; background: #fff; color: var(--teal-deep); font-size: 13px; font-style: normal; font-weight: 800; }
 .tile.is-sel .tile-check { background: var(--teal); color: #fff; }
-.tile-check { display: none; }
-.ex-grid.has-sel .tile-check { display: inline-flex; }
+.tile-check { display: none; }                              /* 체크는 손가락으로 고르는 터치에서만 — 마우스엔 바탕색이면 충분하다 */
+body.is-touch .ex-grid.has-sel .tile-check { display: inline-flex; }
 /* 빈 곳에서 끌면 그려지는 고르기 네모 */
 .marquee { position: fixed; z-index: 50; border: 1px solid var(--teal-deep); background: color-mix(in srgb, var(--teal) 18%, transparent); pointer-events: none; }
 body.is-banding { user-select: none; -webkit-user-select: none; cursor: crosshair; }

@@ -239,8 +239,12 @@ function rangeSel(tile) {
   keys.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((k) => selected.add(k));
   paintSelection();
 }
+/* 길게 눌러 메뉴를 띄우거나 네모로 고른 직후의 click 은 여기 한 곳에서 한 번만 버린다(잡는 단계라 모든 처리기보다 먼저).
+   처리기마다 따로 버리면 앞의 것이 표시를 지워 뒤의 것(빈 곳 클릭 → 풀기)이 그대로 돌았다(2026-10-30). */
 document.addEventListener('click', (e) => {
-  if (suppressClick) { suppressClick = false; return; }
+  if (suppressClick) { suppressClick = false; e.stopPropagation(); e.preventDefault(); }
+}, true);
+document.addEventListener('click', (e) => {
   if (e.target.closest('.tile') || offLimits(e.target) || !e.target.closest('.sheets') || e.target.closest('#ctx')) return;
   if (selected.size) { selected.clear(); paintSelection(); }      /* 빈 곳을 누르면 고른 것이 풀린다 */
 });
@@ -249,9 +253,11 @@ function openTile(tile) {
   if (tile.dataset.f) enter(Number(tile.dataset.f));
   else { const s = sheetById(Number(tile.dataset.s)); if (s) openViewer(s); }
 }
-document.addEventListener('pointerdown', (e) => { lastPointerType = e.pointerType || 'mouse'; }, true);
+document.addEventListener('pointerdown', (e) => {
+  lastPointerType = e.pointerType || 'mouse';
+  document.body.classList.toggle('is-touch', lastPointerType === 'touch');
+}, true);
 gridEl.addEventListener('click', (e) => {
-  if (suppressClick) { suppressClick = false; return; }
   if (e.target.closest('.tile-rename')) return;
   const tile = e.target.closest('.tile');
   if (!tile) return;
@@ -1248,6 +1254,7 @@ async function openViewer(sheet, remote) {
 
 function closeViewer(fromRemote) {
   viewer.hidden = true;
+  if (selected.size) { selected.clear(); paintSelection(); }   /* 보고 나오면 고른 건 푼다 — 터치에선 남으면 다음 탭이 열리지 않는다 */
   document.body.style.overflow = '';
   pageImg.removeAttribute('src');
   currentSheet = null;
