@@ -959,27 +959,24 @@ document.addEventListener('fullscreenchange', paintFs);
 document.addEventListener('webkitfullscreenchange', paintFs);
 
 /* ---------- 페어 (두 아이패드) ----------
-   1번(main)은 홀수쪽, 2번(sub)은 짝수쪽을 맡는다. 넘김은 보면대처럼 한 번에 한 쪽씩 번갈아 간다
-   (2026-10-29 사용자 결정): 1,2 → 3,2 → 3,4 → 5,4 … 어느 기기에서 넘겨도 뒤처진 쪽만 두 쪽 앞으로 가고,
-   지금 보고 치는 쪽은 바뀌지 않는다. 그래서 3쪽짜리는 3,2 에서 끝나고 빈 화면이 없다(악보 절반이 3쪽).
-   전에는 두 기기가 펼침(1,2 → 3,4) 단위로 같이 넘어가 3쪽짜리 끝이 '3, (마지막 쪽)' 이었고,
-   2쪽을 치는 동안엔 넘길 수 없었다.
-   pageNo 변수는 솔로일 땐 쪽 번호, 페어일 땐 걸음(step) 번호다 — 걸음 k 의 두 쪽은 pairPages(k). */
+   1번(main)은 홀수쪽, 2번(sub)은 짝수쪽을 맡고, 펼침 단위로 같이 넘어간다: 1,2 → 3,4 → 5,6.
+   홀수 쪽수의 마지막 펼침에서 짝수쪽이 없으면 2번은 빈 화면 대신 **앞 쪽을 그대로 둔다**(2026-10-30 사용자 결정):
+   3쪽짜리는 1,2 → 3,2. 전에는 '3, (마지막 쪽)' 이라 넘길 타이밍이 어려웠다(악보 절반이 3쪽).
+   (10-29 에 내가 '한 쪽씩 번갈아 1,2→3,2→3,4' 로 잘못 읽어 만들었다가 되돌렸다.)
+   pageNo 변수는 솔로일 땐 쪽 번호, 페어일 땐 펼침 번호다 — 펼침 k 의 두 쪽은 pairPages(k). */
 let pairLinked = false;
 let peerCount = 0;
 let lastTitle = '';
 
 let shownPage = 1;   /* 화면에 실제로 떠 있는 쪽 번호 — 페어가 풀릴 때 기준이 된다 */
 
-/* 걸음 k(1부터)에서 두 기기가 보이는 쪽. 걸음마다 한쪽만 두 쪽 간다.
-     k:    1    2    3    4
-     main: 1    3    3    5
-     sub:  2    2    4    4
-   쪽수 N 이면 걸음은 N-1 개(N≥2). 1쪽짜리는 걸음 하나, 2번 기기엔 보일 쪽이 없다. */
+/* 펼침 k(1부터)에서 두 기기가 보이는 쪽. 짝수쪽이 쪽수를 넘으면 2번은 앞 짝수쪽에 머문다(0 이면 보일 쪽 없음).
+     N=4  k: 1→(1,2) 2→(3,4)        N=3  k: 1→(1,2) 2→(3,2)        N=5  k: 1→(1,2) 2→(3,4) 3→(5,4) */
 function pairPages(k) {
-  return { main: 2 * Math.ceil((k - 1) / 2) + 1, sub: 2 * Math.floor((k - 1) / 2) + 2 };
+  const even = 2 * k;
+  return { main: even - 1, sub: even <= pageTotal ? even : even - 2 };
 }
-function maxStep() { return Pair.active() ? Math.max(1, pageTotal - 1) : pageTotal; }
+function maxStep() { return Pair.active() ? Math.ceil(pageTotal / 2) : pageTotal; }
 function stepPage(n) { return Pair.active() ? pairPages(n)[Pair.isSub() ? 'sub' : 'main'] : n; }
 
 /* 페어가 끝난 직후 — 보조 기기는 페어 전용 화면에 갇혀 있으니 메인으로 내보내고,
