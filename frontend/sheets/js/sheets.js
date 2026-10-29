@@ -80,10 +80,15 @@ const splitKeys = (keys) => ({
 const norm = (t) => String(t || '').toLowerCase();
 const byName = (a, b) => norm(a.title ?? a.name).localeCompare(norm(b.title ?? b.name)) || a.id - b.id;
 /* 보는 폴더의 악보(검색 중이면 제목·아티스트로 전체에서) */
+const byOrder = (a, b) => ((a.order ?? 1e9) - (b.order ?? 1e9)) || byName(a, b);   /* 끌어 둔 순서, 없으면 제목순 뒤에 */
+const byDate = (a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || byName(a, b);
+/* 정렬(우클릭 메뉴). manual = 끌어 둔 순서(기본) · name · date. 기기마다 기억한다 */
+const SORTS = { manual: ['직접 순서(끌어 둔 대로)', byOrder], name: ['이름순', byName], date: ['최근 올린 순', byDate] };
+let sortMode = localStorage.getItem('sheetSort') in SORTS ? localStorage.getItem('sheetSort') : 'manual';
 function viewSheets() {
   const q = norm(query);
-  return (query ? sheets.filter((s) => norm(s.title).includes(q) || norm(s.artist).includes(q))
-    : sheets.filter((s) => (s.folderId ?? null) === (cur ?? null))).slice().sort(byName);
+  return (query ? sheets.filter((s) => norm(s.title).includes(q) || norm(s.artist).includes(q)).sort(byName)
+    : sheets.filter((s) => (s.folderId ?? null) === (cur ?? null)).sort(SORTS[sortMode][1]));
 }
 /* 폴더의 개수는 서버 값이 아니라 손에 든 자료로 센다 — 옮기자마자 숫자가 맞아야 한다 */
 function recount() {
@@ -142,7 +147,7 @@ function paint() {
   const q = query.toLowerCase();
   const fList = query ? folders.filter((f) => f.name.toLowerCase().includes(q)) : childrenOf(cur);
   const pathHtml = (fid) => (query ? `<span class="tile-path">${escapeHtml(['악보', ...pathOf(fid).map((x) => x.name)].join(' › '))}</span>` : '');
-  const check = (key) => (selected.size ? `<i class="tile-check" aria-hidden="true">${selected.has(key) ? '✓' : ''}</i>` : '');
+  const check = (key) => `<i class="tile-check" aria-hidden="true">${selected.has(key) ? '✓' : ''}</i>`;
   let html = fList.map((f) => {
     const key = 'f:' + f.id;
     const name = renaming === f.id
@@ -165,12 +170,24 @@ function paint() {
       : '빈 폴더입니다. PDF 를 끌어다 놓으면 올라가고, 우클릭(길게 누르기)으로 새 폴더를 만듭니다.'}</p>`;
   }
   gridEl.innerHTML = html;
-  $('ex-select').hidden = !selected.size;
-  $('ex-select-n').textContent = selected.size ? `${selected.size}개 선택` : '';
+  paintSelection();
   if (renaming !== null) {
     const inp = gridEl.querySelector('.tile-rename');
     if (inp) { inp.focus(); inp.select(); }
   }
+}
+
+/* 고르기만 바뀌었을 때 — 타일을 다시 만들지 않고 표시만 맞춘다(네모로 끄는 중에 다시 그리면 끌기가 끊긴다) */
+function paintSelection() {
+  gridEl.classList.toggle('has-sel', selected.size > 0);
+  gridEl.querySelectorAll('.tile').forEach((t) => {
+    const on = selected.has(keyOf(t));
+    t.classList.toggle('is-sel', on);
+    const c = t.querySelector('.tile-check');
+    if (c) c.textContent = on ? '✓' : '';
+  });
+  $('ex-select').hidden = !selected.size;
+  $('ex-select-n').textContent = selected.size ? `${selected.size}개 선택` : '';
 }
 
 function enter(id, fromHistory) {
@@ -190,18 +207,35 @@ addEventListener('popstate', () => {
 cur = Number(new URLSearchParams(location.search).get('f')) || null;
 
 /* ---------- 누르기 · 고르기 ---------- */
-let suppressClick = false;        /* 길게 눌러 메뉴를 띄운 직후의 click 은 버린다 */
+let suppressClick = false;        /* 길게 눌러 메뉴를 띄우거나 네모로 고른 직후의 click 은 버린다 */
+let lastKey = null;               /* Shift+클릭 범위의 시작 */
 function toggleSel(tile) {
   const key = keyOf(tile);
   if (selected.has(key)) selected.delete(key); else selected.add(key);
-  paint();
+  lastKey = key;
+  paintSelection();
 }
+/* Shift+클릭: 마지막으로 고른 타일부터 이 타일까지(화면 순서) 전부 */
+function rangeSel(tile) {
+  const keys = [...gridEl.querySelectorAll('.tile')].map(keyOf);
+  const a = keys.indexOf(lastKey), b = keys.indexOf(keyOf(tile));
+  if (a < 0) { toggleSel(tile); return; }
+  keys.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((k) => selected.add(k));
+  paintSelection();
+}
+document.addEventListener('click', (e) => {
+  if (suppressClick) { suppressClick = false; return; }
+  if (e.target.closest('.tile') || offLimits(e.target) || !e.target.closest('.sheets') || e.target.closest('#ctx')) return;
+  if (selected.size) { selected.clear(); paintSelection(); }      /* 빈 곳을 누르면 고른 것이 풀린다 */
+});
 gridEl.addEventListener('click', (e) => {
   if (suppressClick) { suppressClick = false; return; }
   if (e.target.closest('.tile-rename')) return;
   const tile = e.target.closest('.tile');
   if (!tile) return;
+  if (e.shiftKey) { rangeSel(tile); return; }
   if (e.ctrlKey || e.metaKey || selected.size) { toggleSel(tile); return; }
+  lastKey = keyOf(tile);
   if (tile.dataset.f) enter(Number(tile.dataset.f));
   else { const s = sheetById(Number(tile.dataset.s)); if (s) openViewer(s); }
 });
@@ -215,7 +249,41 @@ crumbsEl.addEventListener('click', (e) => {
   const c = e.target.closest('[data-crumb]');
   if (c) enter(c.dataset.crumb === 'root' ? null : Number(c.dataset.crumb));
 });
-$('ex-select-clear').addEventListener('click', () => { selected.clear(); paint(); });
+$('ex-select-clear').addEventListener('click', () => { selected.clear(); paintSelection(); });
+
+/* ---------- 빈 곳에서 끌어 네모로 고르기(마우스) ----------
+   탐색기처럼 빈 곳에서 끌면 네모가 그려지고 닿는 타일이 고른 것이 된다. Ctrl 을 누른 채면 더한다.
+   타일 위에서 시작하면 그건 옮기기·순서 바꾸기다. 터치는 길게 누르기·'선택' 으로 고른다. */
+let band = null;
+document.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'touch' || e.button !== 0) return;
+  if (e.target.closest('.tile') || offLimits(e.target) || !e.target.closest('.sheets') || !viewer.hidden) return;
+  band = { x0: e.clientX, y0: e.clientY, add: e.ctrlKey || e.metaKey, base: new Set(selected), el: null };
+});
+document.addEventListener('pointermove', (e) => {
+  if (!band) return;
+  const dx = e.clientX - band.x0, dy = e.clientY - band.y0;
+  if (!band.el) {
+    if (Math.hypot(dx, dy) < 4) return;
+    band.el = document.createElement('div');
+    band.el.className = 'marquee';
+    document.body.appendChild(band.el);
+    document.body.classList.add('is-banding');
+  }
+  const x = Math.min(e.clientX, band.x0), y = Math.min(e.clientY, band.y0), w = Math.abs(dx), h = Math.abs(dy);
+  Object.assign(band.el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+  const next = new Set(band.add ? band.base : []);
+  gridEl.querySelectorAll('.tile').forEach((t) => {
+    const r = t.getBoundingClientRect();
+    if (r.left < x + w && r.right > x && r.top < y + h && r.bottom > y) next.add(keyOf(t));
+  });
+  if (next.size !== selected.size || [...next].some((k) => !selected.has(k))) { selected = next; paintSelection(); }
+});
+['pointerup', 'pointercancel'].forEach((ev) => document.addEventListener(ev, () => {
+  if (!band) return;
+  if (band.el) { band.el.remove(); document.body.classList.remove('is-banding'); suppressClick = true; }
+  band = null;
+}));
 
 let searchTimer = null;
 searchEl.addEventListener('input', () => {
@@ -272,11 +340,13 @@ function openCtx(x, y, tile) {
     items = [['open', '열기'], ['move', '이동…'], ['replace', '파일 바꾸기'], ['edit', '정보 수정'], ['delete', '삭제'], ['select', '선택']];
   } else {
     ctxTarget = { kind: 'empty' };
-    items = [['new', '새 폴더'], ['upload', '올리기…']];
+    items = [['new', '새 폴더'], ['upload', '올리기…'], ['sep', '정렬'],
+      ...Object.entries(SORTS).map(([k, [label]]) => ['sort:' + k, label])];
     if (selected.size) items.push(['unselect', '선택 해제']);
   }
-  ctxEl.innerHTML = items.map(([act, label]) =>
-    `<button type="button" class="menu-item${act === 'delete' ? ' is-danger' : ''}" role="menuitem" data-act="${act}">${escapeHtml(label)}</button>`).join('');
+  ctxEl.innerHTML = items.map(([act, label]) => (act === 'sep'
+    ? `<div class="ctx-sep">${escapeHtml(label)}</div>`
+    : `<button type="button" class="menu-item${act === 'delete' ? ' is-danger' : ''}${act === 'sort:' + sortMode ? ' is-on' : ''}" role="menuitem" data-act="${act}">${escapeHtml(label)}</button>`)).join('');
   ctxEl.hidden = false;
   const r = ctxEl.getBoundingClientRect();
   ctxEl.style.left = Math.max(4, Math.min(x, innerWidth - r.width - 4)) + 'px';
@@ -336,9 +406,14 @@ ctxEl.addEventListener('click', async (e) => {
     case 'delete': return deleteKeys(t.keys);
     case 'replace': replaceInput.dataset.sheet = String(t.id); replaceInput.value = ''; replaceInput.click(); return;
     case 'edit': return editInfo(sheetById(t.id));
-    case 'select': t.keys.forEach((k) => selected.add(k)); paint(); return;
-    case 'unselect': selected.clear(); paint(); return;
+    case 'select': t.keys.forEach((k) => selected.add(k)); lastKey = t.keys[t.keys.length - 1]; paintSelection(); return;
+    case 'unselect': selected.clear(); paintSelection(); return;
     default:
+      if (item.dataset.act.startsWith('sort:')) {
+        sortMode = item.dataset.act.slice(5);
+        localStorage.setItem('sheetSort', sortMode);
+        paint();
+      }
   }
 });
 
@@ -382,6 +457,21 @@ async function move(keys, folderId) {
     return true;
   }, (err) => say(err.message));
   if (!ok) refresh().catch(console.error);          /* 실패하면 서버 상태로 되돌린다 */
+}
+
+/* 폴더 안 순서 — 끌어서 다른 악보 앞·뒤에 놓는다. 먼저 보여 주고 서버에는 뒤에서(ids 순서대로 1부터) */
+function reorder(keys, beforeId, after) {
+  const moving = splitKeys(keys).sheets;
+  if (!moving.length) return;
+  const list = viewSheets().map((s) => s.id).filter((id) => !moving.includes(id));
+  let at = beforeId == null ? list.length : list.indexOf(beforeId);
+  if (at < 0) at = list.length;
+  if (after && beforeId != null) at += 1;
+  const ids = [...list.slice(0, at), ...moving, ...list.slice(at)];
+  ids.forEach((id, i) => { const s = sheetById(id); if (s) s.order = i + 1; });
+  selected.clear();
+  paint();
+  Writes.commit(null, 'sheets:order', () => api.post('/sheets/order', { ids }), (err) => { say(err.message); refresh().catch(console.error); });
 }
 
 /* 폴더 고르기 창 — 끌기가 어려울 때. 옮기는 폴더와 그 아래는 고를 수 없다 */
@@ -565,14 +655,14 @@ gridEl.addEventListener('dragstart', (e) => {
 });
 gridEl.addEventListener('dragend', () => {
   dragKeys = null;
-  explorerEl.querySelectorAll('.is-dragging, .is-over').forEach((el) => el.classList.remove('is-dragging', 'is-over'));
+  document.querySelectorAll('.is-dragging, .is-over, .is-before, .is-after').forEach((el) => el.classList.remove('is-dragging', 'is-over', 'is-before', 'is-after'));
   explorerEl.classList.remove('is-over');
 });
 
 /* 놓을 곳을 정한다. 돌려주는 것: {folderId} | {sheet} | null */
 function dropTarget(e) {
   const dt = e.dataTransfer;
-  const files = hasFiles(dt), tiles = hasTiles(dt) || !!dragKeys;
+  const files = hasFiles(dt), tiles = !files && (hasTiles(dt) || !!dragKeys);
   if (!files && !tiles) return null;
   const crumb = e.target.closest('[data-crumb]');
   if (crumb) return { folderId: crumb.dataset.crumb === 'root' ? null : Number(crumb.dataset.crumb), el: crumb };
@@ -583,39 +673,49 @@ function dropTarget(e) {
     return { folderId: id, el: tile };
   }
   if (tile && files) return { sheet: sheetById(Number(tile.dataset.s)), el: tile };
-  if (tile) return null;
+  if (tile) {
+    /* 악보 위에 타일을 끌어오면 그 앞(왼쪽 반)·뒤(오른쪽 반)에 놓는 순서 바꾸기. 검색 중에는 순서가 없다 */
+    if (query || sortMode !== 'manual' || (dragKeys || []).includes('s:' + tile.dataset.s)) return null;
+    const r = tile.getBoundingClientRect();
+    return { before: Number(tile.dataset.s), after: e.clientX > r.left + r.width / 2, el: tile, side: true };
+  }
   if (offLimits(e.target)) return null;
+  if (tiles && !query && sortMode === 'manual') return { before: null, after: false, el: null, side: true };   /* 빈 곳에 놓으면 맨 뒤 */
   return { folderId: cur, el: null };      /* 타일이 아닌 곳이면 페이지 어디든 보는 폴더 */
 }
 document.addEventListener('dragover', (e) => {
   const t = dropTarget(e);
-  explorerEl.querySelectorAll('.is-over').forEach((el) => el.classList.remove('is-over'));
+  document.querySelectorAll('.is-over, .is-before, .is-after').forEach((el) => el.classList.remove('is-over', 'is-before', 'is-after'));
   explorerEl.classList.toggle('is-over', !!t && !t.el);
   if (!t) return;
   e.preventDefault();
   e.dataTransfer.dropEffect = hasFiles(e.dataTransfer) ? 'copy' : 'move';
-  if (t.el) t.el.classList.add('is-over');
+  if (t.el) t.el.classList.add(t.side ? (t.after ? 'is-after' : 'is-before') : 'is-over');
+  if (t.side) t.el?.classList.remove(t.after ? 'is-before' : 'is-after');
 });
 document.addEventListener('dragleave', (e) => {
   if (!e.relatedTarget) {
-    explorerEl.querySelectorAll('.is-over').forEach((el) => el.classList.remove('is-over'));
+    document.querySelectorAll('.is-over, .is-before, .is-after').forEach((el) => el.classList.remove('is-over', 'is-before', 'is-after'));
     explorerEl.classList.remove('is-over');
   }
 });
 document.addEventListener('drop', (e) => {
   const t = dropTarget(e);
-  explorerEl.querySelectorAll('.is-over').forEach((el) => el.classList.remove('is-over'));
+  document.querySelectorAll('.is-over, .is-before, .is-after').forEach((el) => el.classList.remove('is-over', 'is-before', 'is-after'));
   explorerEl.classList.remove('is-over');
   if (!t) return;
   e.preventDefault();
   if (hasFiles(e.dataTransfer)) {
     if (t.sheet) replaceFile(t.sheet, e.dataTransfer.files[0]);
-    else uploadFiles(e.dataTransfer.files, t.folderId);
+    else uploadFiles(e.dataTransfer.files, t.folderId ?? cur);
     return;
   }
   let keys = dragKeys;
   if (!keys) { try { keys = JSON.parse(e.dataTransfer.getData(KIND) || '[]'); } catch { keys = []; } }
-  if (keys && keys.length && 'folderId' in t) move(keys, t.folderId);
+  dragKeys = null;
+  if (!keys || !keys.length) return;
+  if (t.side) reorder(keys, t.before, t.after);
+  else if ('folderId' in t) move(keys, t.folderId);
 });
 /* 머리띠 같은 금지 구역에 떨어뜨려도 브라우저가 PDF 를 열지 않게 */
 document.addEventListener('dragover', (e) => { if (hasFiles(e.dataTransfer)) e.preventDefault(); });

@@ -268,6 +268,8 @@ MIGRATIONS = [
     'ALTER TABLE sheets ADD COLUMN IF NOT EXISTS "folderId" INTEGER REFERENCES sheetFolders("id") ON DELETE SET NULL',
     'CREATE INDEX IF NOT EXISTS idx_sheets_folder ON sheets("folderId")',
     'ALTER TABLE sheetFolders ADD COLUMN IF NOT EXISTS "parentId" INTEGER REFERENCES sheetFolders("id") ON DELETE SET NULL',
+    # 폴더 안 악보 순서(2026-10-30). 끌어서 놓은 자리. NULL 이면 제목순으로 뒤에 선다.
+    'ALTER TABLE sheets ADD COLUMN IF NOT EXISTS "order" INTEGER',
     # 종류가 없던 옛 일정: 길드가 있으면 길드 합주, 없으면 정기합주(2026-10-02 기준 9개·2개). 빈 것에만 한 번.
     "UPDATE events SET \"kind\" = CASE WHEN \"guildId\" IS NULL THEN 'regular' ELSE 'guild' END WHERE \"kind\" IS NULL",
 

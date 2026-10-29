@@ -17,7 +17,7 @@ router = APIRouter()
 
 SHEET_COLS = (
     '"id", "title", "artist", "role", "tags", "bpm", "pages", "note", '
-    '"fileName", "viewPrefs", "uploadedBy", "folderId", "createdAt", "updatedAt", '
+    '"fileName", "viewPrefs", "uploadedBy", "folderId", "order", "createdAt", "updatedAt", '
     'octet_length(content) AS "sizeBytes"'
 )
 FOLDER_NAME_MAX = 30
@@ -164,10 +164,24 @@ def list_sheets(q: str | None = None, role: str | None = None, tag: str | None =
     clause = (' WHERE ' + ' AND '.join(where)) if where else ''
     conn = get_db()
     rows = conn.execute(
-        f'SELECT {SHEET_COLS} FROM sheets{clause} ORDER BY lower("title"), "id"', params
+        f'SELECT {SHEET_COLS} FROM sheets{clause} ORDER BY "order" NULLS LAST, lower("title"), "id"', params
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+@router.post('/order')
+def order_sheets(body: dict):
+    """끌어서 놓은 순서. ids 순서대로 1부터 매긴다(한 폴더 안의 악보들). 목록에 없는 악보는 그대로."""
+    ids = body_ids(body)
+    conn = get_db()
+    try:
+        for i, sid in enumerate(ids):
+            conn.execute('UPDATE sheets SET "order"=%s WHERE "id"=%s', (i + 1, sid))
+        conn.commit()
+        return {'ok': True}
+    finally:
+        conn.close()
 
 
 @router.post('')
@@ -264,7 +278,7 @@ def bulk_update_sheets(body: dict):
             conn.close()
             raise
         conn.execute(
-            f'UPDATE sheets SET "folderId"=%s, "updatedAt"=now() WHERE "id" IN ({ph})',
+            f'UPDATE sheets SET "folderId"=%s, "order"=NULL, "updatedAt"=now() WHERE "id" IN ({ph})',
             [folder] + ids,
         )
     if 'tag' in body:

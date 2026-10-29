@@ -63,6 +63,14 @@
 .tile-check { position: absolute; left: 8px; top: 8px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
   border: 2px solid var(--teal); border-radius: 0; background: #fff; color: var(--teal-deep); font-size: 13px; font-style: normal; font-weight: 800; }
 .tile.is-sel .tile-check { background: var(--teal); color: #fff; }
+.tile-check { display: none; }
+.ex-grid.has-sel .tile-check { display: inline-flex; }
+/* 빈 곳에서 끌면 그려지는 고르기 네모 */
+.marquee { position: fixed; z-index: 50; border: 1px solid var(--teal-deep); background: color-mix(in srgb, var(--teal) 18%, transparent); pointer-events: none; }
+body.is-banding { user-select: none; -webkit-user-select: none; cursor: crosshair; }
+/* 순서 바꾸기 — 놓일 자리를 타일 왼쪽·오른쪽 굵은 선으로 */
+.tile.is-before { box-shadow: -3px 0 0 var(--teal-deep); }
+.tile.is-after { box-shadow: 3px 0 0 var(--teal-deep); }
 /* 그 자리에서 이름 고치기 — 타일 이름 자리에 입력칸 */
 .tile-rename { width: 100%; min-height: 30px; margin: 0; padding: 3px 6px; font-size: 13.5px; font-weight: 800; text-align: center; }
 .ex-empty { grid-column: 1 / -1; margin: 24px 0; font-size: 13px; font-weight: 700; color: var(--ink-faint); text-align: center; line-height: 1.7; }
@@ -72,6 +80,7 @@
   border-radius: var(--radius-sm); background: var(--card); box-shadow: var(--shadow-md); display: flex; flex-direction: column; }
 .ctx-menu[hidden] { display: none; }
 .ctx-menu .menu-item.is-danger { color: #ef4444; }
+.ctx-sep { margin: 4px 0 0; padding: 6px 14px 2px; border-top: 1px solid var(--line); font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; color: var(--ink-faint); }
 /* 폴더 고르기 창 — 트리를 들여쓴 목록 */
 .pick-list { max-height: 50vh; overflow-y: auto; padding: 6px 0; }
 .pick-list .menu-item[disabled] { opacity: 0.4; cursor: default; }
