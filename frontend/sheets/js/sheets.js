@@ -38,10 +38,14 @@ let rootCount = 0;
 let cur = null;              /* 보는 폴더 id. null = 맨 위 */
 let sheets = [];             /* 모든 악보(글자 정보만, 그림은 보일 때만). 폴더 이동·검색은 이 안에서 — 서버를 안 거쳐 즉시 */
 const TEMP = -1;             /* 서버가 번호를 주기 전의 새 폴더 */
+const TEMP_KEY = 'f:' + TEMP;
 let creating = null;         /* 새 폴더 만들기 요청. 이름을 확정할 때 이걸 기다린다 */
 let query = '';
 let selected = new Set();    /* 'f:3' | 's:12' */
-let renaming = null;         /* 그 자리에서 이름 고치는 폴더 id */
+let renaming = null;         /* 그 자리에서 이름 고치는 것 — 'f:3'(폴더) | 's:12'(악보 제목) | null */
+let clipboard = [];          /* Ctrl+X 로 잘라 둔 키들. Ctrl+V 로 보는 폴더에 붙인다 */
+let undoAction = null;       /* 마지막 옮기기·순서 바꾸기를 되돌리는 {label, run}. Ctrl+Z */
+let lastPointerType = 'mouse';   /* 마우스는 클릭=고르기·더블클릭=열기, 터치는 탭=열기 */
 let lastRole = localStorage.getItem('sheetRole') || '공용';   /* 올릴 때 묻지 않는 파트 — 마지막 값 */
 
 const $ = (id) => document.getElementById(id);
@@ -105,12 +109,20 @@ function urlFor(id) {
 const fmtSize = (b) => (!b ? '' : b >= 1048576 ? (b / 1048576).toFixed(1) + 'MB' : Math.round(b / 1024) + 'KB');
 
 let statusTimer = null;
-function say(text, keep) {
+function say(text, keep, withUndo) {
   clearTimeout(statusTimer);
-  statusEl.textContent = text;
+  statusEl.innerHTML = escapeHtml(text) + (withUndo && undoAction ? ' <button type="button" class="ex-undo" data-undo>실행 취소</button>' : '');
   statusEl.hidden = !text;
-  if (text && !keep) statusTimer = setTimeout(() => { statusEl.hidden = true; }, 4000);
+  if (text && !keep) statusTimer = setTimeout(() => { statusEl.hidden = true; }, withUndo ? 8000 : 4000);
 }
+async function undo() {
+  const u = undoAction;
+  if (!u) return;
+  undoAction = null;
+  say(`되돌림: ${u.label}`);
+  try { await u.run(); } catch (err) { say('되돌리지 못했습니다. ' + (err.message || '')); refresh().catch(console.error); }
+}
+statusEl.addEventListener('click', (e) => { if (e.target.closest('[data-undo]')) undo(); });
 
 /* ---------- 받기 · 그리기 ---------- */
 let refreshSeq = 0;
@@ -150,7 +162,7 @@ function paint() {
   const check = (key) => `<i class="tile-check" aria-hidden="true">${selected.has(key) ? '✓' : ''}</i>`;
   let html = fList.map((f) => {
     const key = 'f:' + f.id;
-    const name = renaming === f.id
+    const name = renaming === key
       ? `<input class="tile-rename" value="${escapeHtml(f.name)}" maxlength="30" aria-label="폴더 이름" />`
       : `<span class="tile-name">${escapeHtml(f.name)}</span>`;
     const sub = [f.count ? `${f.count}장` : '', f.folders ? `폴더 ${f.folders}` : ''].filter(Boolean).join(' · ') || '비어 있음';
@@ -163,7 +175,10 @@ function paint() {
     return `<div class="tile sheet${selected.has(key) ? ' is-sel' : ''}" data-s="${s.id}" draggable="true" tabindex="0" role="button" aria-label="${escapeHtml(s.title || '제목 없음')}">`
       + check(key)
       + `<span class="tile-thumb genre-${songTone(s)}"><img loading="lazy" draggable="false" alt="" src="/api/sheets/${s.id}/page/1?w=400&v=${sheetVer(s)}" /></span>`
-      + `<span class="tile-name">${escapeHtml(s.title || '제목 없음')}</span><small>${sub}</small>${pathHtml(s.folderId)}</div>`;
+      + (renaming === key
+        ? `<input class="tile-rename" value="${escapeHtml(s.title || '')}" maxlength="80" aria-label="악보 제목" />`
+        : `<span class="tile-name">${escapeHtml(s.title || '제목 없음')}</span>`)
+      + `<small>${sub}</small>${pathHtml(s.folderId)}</div>`;
   }).join('');
   if (!html) {
     html = `<p class="ex-empty">${query ? `“${escapeHtml(query)}” 에 맞는 것이 없습니다.`
@@ -183,6 +198,7 @@ function paintSelection() {
   gridEl.querySelectorAll('.tile').forEach((t) => {
     const on = selected.has(keyOf(t));
     t.classList.toggle('is-sel', on);
+    t.classList.toggle('is-cut', clipboard.includes(keyOf(t)));
     const c = t.querySelector('.tile-check');
     if (c) c.textContent = on ? '✓' : '';
   });
@@ -228,16 +244,28 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('.tile') || offLimits(e.target) || !e.target.closest('.sheets') || e.target.closest('#ctx')) return;
   if (selected.size) { selected.clear(); paintSelection(); }      /* 빈 곳을 누르면 고른 것이 풀린다 */
 });
+function openTile(tile) {
+  if (!tile) return;
+  if (tile.dataset.f) enter(Number(tile.dataset.f));
+  else { const s = sheetById(Number(tile.dataset.s)); if (s) openViewer(s); }
+}
+document.addEventListener('pointerdown', (e) => { lastPointerType = e.pointerType || 'mouse'; }, true);
 gridEl.addEventListener('click', (e) => {
   if (suppressClick) { suppressClick = false; return; }
   if (e.target.closest('.tile-rename')) return;
   const tile = e.target.closest('.tile');
   if (!tile) return;
   if (e.shiftKey) { rangeSel(tile); return; }
-  if (e.ctrlKey || e.metaKey || selected.size) { toggleSel(tile); return; }
+  if (e.ctrlKey || e.metaKey) { toggleSel(tile); return; }
+  /* 터치: 탭이 곧 열기(고른 게 있으면 고르기). 마우스: 탐색기처럼 클릭은 이것 하나 고르기, 열기는 더블클릭 */
+  if (lastPointerType === 'touch') { if (selected.size) toggleSel(tile); else openTile(tile); return; }
+  selected = new Set([keyOf(tile)]);
   lastKey = keyOf(tile);
-  if (tile.dataset.f) enter(Number(tile.dataset.f));
-  else { const s = sheetById(Number(tile.dataset.s)); if (s) openViewer(s); }
+  paintSelection();
+});
+gridEl.addEventListener('dblclick', (e) => {
+  if (e.target.closest('.tile-rename')) return;
+  openTile(e.target.closest('.tile'));
 });
 gridEl.addEventListener('keydown', (e) => {
   const tile = e.target.closest('.tile');
@@ -299,6 +327,8 @@ searchEl.addEventListener('input', () => {
 gridEl.addEventListener('keydown', async (e) => {
   const inp = e.target.closest('.tile-rename');
   if (!inp) return;
+  /* 여기서 끝낸다 — 이 Enter 가 문서 처리기까지 올라가면, 입력칸이 이미 사라진 뒤라 '고른 것 열기' 로 읽힌다 */
+  e.stopPropagation();
   if (e.key === 'Enter') { e.preventDefault(); await commitRename(inp); }
   else if (e.key === 'Escape') { e.preventDefault(); renaming = null; paint(); }
 });
@@ -307,9 +337,21 @@ gridEl.addEventListener('focusout', (e) => {
   if (inp && renaming !== null) commitRename(inp);      /* 탐색기처럼 밖을 누르면 그대로 확정 */
 });
 async function commitRename(inp) {
-  let id = renaming;
+  const key = renaming;
   const name = inp.value.trim();
   renaming = null;
+  if (!key) { paint(); return; }
+  if (key.startsWith('s:')) {                /* 악보 제목 */
+    const s = sheetById(Number(key.slice(2)));
+    if (!s || !name || name === s.title) { paint(); return; }
+    const before = s.title;
+    s.title = name;
+    paint();
+    const ok = await Writes.commit(null, `sheet:${s.id}`, () => api.put('/sheets/' + s.id, { title: name }), (err) => say(err.message));
+    if (!ok) { s.title = before; paint(); }
+    return;
+  }
+  let id = Number(key.slice(2));
   const f = folderById(id);
   if (!f || !name || name === f.name) { paint(); return; }
   const before = f.name;
@@ -331,17 +373,19 @@ function openCtx(x, y, tile) {
   let items;
   if (tile && selected.size > 1 && selected.has(key)) {
     ctxTarget = { kind: 'multi', keys: [...selected] };
-    items = [['move', `${selected.size}개 이동…`], ['delete', `${selected.size}개 삭제`], ['unselect', '선택 해제']];
+    items = [['cut', `${selected.size}개 잘라내기`], ['move', `${selected.size}개 이동…`], ['delete', `${selected.size}개 삭제`], ['unselect', '선택 해제']];
   } else if (tile && tile.dataset.f) {
     ctxTarget = { kind: 'folder', id: Number(tile.dataset.f), keys: [key] };
-    items = [['open', '열기'], ['rename', '이름 바꾸기'], ['move', '이동…'], ['delete', '삭제'], ['select', '선택']];
+    items = [['open', '열기'], ['rename', '이름 바꾸기'], ['cut', '잘라내기'], ['move', '이동…'], ['delete', '삭제'], ['select', '선택']];
   } else if (tile) {
     ctxTarget = { kind: 'sheet', id: Number(tile.dataset.s), keys: [key] };
-    items = [['open', '열기'], ['move', '이동…'], ['replace', '파일 바꾸기'], ['edit', '정보 수정'], ['delete', '삭제'], ['select', '선택']];
+    items = [['open', '열기'], ['rename', '이름 바꾸기'], ['cut', '잘라내기'], ['move', '이동…'], ['replace', '파일 바꾸기'], ['edit', '정보 수정'], ['delete', '삭제'], ['select', '선택']];
   } else {
     ctxTarget = { kind: 'empty' };
-    items = [['new', '새 폴더'], ['upload', '올리기…'], ['sep', '정렬'],
-      ...Object.entries(SORTS).map(([k, [label]]) => ['sort:' + k, label])];
+    items = [['new', '새 폴더'], ['upload', '올리기…']];
+    if (clipboard.length) items.push(['paste', `붙여넣기 (${clipboard.length}개)`]);
+    if (undoAction) items.push(['undo', `실행 취소: ${undoAction.label}`]);
+    items.push(['sep', '정렬'], ...Object.entries(SORTS).map(([k, [label]]) => ['sort:' + k, label]));
     if (selected.size) items.push(['unselect', '선택 해제']);
   }
   ctxEl.innerHTML = items.map(([act, label]) => (act === 'sep'
@@ -380,11 +424,43 @@ document.addEventListener('pointermove', (e) => {
 });
 ['pointerup', 'pointercancel', 'dragstart'].forEach((ev) => document.addEventListener(ev, () => clearTimeout(pressTimer)));
 document.addEventListener('click', (e) => { if (!ctxEl.hidden && !e.target.closest('#ctx')) closeCtx(); });
+/* 키보드 — 탐색기 관례. 뷰어·창·입력칸이 열려 있으면 끼어들지 않는다 */
+function selectedTiles() { return [...gridEl.querySelectorAll('.tile')].filter((t) => selected.has(keyOf(t))); }
+function focusTile(t) { if (t) { t.focus(); selected = new Set([keyOf(t)]); lastKey = keyOf(t); paintSelection(); } }
 document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return;
-  if (!ctxEl.hidden) { closeCtx(); return; }
-  if (renaming !== null) { renaming = null; paint(); return; }
-  if (selected.size && viewer.hidden) { selected.clear(); paint(); }
+  if (e.key === 'Escape') {
+    if (!ctxEl.hidden) { closeCtx(); return; }
+    if (renaming !== null) { renaming = null; paint(); return; }
+    if (clipboard.length) { clipboard = []; paintSelection(); return; }
+    if (selected.size && viewer.hidden) { selected.clear(); paintSelection(); }
+    return;
+  }
+  if (!viewer.hidden || !ctxEl.hidden || document.querySelector('.modal-backdrop')) return;
+  const a = document.activeElement;
+  const src = e.target && e.target.closest ? e.target : null;       /* 눌린 곳 기준 — 입력칸은 처리 중에 사라질 수 있다 */
+  if (src && src.closest('input, textarea, select, [contenteditable]')) return;
+  if (a && (a.matches('input, textarea, select') || a.isContentEditable)) return;
+  const tiles = [...gridEl.querySelectorAll('.tile')];
+  const focused = a && a.closest ? a.closest('.tile') : null;
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); selected = new Set(tiles.map(keyOf)); paintSelection(); return; }
+  if (mod && e.key.toLowerCase() === 'x') { if (selected.size) { clipboard = [...selected]; paintSelection(); say(`${clipboard.length}개 잘라냄 · 붙여넣을 폴더에서 Ctrl+V`); } return; }
+  if (mod && e.key.toLowerCase() === 'v') { if (clipboard.length) { const keys = clipboard; clipboard = []; move(keys, cur); } return; }
+  if (mod && e.key.toLowerCase() === 'z') { if (undoAction) { e.preventDefault(); undo(); } return; }
+  if (mod) return;
+  if (e.key === 'Enter') { const t = focused || (selected.size === 1 && selectedTiles()[0]); if (t) { e.preventDefault(); openTile(t); } return; }
+  if (e.key === 'Delete') { if (selected.size) { e.preventDefault(); deleteKeys([...selected]); } return; }
+  if (e.key === 'F2') { if (selected.size === 1) { e.preventDefault(); renaming = [...selected][0]; paint(); } return; }
+  if (e.key === 'Backspace') { if (cur !== null) { e.preventDefault(); enter(folderById(cur)?.parentId ?? null); } return; }
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) && tiles.length) {
+    e.preventDefault();
+    const i = Math.max(0, tiles.indexOf(focused || selectedTiles()[0]));
+    const top0 = tiles[0].offsetTop;
+    const cols = Math.max(1, tiles.filter((t) => t.offsetTop === top0).length);
+    const d = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
+    const j = focused || selected.size ? i + d : 0;
+    if (j >= 0 && j < tiles.length) focusTile(tiles[j]);
+  }
 });
 addEventListener('scroll', closeCtx, { passive: true });
 addEventListener('resize', closeCtx);
@@ -401,7 +477,10 @@ ctxEl.addEventListener('click', async (e) => {
       if (t.kind === 'folder') enter(t.id);
       else { const s = sheetById(t.id); if (s) openViewer(s); }
       return;
-    case 'rename': renaming = t.id; paint(); return;
+    case 'rename': renaming = t.keys[0]; paint(); return;
+    case 'cut': clipboard = [...t.keys]; paintSelection(); say(`${clipboard.length}개 잘라냄 · 붙여넣을 폴더에서 붙여넣기`); return;
+    case 'paste': { const keys = clipboard; clipboard = []; move(keys, cur); return; }
+    case 'undo': return undo();
     case 'move': return moveByPicker(t.keys);
     case 'delete': return deleteKeys(t.keys);
     case 'replace': replaceInput.dataset.sheet = String(t.id); replaceInput.value = ''; replaceInput.click(); return;
@@ -424,16 +503,16 @@ $('upload-btn').addEventListener('click', () => { closeCtx(); fileInput.click();
 async function newFolder() {
   if (creating) return;                      /* 번호 기다리는 새 폴더가 이미 있다 */
   folders.push({ id: TEMP, name: '새 폴더', parentId: cur, count: 0, folders: 0 });
-  renaming = TEMP;                           /* 탐색기처럼 '새 폴더' 로 바로 생기고 그 자리에서 이름을 고친다 */
+  renaming = TEMP_KEY;                       /* 탐색기처럼 '새 폴더' 로 바로 생기고 그 자리에서 이름을 고친다 */
   paint();
   creating = Writes.commit(null, 'folders',
     () => api.post('/sheets/folders', { parentId: cur, createdBy: Nick.get() || null }), (err) => say(err.message))
     .then((made) => {
       creating = null;
       const f = folderById(TEMP);
-      if (!made) { folders = folders.filter((x) => x.id !== TEMP); if (renaming === TEMP) renaming = null; paint(); return null; }
+      if (!made) { folders = folders.filter((x) => x.id !== TEMP); if (renaming === TEMP_KEY) renaming = null; paint(); return null; }
       if (f) f.id = made.id;
-      if (renaming === TEMP) renaming = made.id;
+      if (renaming === TEMP_KEY) renaming = 'f:' + made.id;
       /* 이름을 치는 중이면 다시 그리지 않는다(입력이 날아간다) — 타일의 번호만 바꾼다 */
       const tile = gridEl.querySelector('[data-f="' + TEMP + '"]');
       if (tile) tile.dataset.f = String(made.id);
@@ -446,10 +525,27 @@ async function move(keys, folderId) {
   const { sheets: sIds, folders: fIds } = splitKeys(keys);
   const target = folderId === null ? '악보(맨 위)' : (folderById(folderId) || {}).name || '폴더';
   if (fIds.some((id) => folderId !== null && descendants(id).has(folderId))) { say('폴더를 자기 안으로 옮길 수는 없습니다.'); return; }
-  sIds.forEach((id) => { const s = sheetById(id); if (s) s.folderId = folderId; });      /* 먼저 옮겨 보여 준다 */
+  const prevS = sIds.map((id) => [id, sheetById(id)?.folderId ?? null, sheetById(id)?.order ?? null]);
+  const prevF = fIds.map((id) => [id, folderById(id)?.parentId ?? null]);
+  sIds.forEach((id) => { const s = sheetById(id); if (s) { s.folderId = folderId; s.order = null; } });   /* 먼저 옮겨 보여 준다 */
   fIds.forEach((id) => { const f = folderById(id); if (f) f.parentId = folderId; });
   selected.clear();
-  say(`${keys.length}개 → ${target}`);
+  clipboard = clipboard.filter((k) => !keys.includes(k));
+  undoAction = { label: `${keys.length}개 → ${target}`, run: async () => {
+    prevS.forEach(([id, fid, ord]) => { const s = sheetById(id); if (s) { s.folderId = fid; s.order = ord; } });
+    prevF.forEach(([id, pid]) => { const f = folderById(id); if (f) f.parentId = pid; });
+    paint();
+    const groups = new Map();
+    prevS.forEach(([id, fid]) => { const g = groups.get(fid) || []; g.push(id); groups.set(fid, g); });
+    for (const [fid, ids] of groups) await api.post('/sheets/bulk', { ids, folderId: fid });
+    for (const [id, pid] of prevF) await api.put('/sheets/folders/' + id, { parentId: pid });
+    const back = prevS.filter(([, , ord]) => ord != null).sort((a, b) => a[2] - b[2]);
+    for (const [fid] of groups) {
+      const ids = sheets.filter((s) => (s.folderId ?? null) === (fid ?? null)).sort(byOrder).map((s) => s.id);
+      if (back.length && ids.length) await api.post('/sheets/order', { ids });
+    }
+  } };
+  say(`${keys.length}개 → ${target}`, false, true);
   paint();
   const ok = await Writes.commit(null, 'sheets:move', async () => {
     if (sIds.length) await api.post('/sheets/bulk', { ids: sIds, folderId });
@@ -468,8 +564,15 @@ function reorder(keys, beforeId, after) {
   if (at < 0) at = list.length;
   if (after && beforeId != null) at += 1;
   const ids = [...list.slice(0, at), ...moving, ...list.slice(at)];
+  const prev = viewSheets().map((s) => [s.id, s.order ?? null]);
   ids.forEach((id, i) => { const s = sheetById(id); if (s) s.order = i + 1; });
   selected.clear();
+  undoAction = { label: '순서 바꾸기', run: async () => {
+    prev.forEach(([id, ord]) => { const s = sheetById(id); if (s) s.order = ord; });
+    paint();
+    await api.post('/sheets/order', { ids: prev.map(([id]) => id) });
+  } };
+  say('순서 바꿈', false, true);
   paint();
   Writes.commit(null, 'sheets:order', () => api.post('/sheets/order', { ids }), (err) => { say(err.message); refresh().catch(console.error); });
 }
@@ -599,11 +702,11 @@ function editInfo(sheet) {
 }
 
 /* ---------- 올리기 — PDF 를 떨어뜨리거나 메뉴의 '올리기…' ---------- */
-async function uploadFiles(fileList, folderId) {
+async function uploadFiles(fileList, folderId, quiet) {
   const pdfs = [...fileList].filter((f) => /\.pdf$/i.test(f.name || '') || f.type === 'application/pdf');
-  if (!pdfs.length) { say('PDF 파일만 올릴 수 있습니다.'); return; }
+  if (!pdfs.length) { say('PDF 파일만 올릴 수 있습니다.'); return 0; }
   const who = await Nick.ensure();
-  if (!who) return;
+  if (!who) return 0;
   const target = folderId === null ? '' : ` → ${(folderById(folderId) || {}).name || '폴더'}`;
   const meta = [];
   try {
@@ -621,13 +724,60 @@ async function uploadFiles(fileList, folderId) {
   form.append('meta', JSON.stringify(meta));
   pdfs.forEach((f) => form.append('files', f));
   say(`올리는 중 ${pdfs.length}개${target}…`, true);
+  let made = 0;
   try {
     const res = await api.post('/sheets', form);
     const skipped = res.skipped || [];
-    say(`${res.created.length}개 올렸습니다${target}` + (skipped.length ? ' · 제외: ' + skipped.map((s) => `${s.fileName} (${s.reason})`).join(', ') : ''));
+    made = res.created.length;
+    if (!quiet) say(`${made}개 올렸습니다${target}` + (skipped.length ? ' · 제외: ' + skipped.map((s) => `${s.fileName} (${s.reason})`).join(', ') : ''));
   } catch (err) {
+    if (quiet) throw err;
     say('올리지 못했습니다. ' + (err.message || ''));
   }
+  if (!quiet) refresh().catch(console.error);
+  return made;
+}
+/* 폴더째 떨어뜨리기 — 폴더 구조 그대로 폴더를 만들고 PDF 를 그 안에 올린다 */
+function readEntry(entry, path, out) {
+  return new Promise((resolve) => {
+    if (entry.isFile) { entry.file((f) => { out.push({ path, file: f }); resolve(); }, () => resolve()); return; }
+    if (!entry.isDirectory) { resolve(); return; }
+    const reader = entry.createReader();
+    const all = [];
+    const next = () => reader.readEntries((batch) => {
+      if (!batch.length) { Promise.all(all.map((en) => readEntry(en, [...path, entry.name], out))).then(resolve); return; }
+      all.push(...batch); next();
+    }, () => resolve());
+    next();
+  });
+}
+async function uploadEntries(entries, folderId) {
+  const out = [];
+  await Promise.all(entries.map((en) => readEntry(en, [], out)));
+  const pdfs = out.filter((x) => /\.pdf$/i.test(x.file.name));
+  if (!pdfs.length) { say('PDF 파일이 없습니다.'); return; }
+  const who = await Nick.ensure();
+  if (!who) return;
+  const made = new Map();                    /* 경로 → 폴더 id */
+  const dirId = async (path) => {
+    if (!path.length) return folderId;
+    const k = path.join('/');
+    if (made.has(k)) return made.get(k);
+    const parent = await dirId(path.slice(0, -1));
+    const f = await api.post('/sheets/folders', { name: path[path.length - 1].slice(0, 30), parentId: parent, createdBy: who });
+    made.set(k, f.id);
+    return f.id;
+  };
+  const groups = new Map();
+  for (const x of pdfs) { const k = x.path.join('/'); if (!groups.has(k)) groups.set(k, { path: x.path, files: [] }); groups.get(k).files.push(x.file); }
+  let n = 0;
+  try {
+    for (const g of groups.values()) {
+      const fid = await dirId(g.path);
+      n += await uploadFiles(g.files, fid, true);
+    }
+    say(`${n}개 올렸습니다 · 폴더 ${made.size}개 만듦`);
+  } catch (err) { say('올리지 못했습니다. ' + (err.message || '')); }
   refresh().catch(console.error);
 }
 fileInput.addEventListener('change', () => {
@@ -706,7 +856,9 @@ document.addEventListener('drop', (e) => {
   if (!t) return;
   e.preventDefault();
   if (hasFiles(e.dataTransfer)) {
-    if (t.sheet) replaceFile(t.sheet, e.dataTransfer.files[0]);
+    if (t.sheet) { replaceFile(t.sheet, e.dataTransfer.files[0]); return; }
+    const entries = [...(e.dataTransfer.items || [])].map((it) => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null)).filter(Boolean);
+    if (entries.some((en) => en.isDirectory)) uploadEntries(entries, t.folderId ?? cur);   /* 폴더째 끌어오면 폴더로 생긴다 */
     else uploadFiles(e.dataTransfer.files, t.folderId ?? cur);
     return;
   }

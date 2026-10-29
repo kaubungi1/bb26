@@ -51,6 +51,10 @@
 .tile.is-sel { background: var(--teal-soft); outline-color: var(--teal); }
 .tile.is-over { background: color-mix(in srgb, var(--teal) 16%, #fff); outline-color: var(--teal-deep); }
 .tile.is-dragging { opacity: 0.45; }
+.tile.is-cut { opacity: 0.5; }                              /* 잘라낸 것 — 붙여넣기 전까지 흐리게 */
+.ex-undo { min-height: 0; margin-left: 8px; padding: 2px 8px; border: 0; border-radius: 0; background: none; box-shadow: none;
+  color: var(--teal-deep); font-size: 12px; font-weight: 800; text-decoration: underline; }
+.ex-undo:hover { background: none; box-shadow: none; filter: none; color: var(--ink); }
 .tile-icon { width: 84px; height: 64px; display: block; }
 .tile-icon svg { width: 100%; height: 100%; fill: color-mix(in srgb, var(--teal) 55%, #fff); stroke: var(--teal-deep); stroke-width: 2; stroke-linejoin: round; }
 .tile.folder .tile-icon { margin-top: 6px; }
