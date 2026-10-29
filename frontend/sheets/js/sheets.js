@@ -157,7 +157,7 @@ function paint() {
     const sub = [s.artist, s.pages ? s.pages + '쪽' : '', fmtSize(s.sizeBytes)].filter(Boolean).map(escapeHtml).join(' · ');
     return `<div class="tile sheet${selected.has(key) ? ' is-sel' : ''}" data-s="${s.id}" draggable="true" tabindex="0" role="button" aria-label="${escapeHtml(s.title || '제목 없음')}">`
       + check(key)
-      + `<span class="tile-thumb genre-${songTone(s)}"><img loading="lazy" alt="" src="/api/sheets/${s.id}/page/1?w=400&v=${sheetVer(s)}" /></span>`
+      + `<span class="tile-thumb genre-${songTone(s)}"><img loading="lazy" draggable="false" alt="" src="/api/sheets/${s.id}/page/1?w=400&v=${sheetVer(s)}" /></span>`
       + `<span class="tile-name">${escapeHtml(s.title || '제목 없음')}</span><small>${sub}</small>${pathHtml(s.folderId)}</div>`;
   }).join('');
   if (!html) {
@@ -284,16 +284,20 @@ function openCtx(x, y, tile) {
   ctxEl.querySelector('.menu-item').focus();
 }
 function closeCtx() { ctxEl.hidden = true; }
-gridEl.addEventListener('contextmenu', (e) => {
-  if (e.target.closest('.tile-rename')) return;
+/* 페이지 어디든 — 타일이 아니면 '빈 곳' 이다. 격자 상자 안으로 좁히면 타일이 꽉 찬 화면에선 틈새만 남고,
+   악보 영역으로 좁혀도 넓은 화면의 좌우 여백이 빠진다(2026-10-30 제보 둘). 머리띠·탭바·뷰어·입력칸·버튼만 뺀다. */
+const offLimits = (el) => !!el.closest('#app-header, #app-tabbar, .viewer, .pair-modal, .pair-standby, .modal-backdrop, #ctx, input, textarea, button, a, .crumbs');
+const onControl = (el) => offLimits(el) && !el.closest('.tile');
+document.addEventListener('contextmenu', (e) => {
+  if (e.target.closest('.tile-rename') || onControl(e.target)) return;
   e.preventDefault();
   openCtx(e.clientX, e.clientY, e.target.closest('.tile'));
 });
 /* 길게 누르기(터치). 움직이거나 끌기가 시작되면 메뉴가 아니다 */
 let pressTimer = null;
 let pressAt = null;
-gridEl.addEventListener('pointerdown', (e) => {
-  if (e.pointerType !== 'touch') return;
+document.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch' || onControl(e.target)) return;
   pressAt = { x: e.clientX, y: e.clientY, tile: e.target.closest('.tile') };
   clearTimeout(pressTimer);
   pressTimer = setTimeout(() => {
@@ -301,10 +305,10 @@ gridEl.addEventListener('pointerdown', (e) => {
     openCtx(pressAt.x, pressAt.y, pressAt.tile);
   }, LONG_PRESS_MS);
 });
-gridEl.addEventListener('pointermove', (e) => {
+document.addEventListener('pointermove', (e) => {
   if (pressAt && Math.hypot(e.clientX - pressAt.x, e.clientY - pressAt.y) > 8) clearTimeout(pressTimer);
 });
-['pointerup', 'pointercancel', 'dragstart'].forEach((ev) => gridEl.addEventListener(ev, () => clearTimeout(pressTimer)));
+['pointerup', 'pointercancel', 'dragstart'].forEach((ev) => document.addEventListener(ev, () => clearTimeout(pressTimer)));
 document.addEventListener('click', (e) => { if (!ctxEl.hidden && !e.target.closest('#ctx')) closeCtx(); });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
@@ -339,6 +343,9 @@ ctxEl.addEventListener('click', async (e) => {
 });
 
 /* ---------- 동작 ---------- */
+$('new-folder-btn').addEventListener('click', () => { closeCtx(); newFolder(); });
+$('upload-btn').addEventListener('click', () => { closeCtx(); fileInput.click(); });
+
 async function newFolder() {
   if (creating) return;                      /* 번호 기다리는 새 폴더가 이미 있다 */
   folders.push({ id: TEMP, name: '새 폴더', parentId: cur, count: 0, folders: 0 });
@@ -577,10 +584,10 @@ function dropTarget(e) {
   }
   if (tile && files) return { sheet: sheetById(Number(tile.dataset.s)), el: tile };
   if (tile) return null;
-  if (!e.target.closest('#grid')) return null;
-  return { folderId: cur, el: null };
+  if (offLimits(e.target)) return null;
+  return { folderId: cur, el: null };      /* 타일이 아닌 곳이면 페이지 어디든 보는 폴더 */
 }
-explorerEl.addEventListener('dragover', (e) => {
+document.addEventListener('dragover', (e) => {
   const t = dropTarget(e);
   explorerEl.querySelectorAll('.is-over').forEach((el) => el.classList.remove('is-over'));
   explorerEl.classList.toggle('is-over', !!t && !t.el);
@@ -589,13 +596,13 @@ explorerEl.addEventListener('dragover', (e) => {
   e.dataTransfer.dropEffect = hasFiles(e.dataTransfer) ? 'copy' : 'move';
   if (t.el) t.el.classList.add('is-over');
 });
-explorerEl.addEventListener('dragleave', (e) => {
-  if (!explorerEl.contains(e.relatedTarget)) {
+document.addEventListener('dragleave', (e) => {
+  if (!e.relatedTarget) {
     explorerEl.querySelectorAll('.is-over').forEach((el) => el.classList.remove('is-over'));
     explorerEl.classList.remove('is-over');
   }
 });
-explorerEl.addEventListener('drop', (e) => {
+document.addEventListener('drop', (e) => {
   const t = dropTarget(e);
   explorerEl.querySelectorAll('.is-over').forEach((el) => el.classList.remove('is-over'));
   explorerEl.classList.remove('is-over');
@@ -610,7 +617,7 @@ explorerEl.addEventListener('drop', (e) => {
   if (!keys) { try { keys = JSON.parse(e.dataTransfer.getData(KIND) || '[]'); } catch { keys = []; } }
   if (keys && keys.length && 'folderId' in t) move(keys, t.folderId);
 });
-/* 탐색기 밖에 떨어뜨리면 브라우저가 PDF 를 열어 버린다 — 막는다 */
+/* 머리띠 같은 금지 구역에 떨어뜨려도 브라우저가 PDF 를 열지 않게 */
 document.addEventListener('dragover', (e) => { if (hasFiles(e.dataTransfer)) e.preventDefault(); });
 document.addEventListener('drop', (e) => { if (hasFiles(e.dataTransfer)) e.preventDefault(); });
 

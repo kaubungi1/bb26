@@ -38,8 +38,10 @@
 /* ---------- 타일 격자 ----------
    폴더가 먼저, 악보가 뒤. 폴더는 아이콘, 악보는 1쪽 그림이 주인공이다.
    빈 곳이 곧 '보는 폴더에 떨어뜨리는 자리' 라 격자 아래에 여백을 둔다. */
+/* 탐색기는 화면 아래까지 차지한다 — 타일 아래 빈 바탕이 우클릭·떨어뜨리기 자리다 */
+.sheets .explorer { display: flex; flex-direction: column; min-height: calc(100vh - 150px); }
 .ex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 16px;
-  align-content: start; min-height: 260px; padding: 6px 4px 60px; border: 2px dashed transparent; }
+  align-content: start; flex: 1; min-height: 260px; padding: 6px 4px 120px; border: 2px dashed transparent; }
 .explorer.is-over .ex-grid { border-color: color-mix(in srgb, var(--teal) 55%, transparent); background: color-mix(in srgb, var(--teal) 5%, transparent); }
 .tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px 8px;
   border-radius: 0; background: transparent; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;

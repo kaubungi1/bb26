@@ -1,3 +1,4 @@
+import hashlib
 import os
 import time
 
@@ -380,15 +381,35 @@ def init_db():
         _init_db()
 
 
+# 기동 때 전부 돌리면 Neon 왕복(72ms)이 77문장 × 실행·커밋 두 번 ≈ 11초가 매 기동·매 리로드마다 들었다(2026-10-30 측정).
+# 스키마와 마이그레이션 글 전체의 지문을 "schemaMeta" 에 적어 두고, 같으면 건너뛴다(왕복 두 번, 0.2초).
+# db.py 의 스키마나 마이그레이션을 고치면 지문이 달라져 그 첫 기동에만 전부 돈다.
+# 손으로 DB 를 바꿔서 다시 돌리고 싶으면: DELETE FROM "schemaMeta" WHERE "key"='fingerprint'
+META_SQL = ('CREATE TABLE IF NOT EXISTS "schemaMeta" ("key" TEXT PRIMARY KEY, "value" TEXT NOT NULL, '
+            '"updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now())')
+
+
+def _fingerprint():
+    return hashlib.sha1((SCHEMA + '\n'.join(MIGRATIONS)).encode('utf-8')).hexdigest()
+
+
 def _init_db():
     conn = get_db()
+    conn.autocommit = True            # 문장마다 커밋하던 왕복을 없앤다. 실패한 문장은 아래서 하나씩 넘긴다
+    fp = _fingerprint()
+    conn.execute(META_SQL)
+    row = conn.execute('SELECT "value" FROM "schemaMeta" WHERE "key"=%s', ('fingerprint',)).fetchone()
+    if row and row['value'] == fp:
+        conn.close()
+        print('[migration] 스키마 지문 같음 — 건너뜀')
+        return
     conn.execute(SCHEMA)
-    conn.commit()
     for statement in MIGRATIONS:
         try:
             conn.execute(statement)
-            conn.commit()
         except Exception as exc:          # 이미 적용된 항목은 넘어간다
-            conn.rollback()
             print(f'[migration] 건너뜀: {statement[:60]}... ({exc})')
+    conn.execute('INSERT INTO "schemaMeta" ("key","value") VALUES (%s,%s) '
+                 'ON CONFLICT ("key") DO UPDATE SET "value"=EXCLUDED."value", "updatedAt"=now()', ('fingerprint', fp))
     conn.close()
+    print(f'[migration] 전부 돌림 ({len(MIGRATIONS)}문장), 지문 {fp[:8]}')
