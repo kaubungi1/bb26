@@ -42,6 +42,13 @@ let editingId = null;
 let editRole = '';            /* 수정 중인 줄의 파트 */
 let editTag = '';             /* 수정 중인 줄의 태그 */
 let openDrop = null;          /* 열려 있는 도구줄 메뉴 — 'role' | 'tag' | null */
+/* 폴더(파일철, 2026-10-29). 한 단계. 보는 폴더는 'all' | 'none'(미분류) | 폴더 id */
+let folders = [];
+let unfiled = 0;
+let totalCount = 0;
+let curFolder = 'all';
+let upFolder = null;          /* 올릴 폴더 id, null = 미분류 */
+let folderForm = null;        /* 폴더 줄의 인라인 입력 — {mode:'new'} | {mode:'rename', id} | null */
 
 const $ = (id) => document.getElementById(id);
 const listEl = $('list');
@@ -94,6 +101,13 @@ function renderTools() {
   bindChips($('bulk-tags'), TAGS.map((t) => chipHtml(t, t, false)).join(''),
     (v) => applyBulk({ tag: v }));
 
+  /* 올릴 폴더와 일괄 '폴더로 옮기기'. 미분류 + 폴더들. 폴더를 골라 둔 채 열면 그 폴더가 켜져 있다 */
+  const folderChips = (on) => chipHtml('', '미분류', on === null)
+    + folders.map((f) => chipHtml(String(f.id), f.name, on === f.id)).join('');
+  bindChips($('up-folder'), folderChips(upFolder), (v) => { upFolder = v ? Number(v) : null; renderTools(); });
+  bindChips($('bulk-folder'), folderChips(undefined), (v) => applyBulk({ folderId: v ? Number(v) : null }));
+  renderFolders();
+
   bindChips($('bulk-role'), ROLES.map((r) => chipHtml(r, r, false)).join(''),
     (v) => applyBulk({ role: v }));
 
@@ -113,6 +127,95 @@ function renderTools() {
     $('drop-' + k).classList.toggle('is-open', openDrop === k);
   }
 }
+
+/* ---------- 폴더 줄 ----------
+   전체(n) · 미분류(n) · 폴더(n)… · ＋ 새 폴더. 고른 것은 잉크 칩. 폴더를 골랐을 때만 다루기 버튼.
+   이름은 브라우저 입력창 대신 줄 안의 작은 칸에 친다. */
+function renderFolders() {
+  const line = $('folder-line');
+  const cur = curFolder;
+  let html = chipHtml('all', '전체', cur === 'all', totalCount)
+    + chipHtml('none', '미분류', cur === 'none', unfiled)
+    + folders.map((f) => chipHtml(String(f.id), f.name, cur === f.id, f.count)).join('');
+  if (folderForm) {
+    const f = folderForm.mode === 'rename' ? folders.find((x) => x.id === folderForm.id) : null;
+    html += '<form class="folder-form" data-folder-form>'
+      + '<input type="text" maxlength="30" placeholder="폴더 이름" value="' + escapeHtml(f ? f.name : '') + '" aria-label="폴더 이름" />'
+      + '<button type="submit" class="pink mini">' + (f ? '바꾸기' : '만들기') + '</button>'
+      + '<button type="button" class="ghost mini" data-folder-cancel>취소</button></form>';
+  } else {
+    html += '<button type="button" class="chip folder-add" data-folder-new>＋ 새 폴더</button>';
+  }
+  const at = folders.findIndex((f) => f.id === cur);
+  if (at >= 0 && !folderForm) {
+    html += '<span class="folder-acts">'
+      + '<button type="button" class="ghost mini" data-folder-rename>이름 바꾸기</button>'
+      + (at > 0 ? '<button type="button" class="ghost mini" data-folder-move="-1" aria-label="앞으로">◀</button>' : '')
+      + (at < folders.length - 1 ? '<button type="button" class="ghost mini" data-folder-move="1" aria-label="뒤로">▶</button>' : '')
+      + '<button type="button" class="ghost mini danger" data-folder-delete>폴더 지우기</button></span>';
+  }
+  line.innerHTML = html;
+  if (folderForm) { const inp = line.querySelector('input'); inp.focus(); inp.select(); }
+}
+
+$('folder-line').addEventListener('click', async (e) => {
+  if (e.target.closest('[data-folder-new]')) { folderForm = { mode: 'new' }; renderFolders(); return; }
+  if (e.target.closest('[data-folder-cancel]')) { folderForm = null; renderFolders(); return; }
+  if (e.target.closest('[data-folder-rename]')) { folderForm = { mode: 'rename', id: curFolder }; renderFolders(); return; }
+  const mv = e.target.closest('[data-folder-move]');
+  if (mv) {
+    const ids = folders.map((f) => f.id);
+    const i = ids.indexOf(curFolder), j = i + Number(mv.dataset.folderMove);
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    const ok = await Writes.commit(mv, 'folders', () => api.post('/sheets/folders/order', { ids }));
+    if (ok) refresh().catch(console.error);
+    return;
+  }
+  const del = e.target.closest('[data-folder-delete]');
+  if (del) {
+    const f = folders.find((x) => x.id === curFolder);
+    if (!f) return;
+    const ok = await confirmModal({
+      title: `'${f.name}' 폴더 지우기`,
+      body: f.count ? `안의 악보 <b>${f.count}장</b>은 지워지지 않고 미분류로 갑니다.` : '빈 폴더를 지웁니다.',
+      confirm: '지우기', danger: true,
+    });
+    if (!ok) return;
+    const done = await Writes.commit(del, 'folders', () => api.del('/sheets/folders/' + f.id).then(() => true));
+    if (!done) return;
+    curFolder = 'all';
+    if (upFolder === f.id) upFolder = null;
+    refresh().catch(console.error);
+    return;
+  }
+  const chip = e.target.closest('.chip[data-v]');
+  if (!chip) return;
+  const v = chip.dataset.v;
+  curFolder = v === 'all' || v === 'none' ? v : Number(v);
+  upFolder = typeof curFolder === 'number' ? curFolder : null;   /* 올릴 폴더도 따라간다 */
+  folderForm = null;
+  refresh().catch(console.error);
+});
+
+$('folder-line').addEventListener('submit', async (e) => {
+  const form = e.target.closest('[data-folder-form]');
+  if (!form) return;
+  e.preventDefault();
+  const name = form.querySelector('input').value.trim();
+  if (!name) { form.querySelector('input').focus(); return; }
+  const btn = form.querySelector('[type=submit]');
+  if (folderForm.mode === 'rename') {
+    const ok = await Writes.commit(btn, 'folders', () => api.put('/sheets/folders/' + folderForm.id, { name }));
+    if (!ok) return;
+  } else {
+    const made = await Writes.commit(btn, 'folders', () => api.post('/sheets/folders', { name, createdBy: Nick.get() || null }));
+    if (!made) return;
+    curFolder = made.id;          /* 만든 폴더를 바로 연다 — 다음 일은 거기에 넣는 것이다 */
+    upFolder = made.id;
+  }
+  folderForm = null;
+  refresh().catch(console.error);
+});
 
 /* 도구줄: 메뉴 열고 닫기 + 항목 고르기. 곡 목록과 같은 규칙이다. */
 document.querySelector('.tool-line').addEventListener('click', (e) => {
@@ -161,6 +264,9 @@ function sheetRow(s) {
       '<div class="edit-actions">',
       '<button type="button" class="pink" data-save="', s.id, '">저장</button>',
       '<button type="button" class="ghost" data-cancel>취소</button>',
+      /* 파일 바꾸기 — PDF 만 갈아끼우고 번호·정보는 그대로(2026-10-29). 고르기 창은 숨은 input 이 연다 */
+      '<button type="button" class="ghost" data-replace="', s.id, '">파일 바꾸기</button>',
+      '<input type="file" accept="application/pdf,.pdf" data-replace-file="', s.id, '" hidden />',
       '<button type="button" class="ghost danger" data-del="', s.id, '">삭제</button>',
       '</div></div></li>',
     ].join('');
@@ -179,13 +285,16 @@ function sheetRow(s) {
     /* 1쪽 썸네일 — 화면에 보일 때만 받는다(lazy). 선택 모드가 아니면 눌러서 바로 연다.
        못 그린 악보는 이미지만 숨고 장르색 바탕이 남는다. 홈·곡의 자켓과 같은 규칙이다. */
     '<span class="sheet-thumb genre-', songTone(s), '">',
-    '<img class="th-img" loading="lazy" alt="" src="/api/sheets/', s.id, '/page/1?w=400" />',
+    '<img class="th-img" loading="lazy" alt="" src="/api/sheets/', s.id, '/page/1?w=400&v=', sheetVer(s), '" />',
     '</span>',
     '<span class="sheet-main">',
     '<span class="sheet-title-row">',
     '<span class="sheet-name">', escapeHtml(s.title || '제목 없음'), '</span>',
     '<span class="sheet-role">', escapeHtml(s.role || '분류 없음'), '</span>',
     s.tags ? '<span class="sheet-tag">' + escapeHtml(s.tags) + '</span>' : '',
+    /* 폴더 안에서는 폴더가 곧 문맥이라 적지 않는다. 전체·검색에서만 어느 철인지 글자로 */
+    (curFolder === 'all' || searchEl.value.trim()) && s.folderId
+      ? '<span class="sheet-folder">' + escapeHtml((folders.find((f) => f.id === s.folderId) || {}).name || '') + '</span>' : '',
     '</span>',
     '<span class="sheet-sub">', bits,
     s.uploadedBy ? '<span class="meta-sep">·</span>' + avatarChip(s.uploadedBy, 'tiny') : '', '</span>',
@@ -242,14 +351,20 @@ async function refresh() {
   if (searchEl.value.trim()) params.set('q', searchEl.value.trim());
   if (filterRole) params.set('role', filterRole);
   if (filterTag) params.set('tag', filterTag);
+  /* 검색은 폴더를 가로질러 전체에서 찾는다 — 어느 철에 넣었는지 기억 못 해도 찾혀야 한다 */
+  if (curFolder !== 'all' && !searchEl.value.trim()) params.set('folder', String(curFolder));
   const qs = params.toString();
-  const [rows, counts] = await Promise.all([
+  const [rows, counts, fl] = await Promise.all([
     api.get('/sheets' + (qs ? '?' + qs : '')),
     api.get('/sheets/tag-counts'),
+    api.get('/sheets/folders'),
   ]);
   if (seq !== refreshSeq) return;   /* 뒤늦게 도착한 이전 검색 응답은 버린다 */
   sheets = rows;
   tagCounts = counts;
+  folders = fl.folders; unfiled = fl.unfiled; totalCount = fl.total;
+  if (typeof curFolder === 'number' && !folders.some((f) => f.id === curFolder)) curFolder = 'all';   /* 남이 지운 폴더 */
+  if (upFolder !== null && !folders.some((f) => f.id === upFolder)) upFolder = null;
   selected = new Set([...selected].filter((id) => sheets.some((s) => s.id === id)));
   renderTools();
   paint();
@@ -397,6 +512,7 @@ $('upload-btn').addEventListener('click', async () => {
   form.append('role', upRole);
   form.append('tags', upTag);
   form.append('uploadedBy', uploadedBy);
+  if (upFolder !== null) form.append('folderId', String(upFolder));
   form.append('meta', JSON.stringify(pending.map((p) =>
     ({ title: p.title, artist: p.artist, bpm: p.bpm, pages: p.pages || null,
        tags: p.tag || '' }))));
@@ -489,6 +605,8 @@ listEl.addEventListener('click', async (e) => {
     return;
   }
   if (e.target.closest('[data-cancel]')) { editingId = null; paint(); return; }
+  const rep = e.target.closest('[data-replace]');
+  if (rep) { rep.closest('[data-row]').querySelector('[data-replace-file]').click(); return; }
 
   /* 수정 줄의 파트 / 태그 칩 (둘 다 하나만 고른다) */
   const roleChip = e.target.closest('[data-erole]');
@@ -533,6 +651,26 @@ listEl.addEventListener('click', async (e) => {
   }
 });
 
+/* 파일 바꾸기 — 고른 PDF 를 보내고, 돌려받은 줄(새 쪽수·크기·수정 시각)로 다시 그린다.
+   수정 시각이 바뀌므로 썸네일과 뷰어 주소도 새것이 된다. */
+listEl.addEventListener('change', async (e) => {
+  const input = e.target.closest('[data-replace-file]');
+  if (!input || !input.files || !input.files[0]) return;
+  const id = Number(input.dataset.replaceFile);
+  const file = input.files[0];
+  input.value = '';
+  const btn = listEl.querySelector(`[data-replace="${id}"]`);
+  const form = new FormData();
+  form.append('file', file);
+  const saved = await Writes.commit(btn, `sheet:${id}`, () => api.post('/sheets/' + id + '/file', form));
+  if (!saved) return;
+  editingId = null;
+  putSheets([saved]);
+  statusEl.hidden = false;
+  statusEl.textContent = (saved.title || '악보') + ' 파일을 바꿨습니다' + (saved.pages ? ' · ' + saved.pages + '쪽' : '');
+  setTimeout(() => { statusEl.hidden = true; }, 4000);
+});
+
 /* ---------- 뷰어 ----------
    서버가 그려준 이미지 한 장을 화면에 꽉 맞춰 보여준다. 스크롤은 없다.
    열 때 전 페이지를 미리 받아두므로 넘길 때 네트워크를 타지 않는다 —
@@ -553,7 +691,11 @@ let pageBlobs = [];   /* n -> objectURL. 받아둔 페이지는 네트워크 없
 let bareTimer = null; /* 컨트롤 자동 숨김 */
 let readyTimer = null;
 
-const pageUrl = (id, n) => '/api/sheets/' + id + '/page/' + n;
+/* 쪽 이미지 주소에 수정 시각을 붙인다. 서버가 한 시간 캐시를 주므로, 파일을 바꾸면 주소가 바뀌어야
+   브라우저가 옛 그림을 안 쓴다(2026-10-29). 서버는 v 를 읽지 않는다 — 주소만 다르면 된다. */
+const sheetVer = (s) => String((s && s.updatedAt) || '').replace(/\D/g, '').slice(0, 14);
+let pageVer = '';
+const pageUrl = (id, n) => '/api/sheets/' + id + '/page/' + n + (pageVer ? '?v=' + pageVer : '');
 
 /* 합주 중 화면이 자동 잠금되지 않게 뷰어가 열려 있는 동안 깨워 둔다. */
 let wakeLock = null;
@@ -609,17 +751,28 @@ document.addEventListener('fullscreenchange', paintFs);
 document.addEventListener('webkitfullscreenchange', paintFs);
 
 /* ---------- 페어 (두 아이패드) ----------
-   페어 중에는 "펼침(spread)" 단위로 움직인다. 1번(main)은 홀수쪽, 2번(sub)은
-   짝수쪽을 맡고, 어느 쪽에서 넘겨도 펼침 번호가 함께 넘어간다.
-   pageNo 변수는 솔로일 땐 쪽 번호, 페어일 땐 펼침 번호를 뜻한다. */
+   1번(main)은 홀수쪽, 2번(sub)은 짝수쪽을 맡는다. 넘김은 보면대처럼 한 번에 한 쪽씩 번갈아 간다
+   (2026-10-29 사용자 결정): 1,2 → 3,2 → 3,4 → 5,4 … 어느 기기에서 넘겨도 뒤처진 쪽만 두 쪽 앞으로 가고,
+   지금 보고 치는 쪽은 바뀌지 않는다. 그래서 3쪽짜리는 3,2 에서 끝나고 빈 화면이 없다(악보 절반이 3쪽).
+   전에는 두 기기가 펼침(1,2 → 3,4) 단위로 같이 넘어가 3쪽짜리 끝이 '3, (마지막 쪽)' 이었고,
+   2쪽을 치는 동안엔 넘길 수 없었다.
+   pageNo 변수는 솔로일 땐 쪽 번호, 페어일 땐 걸음(step) 번호다 — 걸음 k 의 두 쪽은 pairPages(k). */
 let pairLinked = false;
 let peerCount = 0;
 let lastTitle = '';
 
 let shownPage = 1;   /* 화면에 실제로 떠 있는 쪽 번호 — 페어가 풀릴 때 기준이 된다 */
 
-function maxStep() { return Pair.active() ? Math.ceil(pageTotal / 2) : pageTotal; }
-function stepPage(n) { return Pair.active() ? (Pair.isSub() ? n * 2 : n * 2 - 1) : n; }
+/* 걸음 k(1부터)에서 두 기기가 보이는 쪽. 걸음마다 한쪽만 두 쪽 간다.
+     k:    1    2    3    4
+     main: 1    3    3    5
+     sub:  2    2    4    4
+   쪽수 N 이면 걸음은 N-1 개(N≥2). 1쪽짜리는 걸음 하나, 2번 기기엔 보일 쪽이 없다. */
+function pairPages(k) {
+  return { main: 2 * Math.ceil((k - 1) / 2) + 1, sub: 2 * Math.floor((k - 1) / 2) + 2 };
+}
+function maxStep() { return Pair.active() ? Math.max(1, pageTotal - 1) : pageTotal; }
+function stepPage(n) { return Pair.active() ? pairPages(n)[Pair.isSub() ? 'sub' : 'main'] : n; }
 
 /* 페어가 끝난 직후 — 보조 기기는 페어 전용 화면에 갇혀 있으니 메인으로 내보내고,
    주 기기는 펼침 번호를 실제 쪽 번호로 되돌려 표시가 어긋나지 않게 한다. */
@@ -776,11 +929,13 @@ function layout() {
   pageImg.style.height = Math.round(ih * s) + 'px';
 }
 
-/* flash 를 주면 쪽수 뱃지가 잠깐 떠오른다 — 넘겼을 때만 그렇게 한다. */
+/* flash 를 주면 쪽수 뱃지가 잠깐 떠오른다 — 이 기기의 쪽이 실제로 바뀌었을 때만.
+   페어에서 넘겨도 내 쪽이 그대로면(치는 중인 기기) 악보 위에 아무것도 띄우지 않는다 — 옆 기기가 넘어가는 게 곧 피드백이다. */
 function showPage(n, flash) {
   if (!currentSheet) return;
   pageNo = Math.min(Math.max(1, n), maxStep());
   const p = stepPage(pageNo);
+  if (flash && p === shownPage && !pageImg.hidden) flash = false;
   if (p > pageTotal) {
     /* 홀수 쪽수 악보의 마지막 펼침 — 보조 화면엔 짝수쪽이 없다 */
     pageImg.removeAttribute('src');
@@ -845,6 +1000,7 @@ function flashHint() {
 /* remote 가 있으면 상대 기기가 연 것 — 다시 send 하지 않고 그 펼침 위치로 맞춘다. */
 async function openViewer(sheet, remote) {
   currentSheet = sheet;
+  pageVer = sheetVer(sheet);
   lastTitle = sheet.title || '';
   viewer.hidden = false;
   viewer.classList.remove('is-bare');       /* 지난번 숨김 상태를 되돌린다 */

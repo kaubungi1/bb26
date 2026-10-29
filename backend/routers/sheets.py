@@ -13,9 +13,32 @@ router = APIRouter()
 
 SHEET_COLS = (
     '"id", "title", "artist", "role", "tags", "bpm", "pages", "note", '
-    '"fileName", "viewPrefs", "uploadedBy", "createdAt", "updatedAt", '
+    '"fileName", "viewPrefs", "uploadedBy", "folderId", "createdAt", "updatedAt", '
     'octet_length(content) AS "sizeBytes"'
 )
+FOLDER_NAME_MAX = 30
+
+
+def _folder_id(conn, raw):
+    """폴더 값 하나를 읽는다. None·''·'none' 은 미분류. 없는 폴더면 400."""
+    if raw in (None, '', 'none'):
+        return None
+    try:
+        fid = int(raw)
+    except (TypeError, ValueError):
+        raise HTTPException(400, '폴더가 올바르지 않습니다.')
+    if not conn.execute('SELECT 1 FROM sheetFolders WHERE "id"=%s', (fid,)).fetchone():
+        raise HTTPException(400, '없는 폴더입니다.')
+    return fid
+
+
+def _folder_name(raw):
+    name = str(raw or '').strip()
+    if not name:
+        raise HTTPException(400, '폴더 이름을 넣어 주세요.')
+    if len(name) > FOLDER_NAME_MAX:
+        raise HTTPException(400, f'폴더 이름은 {FOLDER_NAME_MAX}자까지입니다.')
+    return name
 SHEET_EDITABLE = ('title', 'artist', 'role', 'tags', 'bpm', 'pages', 'note', 'viewPrefs')
 MAX_SHEET_BYTES = 30 * 1024 * 1024
 
@@ -32,11 +55,96 @@ def sheet_tag_counts():
     return {r['t']: r['c'] for r in rows}
 
 
+# ---------- 폴더(파일철) ----------
+@router.get('/folders')
+def list_folders():
+    """폴더와 각 폴더의 악보 수, 미분류 수, 전체 수. 화면의 폴더 줄이 이걸로 그려진다."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            'SELECT f."id", f."name", f."order", f."createdBy", '
+            '(SELECT count(*) FROM sheets s WHERE s."folderId"=f."id") AS "count" '
+            'FROM sheetFolders f ORDER BY f."order", f."id"').fetchall()
+        unfiled = conn.execute('SELECT count(*) AS n FROM sheets WHERE "folderId" IS NULL').fetchone()['n']
+        total = conn.execute('SELECT count(*) AS n FROM sheets').fetchone()['n']
+        return {'folders': [dict(r) for r in rows], 'unfiled': unfiled, 'total': total}
+    finally:
+        conn.close()
+
+
+@router.post('/folders')
+def create_folder(body: dict):
+    name = _folder_name(body.get('name'))
+    conn = get_db()
+    try:
+        nxt = conn.execute('SELECT coalesce(max("order"), 0) + 1 AS n FROM sheetFolders').fetchone()['n']
+        row = conn.execute(
+            'INSERT INTO sheetFolders ("name","order","createdBy") VALUES (%s,%s,%s) '
+            'RETURNING "id","name","order","createdBy"', (name, nxt, body.get('createdBy'))).fetchone()
+        conn.commit()
+        return {**dict(row), 'count': 0}
+    finally:
+        conn.close()
+
+
+@router.post('/folders/order')
+def order_folders(body: dict):
+    """폴더 순서를 이 목록대로. 목록에 없는 폴더는 뒤에 그대로 남는다."""
+    ids = body_ids(body)
+    conn = get_db()
+    try:
+        for i, fid in enumerate(ids):
+            conn.execute('UPDATE sheetFolders SET "order"=%s WHERE "id"=%s', (i + 1, fid))
+        conn.commit()
+        return {'ok': True}
+    finally:
+        conn.close()
+
+
+@router.put('/folders/{folder_id}')
+def rename_folder(folder_id: int, body: dict):
+    name = _folder_name(body.get('name'))
+    conn = get_db()
+    try:
+        cur = conn.execute('UPDATE sheetFolders SET "name"=%s WHERE "id"=%s', (name, folder_id))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(404, '폴더를 찾을 수 없습니다.')
+        return {'id': folder_id, 'name': name}
+    finally:
+        conn.close()
+
+
+@router.delete('/folders/{folder_id}')
+def delete_folder(folder_id: int):
+    """폴더만 지운다. 안의 악보는 미분류로 돌아간다(FK ON DELETE SET NULL)."""
+    conn = get_db()
+    try:
+        n = conn.execute('SELECT count(*) AS n FROM sheets WHERE "folderId"=%s', (folder_id,)).fetchone()['n']
+        cur = conn.execute('DELETE FROM sheetFolders WHERE "id"=%s', (folder_id,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(404, '폴더를 찾을 수 없습니다.')
+        return {'ok': True, 'unfiled': n}
+    finally:
+        conn.close()
+
+
 @router.get('')
-def list_sheets(q: str | None = None, role: str | None = None, tag: str | None = None):
-    """태그는 하나만 붙으므로 정확히 일치하는 것만 거른다."""
+def list_sheets(q: str | None = None, role: str | None = None, tag: str | None = None,
+                folder: str | None = None):
+    """태그는 하나만 붙으므로 정확히 일치하는 것만 거른다.
+    folder 는 폴더 id 또는 'none'(미분류). 순서는 제목순이다(2026-10-29) — 올린 순서는 파일철로 쓰기에 맞지 않았다."""
     where = []
     params = []
+    if folder == 'none':
+        where.append('"folderId" IS NULL')
+    elif folder:
+        try:
+            params.append(int(folder))
+        except ValueError:
+            raise HTTPException(400, '폴더가 올바르지 않습니다.')
+        where.append('"folderId" = %s')
     if q and q.strip():
         like = f'%{like_escape(q.strip())}%'
         where.append('("title" ILIKE %s OR "artist" ILIKE %s OR "tags" ILIKE %s)')
@@ -50,7 +158,7 @@ def list_sheets(q: str | None = None, role: str | None = None, tag: str | None =
     clause = (' WHERE ' + ' AND '.join(where)) if where else ''
     conn = get_db()
     rows = conn.execute(
-        f'SELECT {SHEET_COLS} FROM sheets{clause} ORDER BY "createdAt" DESC', params
+        f'SELECT {SHEET_COLS} FROM sheets{clause} ORDER BY lower("title"), "id"', params
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -62,6 +170,7 @@ async def upload_sheets(
     tags: str | None = Form(None),
     uploadedBy: str | None = Form(None),
     meta: str | None = Form(None),
+    folderId: str | None = Form(None),
     files: list[UploadFile] = File(...),
 ):
     """파트를 한 번 고르고 여러 파일을 한꺼번에 올린다.
@@ -76,6 +185,11 @@ async def upload_sheets(
 
     tag_text = norm_tag(tags)
     conn = get_db()
+    try:
+        folder = _folder_id(conn, folderId)      # 올릴 때 고른 폴더. 없으면 미분류
+    except HTTPException:
+        conn.close()
+        raise
     created = []
     skipped = []                # 문제 있는 파일은 묶음 전체를 깨지 않고 하나만 빼고 알려준다
     try:
@@ -104,8 +218,8 @@ async def upload_sheets(
             pages = int(pages) if isinstance(pages, (int, float)) and pages > 0 else None
             cur = conn.execute(
                 'INSERT INTO sheets ("title","artist","role","tags","bpm","pages","fileName",'
-                '"content","uploadedBy") VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING "id"',
-                (title, artist, role, row_tags, bpm, pages, f.filename or '', data, uploadedBy),
+                '"content","uploadedBy","folderId") VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING "id"',
+                (title, artist, role, row_tags, bpm, pages, f.filename or '', data, uploadedBy, folder),
             )
             created.append(cur.fetchone()['id'])
         if not created:
@@ -135,6 +249,17 @@ def bulk_update_sheets(body: dict):
 
     conn = get_db()
     ph = ','.join('%s' for _ in ids)
+    if 'folderId' in body:
+        # 폴더로 옮기기(2026-10-29). null 이면 미분류로
+        try:
+            folder = _folder_id(conn, body.get('folderId'))
+        except HTTPException:
+            conn.close()
+            raise
+        conn.execute(
+            f'UPDATE sheets SET "folderId"=%s, "updatedAt"=now() WHERE "id" IN ({ph})',
+            [folder] + ids,
+        )
     if 'tag' in body:
         conn.execute(
             f'UPDATE sheets SET "tags"=%s, "updatedAt"=now() WHERE "id" IN ({ph})',
@@ -147,7 +272,7 @@ def bulk_update_sheets(body: dict):
         )
     conn.commit()
     rows = conn.execute(
-        f'SELECT {SHEET_COLS} FROM sheets WHERE "id" IN ({ph}) ORDER BY "createdAt" DESC', ids
+        f'SELECT {SHEET_COLS} FROM sheets WHERE "id" IN ({ph}) ORDER BY lower("title"), "id"', ids
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -188,6 +313,44 @@ def update_sheet(sheet_id: int, body: dict):
     row = conn.execute(f'SELECT {SHEET_COLS} FROM sheets WHERE "id"=%s', (sheet_id,)).fetchone()
     conn.close()
     return dict(row)
+
+
+@router.post('/{sheet_id}/file')
+async def replace_sheet_file(sheet_id: int, file: UploadFile = File(...)):
+    """PDF 만 갈아끼운다(2026-10-29). 번호·제목·파트·태그·BPM·메모·보기 설정은 그대로라
+    페어가 기억하는 악보와 목록의 자리가 유지된다. 전에는 지우고 다시 올려야 했다.
+    쪽수는 새 파일에서 다시 세고, 그려 둔 쪽 이미지·쪽수·여백은 버린다(render.forget).
+    쪽 이미지 주소에는 화면이 수정 시각을 붙이므로 브라우저의 한 시간 캐시도 비켜 간다."""
+    data = await file.read()
+    name = file.filename or ''
+    if not data.startswith(b'%PDF-'):
+        raise HTTPException(400, 'PDF 파일이 아닙니다.')
+    if len(data) > MAX_SHEET_BYTES:
+        raise HTTPException(400, '30MB를 넘습니다.')
+    conn = get_db()
+    try:
+        cur = conn.execute(
+            'UPDATE sheets SET "content"=%s, "fileName"=%s, "pages"=NULL, "updatedAt"=now() WHERE "id"=%s',
+            (data, name, sheet_id))
+        if cur.rowcount == 0:
+            raise HTTPException(404, '악보를 찾을 수 없습니다.')
+        conn.commit()
+    finally:
+        conn.close()          # 쪽수 세기가 제 연결을 열므로 먼저 닫는다
+    render.forget(sheet_id)
+    try:
+        pages = render.page_count(sheet_id)
+    except Exception:         # 못 세면 비워 둔다 — 뷰어의 /pages 가 다음에 다시 센다
+        pages = None
+    conn = get_db()
+    try:
+        if pages:
+            conn.execute('UPDATE sheets SET "pages"=%s WHERE "id"=%s', (pages, sheet_id))
+            conn.commit()
+        row = conn.execute(f'SELECT {SHEET_COLS} FROM sheets WHERE "id"=%s', (sheet_id,)).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
 
 
 @router.get('/{sheet_id}/pages')

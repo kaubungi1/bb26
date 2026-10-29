@@ -34,6 +34,11 @@
           <span class="field-label">태그</span>
           <div class="chip-set" id="up-tags"></div>
         </div>
+        <!-- 올릴 폴더. 폴더를 열어 둔 채 올리면 그 폴더가 기본이다 -->
+        <div class="field-row">
+          <span class="field-label">폴더</span>
+          <div class="chip-set" id="up-folder"></div>
+        </div>
 
         <label class="file-pick" for="file-input">
           <span id="file-fake">파일 선택 · 드래그</span>
@@ -50,6 +55,11 @@
         </div>
         <p class="muted upload-status" id="upload-status" hidden></p>
       </div>
+
+      <!-- 폴더(파일철, 2026-10-29). 한 단계, 칩 한 줄: 전체 · 미분류 · 폴더들 · ＋.
+           폴더를 골랐을 때만 오른쪽에 이름 바꾸기·순서·지우기가 글자 버튼으로 선다.
+           왼쪽 세로 칸 대신 칩 줄인 이유: 주로 쓰는 세로 아이패드에서 목록 폭을 안 뺏는다. -->
+      <div class="folder-line" id="folder-line"></div>
 
       <!-- 검색 · 파트 · 태그 · 동작을 한 줄에. 곡 목록과 같은 문법이다 —
            줄에는 현재 값만 글자로 보이고, 누르면 아래로 메뉴가 열린다. -->
@@ -86,6 +96,10 @@
       <div class="chip-set" id="bulk-tags"></div>
     </div>
     <div class="bulk-row">
+      <span class="field-label">폴더</span>
+      <div class="chip-set" id="bulk-folder"></div>
+    </div>
+    <div class="bulk-row">
       <span class="field-label">파트</span>
       <div class="chip-set" id="bulk-role"></div>
       <button type="button" class="ghost mini danger" id="bulk-delete">삭제</button>
@@ -99,7 +113,8 @@
       <div class="pair-qr" id="pair-qr"></div>
       <p class="pair-code" id="pair-code"></p>
       <p class="muted pair-guide">2번 아이패드 카메라로 QR 스캔<br />
-        본 기기엔 홀수쪽, 2번엔 짝수쪽이 표시되며 페이지 전환이 연동됩니다.</p>
+        본 기기엔 홀수쪽, 2번엔 짝수쪽이 표시됩니다.<br />
+        어느 쪽에서 넘겨도 보면대처럼 한 쪽씩 번갈아 넘어갑니다 — 보고 있는 쪽은 그대로.</p>
       <p class="pair-peers" id="pair-peers"></p>
       <div class="pair-actions">
         <button type="button" class="ghost mini danger" id="pair-stop">페어 해제</button>

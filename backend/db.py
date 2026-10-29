@@ -199,7 +199,7 @@ CREATE TABLE IF NOT EXISTS songComments (
 # pairs 는 뺀다 — 악보 넘길 때마다 써서 잦고, 어느 목록도 읽지 않는다.
 CHANGE_TRACKED = ('songs', 'sessions', 'sessionSupports', 'songComments', 'sheets', 'events', 'eventDates',
                   'eventAvails', 'eventSongs', 'eventLineups', 'guilds', 'guildMembers', 'guildDrawings',
-                  'members', 'eventGuilds', 'eventLineupSkips', 'eventGuildAvails')
+                  'members', 'eventGuilds', 'eventLineupSkips', 'eventGuildAvails', 'sheetFolders')
 
 MIGRATIONS = [
     'CREATE INDEX IF NOT EXISTS idx_songcomments_song ON songComments ("songId", "id")',
@@ -259,6 +259,12 @@ MIGRATIONS = [
     '"guildId" INTEGER NOT NULL REFERENCES guilds("id") ON DELETE CASCADE, '
     '"nickname" TEXT, "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(), '
     'UNIQUE ("eventId", "date", "guildId"))',
+    # 악보 폴더(파일철, 2026-10-29). 한 단계뿐이고 악보 하나는 폴더 하나에 든다(없으면 미분류).
+    # 폴더를 지우면 악보는 미분류로 돌아갈 뿐 지워지지 않는다(ON DELETE SET NULL). 순서는 손으로("order").
+    'CREATE TABLE IF NOT EXISTS sheetFolders ("id" SERIAL PRIMARY KEY, "name" TEXT NOT NULL, '
+    '"order" INTEGER NOT NULL DEFAULT 0, "createdBy" TEXT, "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now())',
+    'ALTER TABLE sheets ADD COLUMN IF NOT EXISTS "folderId" INTEGER REFERENCES sheetFolders("id") ON DELETE SET NULL',
+    'CREATE INDEX IF NOT EXISTS idx_sheets_folder ON sheets("folderId")',
     # 종류가 없던 옛 일정: 길드가 있으면 길드 합주, 없으면 정기합주(2026-10-02 기준 9개·2개). 빈 것에만 한 번.
     "UPDATE events SET \"kind\" = CASE WHEN \"guildId\" IS NULL THEN 'regular' ELSE 'guild' END WHERE \"kind\" IS NULL",
 

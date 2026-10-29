@@ -216,6 +216,10 @@
   font-size: 11.5px; font-weight: 700; color: var(--ink-faint); }
 .sheets .meta-sep { color: #c3d2de; user-select: none; }
 
+/* 전체·검색에서 어느 철에 들었는지. 태그처럼 글자만, 색으로 태그와 갈린다 */
+.sheet-folder { flex: none; font-size: 10.5px; font-weight: 800; letter-spacing: -0.01em;
+  color: var(--teal-deep); opacity: 0.8; white-space: nowrap; }
+
 /* 열기 버튼은 없앴다 — 줄 자체가 열기다. 수정만 옅게 남긴다. */
 .row-edit {
   flex: none;
@@ -680,3 +684,15 @@ body.has-fs-cue .pair-lost { top: calc(62px + env(safe-area-inset-top, 0px)); }
 }
 .edit-chips .chip-set { display: flex; flex-wrap: wrap; gap: 2px 4px; flex: 1; }
 .edit-chips .chip { min-height: 26px; padding: 0 9px; font-size: 12px; }
+
+/* ---------- 폴더 줄(파일철, 2026-10-29) ----------
+   칩 한 줄. 고른 것은 .chip.is-on(잉크). 폴더를 골랐을 때만 오른쪽 끝에 다루기 글자 버튼.
+   이름 입력은 줄 안의 작은 칸 — 브라우저 입력창을 띄우지 않는다. */
+.folder-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 10px; }
+.folder-line .chip.folder-add { color: var(--ink-faint); }
+.folder-line .chip.folder-add:hover { color: var(--teal-deep); }
+.folder-acts { display: inline-flex; flex-wrap: wrap; gap: 2px; margin-left: auto; }
+.folder-acts .ghost.mini { padding: 5px 9px; font-size: 12px; }
+.folder-form { display: inline-flex; align-items: center; gap: 6px; }
+.folder-form input { width: 170px; min-height: 32px; margin: 0; padding: 4px 10px; font-size: 13px; }
+.folder-form .pink.mini { min-height: 32px; padding: 0 12px; font-size: 12.5px; }
