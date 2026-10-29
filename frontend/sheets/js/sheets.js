@@ -1,6 +1,5 @@
-/* 악보 — 곡 목록과 독립된 라이브러리 + 전체화면 PDF 뷰어.
-   파트를 한 번 고르고 여러 파일을 한꺼번에 올린다. 제목·아티스트·BPM 은
-   악보 본문에서 자동으로 뽑아 미리 채우고, 사용자가 확인만 하면 된다. */
+/* 악보 — 탐색기(폴더 트리) + 전체화면 PDF 뷰어 + 두 아이패드 페어.
+   PDF 를 떨어뜨리면 올라가고, 제목·아티스트·BPM 은 악보 본문에서 자동으로 뽑는다. */
 
 import { extractSheetInfo } from './extract.js?v=2';
 import * as Pair from './pair.js?v=2';
@@ -18,8 +17,11 @@ function getPdfjs() {
   return pdfjsPromise;
 }
 
-/* 파트·태그 목록은 common.js 에서 한 번만 정의한다 */
-const ROLES = SHEET_ROLES;
+/* ---------- 탐색기 (2026-10-30 사용자 결정) ----------
+   악보는 폴더 트리 안에 든다 — 파일 앱처럼 폴더를 누르면 들어가고 악보를 누르면 바로 뷰어다.
+   관리는 우클릭(아이패드·폰은 길게 누르기) 메뉴, 옮기기는 끌어다 놓기, 올리기는 PDF 를 떨어뜨리는 것.
+   PDF 를 폴더에 놓으면 그 안에, 빈 곳에 놓으면 보는 폴더에, 악보 위에 놓으면 그 악보의 파일이 바뀐다.
+   파트·태그·거르기·칩·일괄 바·올리기 판은 걷어냈다. 검색 칸 하나만 남고 폴더를 가로지른다. */
 
 /* 264ppi급 아이패드(10.2·11인치)는 CSS 1mm ≈ 5.2px. 실물 크기 환산용 근사값. */
 const PX_PER_MM = 5.2;
@@ -28,648 +30,533 @@ const LOCK_MS = 380;
 const TAP_MAX_MOVE = 14;
 const CLOSE_SWIPE = 90;   /* 이만큼 아래로 쓸어내리면 뷰어를 닫는다 */
 const CROP_LIMIT = 0.015; /* 세로 화면에서 위·아래 각각 이만큼까지만 잘라낸다 */
+const LONG_PRESS_MS = 500;
+const FOLDER_SVG = '<svg viewBox="0 0 64 48" aria-hidden="true"><path d="M4 10a4 4 0 0 1 4-4h14l6 6h28a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/></svg>';
 
-let sheets = [];
-let pending = [];                 /* 올리기 전 파일 + 추출 결과 */
-let upRole = '보컬';
-let upTag = '';                   /* 올릴 때 붙일 태그 (하나) */
-let filterRole = '';
-let filterTag = '';               /* 목록 필터 태그 (하나) */
-let tagCounts = {};
-let selectMode = false;
-let selected = new Set();
-let editingId = null;
-let editRole = '';            /* 수정 중인 줄의 파트 */
-let editTag = '';             /* 수정 중인 줄의 태그 */
-let openDrop = null;          /* 열려 있는 도구줄 메뉴 — 'role' | 'tag' | null */
-/* 폴더(파일철, 2026-10-29). 한 단계. 보는 폴더는 'all' | 'none'(미분류) | 폴더 id */
-let folders = [];
-let unfiled = 0;
-let totalCount = 0;
-let curFolder = 'all';
-let upFolder = null;          /* 올릴 폴더 id, null = 미분류 */
-let folderForm = null;        /* 폴더 줄의 인라인 입력 — {mode:'new'} | {mode:'rename', id} | null */
+let folders = [];            /* 모든 폴더 {id,name,parentId,count,folders} */
+let rootCount = 0;
+let cur = null;              /* 보는 폴더 id. null = 맨 위 */
+let sheets = [];             /* 보는 폴더의 악보. 검색 중이면 결과 */
+let query = '';
+let selected = new Set();    /* 'f:3' | 's:12' */
+let renaming = null;         /* 그 자리에서 이름 고치는 폴더 id */
+let lastRole = localStorage.getItem('sheetRole') || '공용';   /* 올릴 때 묻지 않는 파트 — 마지막 값 */
 
 const $ = (id) => document.getElementById(id);
-const listEl = $('list');
+const explorerEl = $('explorer');
+const gridEl = $('grid');
+const crumbsEl = $('crumbs');
 const searchEl = $('search');
+const statusEl = $('ex-status');
+const ctxEl = $('ctx');
 const fileInput = $('file-input');
-const fileFake = $('file-fake');
-const statusEl = $('upload-status');
-const previewEl = $('preview');
-const previewList = $('preview-list');
-const bulkBar = $('bulk-bar');
+const replaceInput = $('replace-input');
 
-/* ---------- 칩 ---------- */
-function chipHtml(value, label, on, count) {
-  return '<button type="button" class="chip' + (on ? ' is-on' : '') +
-    '" data-v="' + escapeHtml(value) + '">' + escapeHtml(label) +
-    (count ? '<i>' + count + '</i>' : '') + '</button>';
+const folderById = (id) => folders.find((f) => f.id === id);
+const sheetById = (id) => sheets.find((s) => s.id === id);
+const childrenOf = (id) => folders.filter((f) => (f.parentId ?? null) === (id ?? null));
+function pathOf(id) {
+  const out = [];
+  let f = folderById(id);
+  for (let guard = 0; f && guard < 50; guard++) { out.unshift(f); f = folderById(f.parentId); }
+  return out;
 }
-
-function bindChips(el, html, onPick) {
-  el.innerHTML = html;
-  el.onclick = (e) => {
-    const btn = e.target.closest('.chip');
-    if (btn) onPick(btn.dataset.v);
-  };
+function descendants(id) {
+  const out = new Set([id]);
+  let frontier = [id];
+  while (frontier.length) {
+    frontier = folders.filter((f) => frontier.includes(f.parentId) && !out.has(f.id)).map((f) => f.id);
+    frontier.forEach((x) => out.add(x));
+  }
+  return out;
 }
-
-/* 목록 필터의 한 줄 — 곡 목록(songs.js)의 .menu-item 과 같은 부품이다.
-   파트도 태그도 하나만 고르므로 체크가 아니라 점 표시가 붙는다. */
-function menuHtml(value, label, on, count) {
-  return '<button type="button" class="menu-item' + (on ? ' is-on' : '') +
-    '" data-v="' + escapeHtml(value) + '">' + escapeHtml(label) +
-    (count ? '<i>' + count + '</i>' : '') + '</button>';
-}
-
-function renderTools() {
-  /* 올릴 때 고르는 파트·태그와 일괄 처리의 파트·태그는 칩 그대로 둔다.
-     이미 펼쳐 놓은 판 안에 있어서 고르는 즉시 결과가 보인다. 메뉴로 한 번 더 감출 이유가 없다. */
-  bindChips($('up-role'), ROLES.map((r) => chipHtml(r, r, r === upRole)).join(''),
-    (v) => { upRole = v; renderTools(); });
-
-  bindChips($('up-tags'), TAGS.map((t) => chipHtml(t, t, t === upTag)).join(''),
-    (v) => {
-      upTag = (v === upTag) ? '' : v;      /* 다시 누르면 해제 */
-      /* 위에서 고른 태그는 이미 담아둔 파일 전부에 즉시 반영한다. */
-      pending.forEach((p) => { p.tag = upTag; });
-      renderTools();
-      paintPreview();
-    });
-
-  bindChips($('bulk-tags'), TAGS.map((t) => chipHtml(t, t, false)).join(''),
-    (v) => applyBulk({ tag: v }));
-
-  /* 올릴 폴더와 일괄 '폴더로 옮기기'. 미분류 + 폴더들. 폴더를 골라 둔 채 열면 그 폴더가 켜져 있다 */
-  const folderChips = (on) => chipHtml('', '미분류', on === null)
-    + folders.map((f) => chipHtml(String(f.id), f.name, on === f.id)).join('');
-  bindChips($('up-folder'), folderChips(upFolder), (v) => { upFolder = v ? Number(v) : null; renderTools(); });
-  bindChips($('bulk-folder'), folderChips(undefined), (v) => applyBulk({ folderId: v ? Number(v) : null }));
-  renderFolders();
-
-  bindChips($('bulk-role'), ROLES.map((r) => chipHtml(r, r, false)).join(''),
-    (v) => applyBulk({ role: v }));
-
-  /* 도구줄에는 현재 값만 글자로 남는다. 고르지 않았으면 항목 이름이 그대로 라벨이다. */
-  $('role-label').textContent = filterRole || '파트';
-  $('drop-role').classList.toggle('is-set', !!filterRole);
-  $('menu-role').innerHTML = menuHtml('', '전체', !filterRole) +
-    ROLES.map((r) => menuHtml(r, r, r === filterRole)).join('');
-
-  $('tag-label').textContent = filterTag || '태그';
-  $('drop-tag').classList.toggle('is-set', !!filterTag);
-  $('menu-tag').innerHTML = menuHtml('', '전체', !filterTag) +
-    TAGS.map((t) => menuHtml(t, t, t === filterTag, tagCounts[t])).join('');
-
-  for (const k of ['role', 'tag']) {
-    $('menu-' + k).hidden = openDrop !== k;
-    $('drop-' + k).classList.toggle('is-open', openDrop === k);
-  }
-}
-
-/* ---------- 폴더 줄 ----------
-   전체(n) · 미분류(n) · 폴더(n)… · ＋ 새 폴더. 고른 것은 잉크 칩. 폴더를 골랐을 때만 다루기 버튼.
-   이름은 브라우저 입력창 대신 줄 안의 작은 칸에 친다. */
-function renderFolders() {
-  const line = $('folder-line');
-  const cur = curFolder;
-  let html = chipHtml('all', '전체', cur === 'all', totalCount)
-    + chipHtml('none', '미분류', cur === 'none', unfiled)
-    + folders.map((f) => chipHtml(String(f.id), f.name, cur === f.id, f.count)).join('');
-  if (folderForm) {
-    const f = folderForm.mode === 'rename' ? folders.find((x) => x.id === folderForm.id) : null;
-    html += '<form class="folder-form" data-folder-form>'
-      + '<input type="text" maxlength="30" placeholder="폴더 이름" value="' + escapeHtml(f ? f.name : '') + '" aria-label="폴더 이름" />'
-      + '<button type="submit" class="pink mini">' + (f ? '바꾸기' : '만들기') + '</button>'
-      + '<button type="button" class="ghost mini" data-folder-cancel>취소</button></form>';
-  } else {
-    html += '<button type="button" class="chip folder-add" data-folder-new>＋ 새 폴더</button>';
-  }
-  const at = folders.findIndex((f) => f.id === cur);
-  if (at >= 0 && !folderForm) {
-    html += '<span class="folder-acts">'
-      + '<button type="button" class="ghost mini" data-folder-rename>이름 바꾸기</button>'
-      + (at > 0 ? '<button type="button" class="ghost mini" data-folder-move="-1" aria-label="앞으로">◀</button>' : '')
-      + (at < folders.length - 1 ? '<button type="button" class="ghost mini" data-folder-move="1" aria-label="뒤로">▶</button>' : '')
-      + '<button type="button" class="ghost mini danger" data-folder-delete>폴더 지우기</button></span>';
-  }
-  line.innerHTML = html;
-  if (folderForm) { const inp = line.querySelector('input'); inp.focus(); inp.select(); }
-}
-
-$('folder-line').addEventListener('click', async (e) => {
-  if (e.target.closest('[data-folder-new]')) { folderForm = { mode: 'new' }; renderFolders(); return; }
-  if (e.target.closest('[data-folder-cancel]')) { folderForm = null; renderFolders(); return; }
-  if (e.target.closest('[data-folder-rename]')) { folderForm = { mode: 'rename', id: curFolder }; renderFolders(); return; }
-  const mv = e.target.closest('[data-folder-move]');
-  if (mv) {
-    const ids = folders.map((f) => f.id);
-    const i = ids.indexOf(curFolder), j = i + Number(mv.dataset.folderMove);
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    const ok = await Writes.commit(mv, 'folders', () => api.post('/sheets/folders/order', { ids }));
-    if (ok) refresh().catch(console.error);
-    return;
-  }
-  const del = e.target.closest('[data-folder-delete]');
-  if (del) {
-    const f = folders.find((x) => x.id === curFolder);
-    if (!f) return;
-    const ok = await confirmModal({
-      title: `'${f.name}' 폴더 지우기`,
-      body: f.count ? `안의 악보 <b>${f.count}장</b>은 지워지지 않고 미분류로 갑니다.` : '빈 폴더를 지웁니다.',
-      confirm: '지우기', danger: true,
-    });
-    if (!ok) return;
-    const done = await Writes.commit(del, 'folders', () => api.del('/sheets/folders/' + f.id).then(() => true));
-    if (!done) return;
-    curFolder = 'all';
-    if (upFolder === f.id) upFolder = null;
-    refresh().catch(console.error);
-    return;
-  }
-  const chip = e.target.closest('.chip[data-v]');
-  if (!chip) return;
-  const v = chip.dataset.v;
-  curFolder = v === 'all' || v === 'none' ? v : Number(v);
-  upFolder = typeof curFolder === 'number' ? curFolder : null;   /* 올릴 폴더도 따라간다 */
-  folderForm = null;
-  refresh().catch(console.error);
+const keyOf = (tile) => (tile.dataset.f ? 'f:' + tile.dataset.f : 's:' + tile.dataset.s);
+const splitKeys = (keys) => ({
+  sheets: keys.filter((k) => k.startsWith('s:')).map((k) => Number(k.slice(2))),
+  folders: keys.filter((k) => k.startsWith('f:')).map((k) => Number(k.slice(2))),
 });
+const fmtSize = (b) => (!b ? '' : b >= 1048576 ? (b / 1048576).toFixed(1) + 'MB' : Math.round(b / 1024) + 'KB');
 
-$('folder-line').addEventListener('submit', async (e) => {
-  const form = e.target.closest('[data-folder-form]');
-  if (!form) return;
-  e.preventDefault();
-  const name = form.querySelector('input').value.trim();
-  if (!name) { form.querySelector('input').focus(); return; }
-  const btn = form.querySelector('[type=submit]');
-  if (folderForm.mode === 'rename') {
-    const ok = await Writes.commit(btn, 'folders', () => api.put('/sheets/folders/' + folderForm.id, { name }));
-    if (!ok) return;
-  } else {
-    const made = await Writes.commit(btn, 'folders', () => api.post('/sheets/folders', { name, createdBy: Nick.get() || null }));
-    if (!made) return;
-    curFolder = made.id;          /* 만든 폴더를 바로 연다 — 다음 일은 거기에 넣는 것이다 */
-    upFolder = made.id;
-  }
-  folderForm = null;
-  refresh().catch(console.error);
-});
-
-/* 도구줄: 메뉴 열고 닫기 + 항목 고르기. 곡 목록과 같은 규칙이다. */
-document.querySelector('.tool-line').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-drop]');
-  if (btn) {
-    openDrop = openDrop === btn.dataset.drop ? null : btn.dataset.drop;
-    renderTools();
-    return;
-  }
-  const item = e.target.closest('.menu-item');
-  if (!item) return;
-  const which = item.closest('.drop').id === 'drop-role' ? 'role' : 'tag';
-  if (which === 'role') filterRole = item.dataset.v;
-  else filterTag = item.dataset.v;
-  openDrop = null;
-  renderTools();
-  refresh().catch(console.error);
-});
-
-/* 바깥을 누르면 닫힌다 */
-document.addEventListener('click', (e) => {
-  if (openDrop && !e.target.closest('.drop')) { openDrop = null; renderTools(); }
-});
-
-/* ---------- 목록 ---------- */
-function fmtSize(bytes) {
-  if (!bytes) return '';
-  const mb = bytes / (1024 * 1024);
-  return mb >= 1 ? mb.toFixed(1) + 'MB' : Math.round(bytes / 1024) + 'KB';
+let statusTimer = null;
+function say(text, keep) {
+  clearTimeout(statusTimer);
+  statusEl.textContent = text;
+  statusEl.hidden = !text;
+  if (text && !keep) statusTimer = setTimeout(() => { statusEl.hidden = true; }, 4000);
 }
 
-function sheetRow(s) {
-  if (s.id === editingId) {
-    return [
-      '<li class="sheet-item is-editing" data-row="', s.id, '">',
-      '<div class="edit-grid">',
-      '<input type="text" data-f="title" value="', escapeHtml(s.title || ''), '" placeholder="제목" />',
-      '<input type="text" data-f="artist" value="', escapeHtml(s.artist || ''), '" placeholder="아티스트" />',
-      '<input type="number" data-f="bpm" value="', s.bpm || '', '" placeholder="BPM" />',
-      '<div class="edit-chips"><span class="edit-label">파트</span><span class="chip-set">',
-      ROLES.map((r) => chipHtml(r, r, r === editRole).replace('data-v=', 'data-erole=')).join(''),
-      '</span></div>',
-      '<div class="edit-chips"><span class="edit-label">태그</span><span class="chip-set">',
-      TAGS.map((t) => chipHtml(t, t, t === editTag).replace('data-v=', 'data-etag=')).join(''),
-      '</span></div>',
-      '<div class="edit-actions">',
-      '<button type="button" class="pink" data-save="', s.id, '">저장</button>',
-      '<button type="button" class="ghost" data-cancel>취소</button>',
-      /* 파일 바꾸기 — PDF 만 갈아끼우고 번호·정보는 그대로(2026-10-29). 고르기 창은 숨은 input 이 연다 */
-      '<button type="button" class="ghost" data-replace="', s.id, '">파일 바꾸기</button>',
-      '<input type="file" accept="application/pdf,.pdf" data-replace-file="', s.id, '" hidden />',
-      '<button type="button" class="ghost danger" data-del="', s.id, '">삭제</button>',
-      '</div></div></li>',
-    ].join('');
-  }
-  /* 제목 줄은 곡 목록과 같다 — 제목, 그 옆에 태그를 면 없이 글자로. 알약을 줄마다
-     빛내면 제목이 안 읽힌다. 파트는 악보에서 제목 다음으로 중요하므로 앞에 세운다. */
-  const bits = [s.artist, s.bpm ? '♩' + s.bpm : '', fmtSize(s.sizeBytes)]
-    .filter(Boolean).map(escapeHtml).join('<span class="meta-sep">·</span>');
-  /* 잘렸을 때만 켠다 — fitPeek() 가 실제로 재서 정한다. 여기서는 담아만 둔다. */
-  const peek = [s.title || '제목 없음', s.artist, s.role, s.tags].filter(Boolean).join(' · ');
-  return [
-    '<li class="sheet-item', selected.has(s.id) ? ' is-picked' : '', '" data-id="', s.id, '"',
-    ' data-peek-full="', escapeHtml(peek), '"',
-    selectMode ? '' : ' data-open="' + s.id + '"', '>',
-    selectMode ? '<span class="pick-box">' + (selected.has(s.id) ? '✓' : '') + '</span>' : '',
-    /* 1쪽 썸네일 — 화면에 보일 때만 받는다(lazy). 선택 모드가 아니면 눌러서 바로 연다.
-       못 그린 악보는 이미지만 숨고 장르색 바탕이 남는다. 홈·곡의 자켓과 같은 규칙이다. */
-    '<span class="sheet-thumb genre-', songTone(s), '">',
-    '<img class="th-img" loading="lazy" alt="" src="/api/sheets/', s.id, '/page/1?w=400&v=', sheetVer(s), '" />',
-    '</span>',
-    '<span class="sheet-main">',
-    '<span class="sheet-title-row">',
-    '<span class="sheet-name">', escapeHtml(s.title || '제목 없음'), '</span>',
-    '<span class="sheet-role">', escapeHtml(s.role || '분류 없음'), '</span>',
-    s.tags ? '<span class="sheet-tag">' + escapeHtml(s.tags) + '</span>' : '',
-    /* 폴더 안에서는 폴더가 곧 문맥이라 적지 않는다. 전체·검색에서만 어느 철인지 글자로 */
-    (curFolder === 'all' || searchEl.value.trim()) && s.folderId
-      ? '<span class="sheet-folder">' + escapeHtml((folders.find((f) => f.id === s.folderId) || {}).name || '') + '</span>' : '',
-    '</span>',
-    '<span class="sheet-sub">', bits,
-    s.uploadedBy ? '<span class="meta-sep">·</span>' + avatarChip(s.uploadedBy, 'tiny') : '', '</span>',
-    '</span>',
-    selectMode ? '' : '<button type="button" class="row-edit" data-edit="' + s.id + '">수정</button>',
-    '</li>',
-  ].join('');
-}
-
-/* 제목이 칸에 들어가는지 실제로 재서, 잘린 줄에만 쪽지를 켠다.
-   글자 수로 어림하지 않는다 — 곡 목록의 fitNames() 와 같은 이유다.
-   읽기를 전부 한 번에 하고 쓰기를 전부 한 번에 한다. */
-function fitPeek() {
-  const rows = [...listEl.querySelectorAll('.sheet-item[data-peek-full]')];
-  if (!rows.length) return;
-  const clipped = rows.map((li) => {
-    const n = li.querySelector('.sheet-name');
-    return n && n.scrollWidth > n.clientWidth + 1;
-  });
-  rows.forEach((li, i) => {
-    if (clipped[i]) li.setAttribute('data-peek', li.dataset.peekFull);
-    else li.removeAttribute('data-peek');
-  });
-}
-
-/* 창 폭이 바뀌면 칸 폭도 바뀐다. 연달아 들어오는 동안은 마지막 것만 센다. */
-let fitTimer = null;
-addEventListener('resize', () => {
-  clearTimeout(fitTimer);
-  fitTimer = setTimeout(fitPeek, 120);
-});
-
-function paint() {
-  listEl.innerHTML = sheets.length
-    ? sheets.map(sheetRow).join('')
-    : '<li class="sheet-empty muted">조건에 맞는 악보가 없습니다.</li>';
-  /* 개수는 제목 옆 숫자로 간다 — 곡 목록과 같은 자리다. 필터를 걸면 몇 개가 남았는지 바로 보인다. */
-  $('list-count').textContent = sheets.length || '';
-  $('select-all').hidden = !selectMode;
-  $('select-toggle').classList.toggle('is-on', selectMode);
-  fitPeek();
-  paintBulk();
-}
-
-function paintBulk() {
-  bulkBar.hidden = !selectMode || selected.size === 0;
-  $('bulk-count').textContent = selected.size + '개 선택됨';
-}
-
+/* ---------- 받기 · 그리기 ---------- */
 let refreshSeq = 0;
 async function refresh() {
   const seq = ++refreshSeq;
   const params = new URLSearchParams();
-  if (searchEl.value.trim()) params.set('q', searchEl.value.trim());
-  if (filterRole) params.set('role', filterRole);
-  if (filterTag) params.set('tag', filterTag);
-  /* 검색은 폴더를 가로질러 전체에서 찾는다 — 어느 철에 넣었는지 기억 못 해도 찾혀야 한다 */
-  if (curFolder !== 'all' && !searchEl.value.trim()) params.set('folder', String(curFolder));
-  const qs = params.toString();
-  const [rows, counts, fl] = await Promise.all([
-    api.get('/sheets' + (qs ? '?' + qs : '')),
-    api.get('/sheets/tag-counts'),
-    api.get('/sheets/folders'),
-  ]);
-  if (seq !== refreshSeq) return;   /* 뒤늦게 도착한 이전 검색 응답은 버린다 */
+  if (query) params.set('q', query);
+  else params.set('folder', cur === null ? 'root' : String(cur));
+  const [rows, fl] = await Promise.all([api.get('/sheets?' + params), api.get('/sheets/folders')]);
+  if (seq !== refreshSeq) return;       /* 뒤늦게 온 이전 응답은 버린다 */
   sheets = rows;
-  tagCounts = counts;
-  folders = fl.folders; unfiled = fl.unfiled; totalCount = fl.total;
-  if (typeof curFolder === 'number' && !folders.some((f) => f.id === curFolder)) curFolder = 'all';   /* 남이 지운 폴더 */
-  if (upFolder !== null && !folders.some((f) => f.id === upFolder)) upFolder = null;
-  selected = new Set([...selected].filter((id) => sheets.some((s) => s.id === id)));
-  renderTools();
+  folders = fl.folders;
+  rootCount = fl.rootCount;
+  if (cur !== null && !folderById(cur)) cur = null;      /* 남이 지운 폴더에 서 있었다 */
+  selected = new Set([...selected].filter((k) => {
+    const { sheets: s, folders: f } = splitKeys([k]);
+    return s.length ? sheetById(s[0]) : folderById(f[0]);
+  }));
   paint();
 }
+
+function paint() {
+  /* 경로. 맨 위는 '악보'. 검색 중이면 경로 대신 검색어 */
+  if (query) {
+    crumbsEl.innerHTML = `<span class="crumb is-cur">검색 “${escapeHtml(query)}”</span>`
+      + '<button type="button" class="crumb-clear" data-clear-search>지우기</button>';
+  } else {
+    const trail = [{ id: null, name: '악보' }, ...pathOf(cur)];
+    crumbsEl.innerHTML = trail.map((f, i) => {
+      const last = i === trail.length - 1;
+      return (i ? '<span class="crumb-sep">›</span>' : '')
+        + `<button type="button" class="crumb${last ? ' is-cur' : ''}" data-crumb="${f.id === null ? 'root' : f.id}">${escapeHtml(f.name)}</button>`;
+    }).join('');
+  }
+  $('list-count').textContent = rootCount + folders.reduce((n, f) => n + f.count, 0) || '';
+
+  const q = query.toLowerCase();
+  const fList = query ? folders.filter((f) => f.name.toLowerCase().includes(q)) : childrenOf(cur);
+  const pathHtml = (fid) => (query ? `<span class="tile-path">${escapeHtml(['악보', ...pathOf(fid).map((x) => x.name)].join(' › '))}</span>` : '');
+  const check = (key) => (selected.size ? `<i class="tile-check" aria-hidden="true">${selected.has(key) ? '✓' : ''}</i>` : '');
+  let html = fList.map((f) => {
+    const key = 'f:' + f.id;
+    const name = renaming === f.id
+      ? `<input class="tile-rename" value="${escapeHtml(f.name)}" maxlength="30" aria-label="폴더 이름" />`
+      : `<span class="tile-name">${escapeHtml(f.name)}</span>`;
+    const sub = [f.count ? `${f.count}장` : '', f.folders ? `폴더 ${f.folders}` : ''].filter(Boolean).join(' · ') || '비어 있음';
+    return `<div class="tile folder${selected.has(key) ? ' is-sel' : ''}" data-f="${f.id}" draggable="true" tabindex="0" role="button" aria-label="${escapeHtml(f.name)} 폴더">`
+      + check(key) + `<span class="tile-icon">${FOLDER_SVG}</span>${name}<small>${sub}</small>${pathHtml(f.parentId)}</div>`;
+  }).join('');
+  html += sheets.map((s) => {
+    const key = 's:' + s.id;
+    const sub = [s.artist, s.pages ? s.pages + '쪽' : '', fmtSize(s.sizeBytes)].filter(Boolean).map(escapeHtml).join(' · ');
+    return `<div class="tile sheet${selected.has(key) ? ' is-sel' : ''}" data-s="${s.id}" draggable="true" tabindex="0" role="button" aria-label="${escapeHtml(s.title || '제목 없음')}">`
+      + check(key)
+      + `<span class="tile-thumb genre-${songTone(s)}"><img loading="lazy" alt="" src="/api/sheets/${s.id}/page/1?w=400&v=${sheetVer(s)}" /></span>`
+      + `<span class="tile-name">${escapeHtml(s.title || '제목 없음')}</span><small>${sub}</small>${pathHtml(s.folderId)}</div>`;
+  }).join('');
+  if (!html) {
+    html = `<p class="ex-empty">${query ? `“${escapeHtml(query)}” 에 맞는 것이 없습니다.`
+      : '빈 폴더입니다. PDF 를 끌어다 놓으면 올라가고, 우클릭(길게 누르기)으로 새 폴더를 만듭니다.'}</p>`;
+  }
+  gridEl.innerHTML = html;
+  $('ex-select').hidden = !selected.size;
+  $('ex-select-n').textContent = selected.size ? `${selected.size}개 선택` : '';
+  if (renaming !== null) {
+    const inp = gridEl.querySelector('.tile-rename');
+    if (inp) { inp.focus(); inp.select(); }
+  }
+}
+
+function enter(id) {
+  cur = id;
+  query = '';
+  searchEl.value = '';
+  selected.clear();
+  renaming = null;
+  refresh().catch(console.error);
+}
+
+/* ---------- 누르기 · 고르기 ---------- */
+let suppressClick = false;        /* 길게 눌러 메뉴를 띄운 직후의 click 은 버린다 */
+function toggleSel(tile) {
+  const key = keyOf(tile);
+  if (selected.has(key)) selected.delete(key); else selected.add(key);
+  paint();
+}
+gridEl.addEventListener('click', (e) => {
+  if (suppressClick) { suppressClick = false; return; }
+  if (e.target.closest('.tile-rename')) return;
+  const tile = e.target.closest('.tile');
+  if (!tile) return;
+  if (e.ctrlKey || e.metaKey || selected.size) { toggleSel(tile); return; }
+  if (tile.dataset.f) enter(Number(tile.dataset.f));
+  else { const s = sheetById(Number(tile.dataset.s)); if (s) openViewer(s); }
+});
+gridEl.addEventListener('keydown', (e) => {
+  const tile = e.target.closest('.tile');
+  if (!tile || e.target.closest('.tile-rename')) return;
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tile.click(); }
+});
+crumbsEl.addEventListener('click', (e) => {
+  if (e.target.closest('[data-clear-search]')) { query = ''; searchEl.value = ''; refresh().catch(console.error); return; }
+  const c = e.target.closest('[data-crumb]');
+  if (c) enter(c.dataset.crumb === 'root' ? null : Number(c.dataset.crumb));
+});
+$('ex-select-clear').addEventListener('click', () => { selected.clear(); paint(); });
 
 let searchTimer = null;
 searchEl.addEventListener('input', () => {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => refresh().catch(console.error), 250);
+  searchTimer = setTimeout(() => {
+    query = searchEl.value.trim();
+    renaming = null;
+    refresh().catch(console.error);
+  }, 250);
 });
 
-/* 렌더에 실패한 썸네일은 자리만 남기고 숨긴다 (error는 버블링하지 않아 캡처로 받는다) */
-listEl.addEventListener('error', (e) => {
-  if (e.target.classList && e.target.classList.contains('th-img')) {
-    e.target.classList.add('is-broken');
-  }
-}, true);
-
-/* ---------- 업로드 접기 — 평소엔 목록이 주인공이다 ----------
-   전에는 카드 머리 전체가 누르는 자리였고 ▾ 이 뒤집혔다. 지금은 제목 줄의
-   '＋ 악보 올리기' 가 그 일을 한다 — 곡 목록의 '＋ 곡 등록' 과 같은 자리, 같은 무게다.
-   진짜 <button> 이라 Enter·Space 는 브라우저가 알아서 받는다. */
-$('upload-toggle').addEventListener('click', () => {
-  const body = $('upload-body');
-  const btn = $('upload-toggle');
-  body.hidden = !body.hidden;
-  btn.setAttribute('aria-expanded', String(!body.hidden));
-  btn.textContent = body.hidden ? '＋ 악보 올리기' : '× 닫기';
+/* ---------- 그 자리에서 이름 고치기 ---------- */
+gridEl.addEventListener('keydown', async (e) => {
+  const inp = e.target.closest('.tile-rename');
+  if (!inp) return;
+  if (e.key === 'Enter') { e.preventDefault(); await commitRename(inp); }
+  else if (e.key === 'Escape') { e.preventDefault(); renaming = null; paint(); }
 });
-
-/* ---------- 파일 담기 → 악보에서 정보 뽑기 ---------- */
-const FILE_PICK_LABEL = '파일 선택 · 끌어다 놓기도 됩니다';
-
-function fileKey(f) {
-  return f.name + '|' + f.size;
+gridEl.addEventListener('focusout', (e) => {
+  const inp = e.target.closest && e.target.closest('.tile-rename');
+  if (inp && renaming !== null) commitRename(inp);      /* 탐색기처럼 밖을 누르면 그대로 확정 */
+});
+async function commitRename(inp) {
+  const id = renaming;
+  const name = inp.value.trim();
+  renaming = null;
+  const f = folderById(id);
+  if (!f || !name || name === f.name) { paint(); return; }
+  const ok = await Writes.commit(null, 'folders', () => api.put('/sheets/folders/' + id, { name }), (err) => say(err.message));
+  if (ok) f.name = name;
+  refresh().catch(console.error);
 }
 
-/* 고를 때마다 덮어쓰지 않고 뒤에 붙인다. 나눠서 담을 수 있어야 한다. */
-async function addFiles(files) {
-  const incoming = [...files];
-  if (!incoming.length) return;
-  /* 뷰어가 PDF만 그릴 수 있으므로 다른 형식은 여기서 걸러낸다. */
-  const pdfs = incoming.filter((f) => /\.pdf$/i.test(f.name || ''));
-  const notPdf = incoming.length - pdfs.length;
-  const known = new Set(pending.map((p) => fileKey(p.file)));
-  const fresh = pdfs.filter((f) => !known.has(fileKey(f)));
-  const dupes = pdfs.length - fresh.length;
-
-  let done = 0;
-  for (const file of fresh) {
-    fileFake.textContent = ++done + ' / ' + fresh.length + ' 읽는 중...';
-    const info = await extractSheetInfo(await getPdfjs(), file);
-    pending.push({ file, ...info, tag: upTag });
-    paintPreview();
+/* ---------- 우클릭 · 길게 누르기 메뉴 ---------- */
+let ctxTarget = null;     /* {kind:'empty'|'folder'|'sheet'|'multi', id, keys} */
+function openCtx(x, y, tile) {
+  const key = tile ? keyOf(tile) : null;
+  let items;
+  if (tile && selected.size > 1 && selected.has(key)) {
+    ctxTarget = { kind: 'multi', keys: [...selected] };
+    items = [['move', `${selected.size}개 이동…`], ['delete', `${selected.size}개 삭제`], ['unselect', '선택 해제']];
+  } else if (tile && tile.dataset.f) {
+    ctxTarget = { kind: 'folder', id: Number(tile.dataset.f), keys: [key] };
+    items = [['open', '열기'], ['rename', '이름 바꾸기'], ['move', '이동…'], ['delete', '삭제'], ['select', '선택']];
+  } else if (tile) {
+    ctxTarget = { kind: 'sheet', id: Number(tile.dataset.s), keys: [key] };
+    items = [['open', '열기'], ['move', '이동…'], ['replace', '파일 바꾸기'], ['edit', '정보 수정'], ['delete', '삭제'], ['select', '선택']];
+  } else {
+    ctxTarget = { kind: 'empty' };
+    items = [['new', '새 폴더'], ['upload', '올리기…']];
+    if (selected.size) items.push(['unselect', '선택 해제']);
   }
-  const notes = [];
-  if (dupes) notes.push('같은 파일 ' + dupes + '개 제외');
-  if (notPdf) notes.push('PDF 아닌 파일 ' + notPdf + '개 제외');
-  fileFake.textContent = FILE_PICK_LABEL + (notes.length ? '  (' + notes.join(' · ') + ')' : '');
-  paintPreview();
+  ctxEl.innerHTML = items.map(([act, label]) =>
+    `<button type="button" class="menu-item${act === 'delete' ? ' is-danger' : ''}" role="menuitem" data-act="${act}">${escapeHtml(label)}</button>`).join('');
+  ctxEl.hidden = false;
+  const r = ctxEl.getBoundingClientRect();
+  ctxEl.style.left = Math.max(4, Math.min(x, innerWidth - r.width - 4)) + 'px';
+  ctxEl.style.top = Math.max(4, Math.min(y, innerHeight - r.height - 4)) + 'px';
+  ctxEl.querySelector('.menu-item').focus();
 }
-
-fileInput.addEventListener('change', async () => {
-  await addFiles(fileInput.files);
-  /* 값을 비워야 같은 파일을 지웠다가 다시 고를 수 있다. */
-  fileInput.value = '';
-});
-
-/* 탐색기에서 끌어다 놓기 */
-const dropZone = document.querySelector('.file-pick');
-['dragenter', 'dragover'].forEach((type) => {
-  dropZone.addEventListener(type, (e) => {
-    e.preventDefault();
-    dropZone.classList.add('is-drag');
-  });
-});
-['dragleave', 'drop'].forEach((type) => {
-  dropZone.addEventListener(type, () => dropZone.classList.remove('is-drag'));
-});
-dropZone.addEventListener('drop', async (e) => {
+function closeCtx() { ctxEl.hidden = true; }
+gridEl.addEventListener('contextmenu', (e) => {
+  if (e.target.closest('.tile-rename')) return;
   e.preventDefault();
-  await addFiles(e.dataTransfer.files);
+  openCtx(e.clientX, e.clientY, e.target.closest('.tile'));
+});
+/* 길게 누르기(터치). 움직이거나 끌기가 시작되면 메뉴가 아니다 */
+let pressTimer = null;
+let pressAt = null;
+gridEl.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch') return;
+  pressAt = { x: e.clientX, y: e.clientY, tile: e.target.closest('.tile') };
+  clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => {
+    suppressClick = true;
+    openCtx(pressAt.x, pressAt.y, pressAt.tile);
+  }, LONG_PRESS_MS);
+});
+gridEl.addEventListener('pointermove', (e) => {
+  if (pressAt && Math.hypot(e.clientX - pressAt.x, e.clientY - pressAt.y) > 8) clearTimeout(pressTimer);
+});
+['pointerup', 'pointercancel', 'dragstart'].forEach((ev) => gridEl.addEventListener(ev, () => clearTimeout(pressTimer)));
+document.addEventListener('click', (e) => { if (!ctxEl.hidden && !e.target.closest('#ctx')) closeCtx(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!ctxEl.hidden) { closeCtx(); return; }
+  if (renaming !== null) { renaming = null; paint(); return; }
+  if (selected.size && viewer.hidden) { selected.clear(); paint(); }
+});
+addEventListener('scroll', closeCtx, { passive: true });
+addEventListener('resize', closeCtx);
+
+ctxEl.addEventListener('click', async (e) => {
+  const item = e.target.closest('[data-act]');
+  if (!item) return;
+  const t = ctxTarget;
+  closeCtx();
+  switch (item.dataset.act) {
+    case 'new': return newFolder();
+    case 'upload': return fileInput.click();
+    case 'open':
+      if (t.kind === 'folder') enter(t.id);
+      else { const s = sheetById(t.id); if (s) openViewer(s); }
+      return;
+    case 'rename': renaming = t.id; paint(); return;
+    case 'move': return moveByPicker(t.keys);
+    case 'delete': return deleteKeys(t.keys);
+    case 'replace': replaceInput.dataset.sheet = String(t.id); replaceInput.value = ''; replaceInput.click(); return;
+    case 'edit': return editInfo(sheetById(t.id));
+    case 'select': t.keys.forEach((k) => selected.add(k)); paint(); return;
+    case 'unselect': selected.clear(); paint(); return;
+    default:
+  }
 });
 
-function paintPreview() {
-  previewEl.hidden = !pending.length;
-  if (!pending.length) return;
-  const fromBody = pending.filter((p) => p.source === '악보 본문').length;
-  const noTag = pending.filter((p) => !p.tag).length;
-  const total = pending.reduce((sum, p) => sum + p.file.size, 0);
-  $('preview-count').textContent = pending.length + '개 · ' + fmtSize(total) +
-    ' · 본문에서 읽어낸 것 ' + fromBody + '개' +
-    (noTag ? ' · 태그 없음 ' + noTag + '개' : '');
-  previewList.innerHTML = pending.map((p, i) => [
-    '<li data-i="', i, '">',
-    '<input type="text" data-f="title" value="', escapeHtml(p.title || ''), '" placeholder="제목" />',
-    '<input type="text" data-f="artist" value="', escapeHtml(p.artist || ''), '" placeholder="아티스트" />',
-    '<input type="number" data-f="bpm" value="', p.bpm || '', '" placeholder="BPM" />',
-    '<span class="chip-set row-tags">',
-    TAGS.map((t) => chipHtml(t, t, t === p.tag)).join(''),
-    '</span>',
-    '<button type="button" class="row-del" data-drop="', i, '" title="이 줄 빼기">✕</button>',
-    '<span class="preview-file">', escapeHtml(p.file.name),
-    p.pages ? ' · ' + p.pages + '쪽' : '', '</span>',
-    '</li>',
-  ].join('')).join('');
+/* ---------- 동작 ---------- */
+async function newFolder() {
+  const made = await Writes.commit(null, 'folders',
+    () => api.post('/sheets/folders', { parentId: cur, createdBy: Nick.get() || null }), (err) => say(err.message));
+  if (!made) return;
+  renaming = made.id;          /* 탐색기처럼 '새 폴더' 로 생기자마자 이름을 고친다 */
+  await refresh();
 }
 
-previewList.addEventListener('click', (e) => {
-  const del = e.target.closest('[data-drop]');
-  if (del) {
-    pending.splice(Number(del.dataset.drop), 1);
-    paintPreview();
-    return;
-  }
-  const chip = e.target.closest('.row-tags .chip');
-  if (!chip) return;
-  const item = pending[Number(chip.closest('[data-i]').dataset.i)];
-  const v = chip.dataset.v;
-  item.tag = (v === item.tag) ? '' : v;   /* 다시 누르면 해제 */
-  paintPreview();
-});
+async function move(keys, folderId) {
+  const { sheets: sIds, folders: fIds } = splitKeys(keys);
+  const target = folderId === null ? '악보(맨 위)' : (folderById(folderId) || {}).name || '폴더';
+  if (fIds.some((id) => folderId !== null && descendants(id).has(folderId))) { say('폴더를 자기 안으로 옮길 수는 없습니다.'); return; }
+  const ok = await Writes.commit(null, 'sheets:move', async () => {
+    if (sIds.length) await api.post('/sheets/bulk', { ids: sIds, folderId });
+    for (const id of fIds) await api.put('/sheets/folders/' + id, { parentId: folderId });
+    return true;
+  }, (err) => say(err.message));
+  if (!ok) return;
+  selected.clear();
+  say(`${keys.length}개 → ${target}`);
+  refresh().catch(console.error);
+}
 
-previewList.addEventListener('input', (e) => {
-  const li = e.target.closest('[data-i]');
-  if (!li) return;
-  const item = pending[Number(li.dataset.i)];
-  const f = e.target.dataset.f;
-  item[f] = f === 'bpm' ? (Number(e.target.value) || null) : e.target.value;
-});
+/* 폴더 고르기 창 — 끌기가 어려울 때. 옮기는 폴더와 그 아래는 고를 수 없다 */
+function moveByPicker(keys) {
+  const { folders: fIds } = splitKeys(keys);
+  const blocked = new Set();
+  fIds.forEach((id) => descendants(id).forEach((x) => blocked.add(x)));
+  const rows = [];
+  const walk = (parent, depth) => childrenOf(parent).forEach((f) => {
+    rows.push(`<button type="button" class="menu-item" data-pick="${f.id}" style="padding-left:${30 + depth * 16}px"${blocked.has(f.id) ? ' disabled' : ''}>${escapeHtml(f.name)}</button>`);
+    walk(f.id, depth + 1);
+  });
+  walk(null, 0);
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal pick-modal" role="dialog" aria-modal="true" aria-labelledby="pick-title">
+      <h3 class="modal-title" id="pick-title">어디로 옮길까요</h3>
+      <div class="pick-list"><button type="button" class="menu-item" data-pick="root">악보 (맨 위)</button>${rows.join('')}</div>
+      <div class="modal-form"><button type="button" class="ghost" data-no>취소</button></div>
+    </div>`;
+  const close = () => { document.removeEventListener('keydown', onKey); backdrop.remove(); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop || e.target.closest('[data-no]')) { close(); return; }
+    const b = e.target.closest('[data-pick]');
+    if (!b || b.disabled) return;
+    close();
+    move(keys, b.dataset.pick === 'root' ? null : Number(b.dataset.pick));
+  });
+  document.body.appendChild(backdrop);
+}
 
-$('preview-clear').addEventListener('click', () => {
-  pending = [];
-  fileInput.value = '';
-  fileFake.textContent = FILE_PICK_LABEL;
-  paintPreview();
-});
+async function deleteKeys(keys) {
+  const { sheets: sIds, folders: fIds } = splitKeys(keys);
+  const lifted = fIds.reduce((n, id) => { const f = folderById(id); return n + (f ? f.count + f.folders : 0); }, 0);
+  const what = [sIds.length ? `악보 ${sIds.length}장` : '', fIds.length ? `폴더 ${fIds.length}개` : ''].filter(Boolean).join('과 ');
+  const ok = await confirmModal({
+    title: `${what} 삭제`,
+    body: (sIds.length ? '악보는 되돌릴 수 없습니다. ' : '') + (lifted ? `폴더 안의 <b>${lifted}개</b>는 지워지지 않고 한 단계 위로 올라갑니다.` : ''),
+    confirm: '삭제', danger: true,
+  });
+  if (!ok) return;
+  const done = await Writes.commit(null, 'sheets:delete', async () => {
+    if (sIds.length) await api.post('/sheets/bulk-delete', { ids: sIds });
+    for (const id of fIds) await api.del('/sheets/folders/' + id);
+    return true;
+  }, (err) => say(err.message));
+  if (!done) return;
+  selected.clear();
+  refresh().catch(console.error);
+}
 
-$('upload-btn').addEventListener('click', async () => {
-  if (!pending.length) return;
-  const uploadedBy = await Nick.ensure();
-  if (!uploadedBy) return;
-
+async function replaceFile(sheet, file) {
+  if (!sheet || !file) return;
+  const ok = await confirmModal({
+    title: `'${sheet.title}' 파일 바꾸기`,
+    body: `<b>${escapeHtml(file.name)}</b> 로 바꿉니다. 번호·제목·정보는 그대로입니다.`,
+    confirm: '바꾸기',
+  });
+  if (!ok) return;
   const form = new FormData();
-  form.append('role', upRole);
-  form.append('tags', upTag);
-  form.append('uploadedBy', uploadedBy);
-  if (upFolder !== null) form.append('folderId', String(upFolder));
-  form.append('meta', JSON.stringify(pending.map((p) =>
-    ({ title: p.title, artist: p.artist, bpm: p.bpm, pages: p.pages || null,
-       tags: p.tag || '' }))));
-  pending.forEach((p) => form.append('files', p.file));
+  form.append('file', file);
+  say(`'${sheet.title}' 파일 바꾸는 중…`, true);
+  const saved = await Writes.commit(null, `sheet:${sheet.id}`, () => api.post('/sheets/' + sheet.id + '/file', form), (err) => say(err.message));
+  if (!saved) return;
+  say(`'${saved.title}' 파일을 바꿨습니다${saved.pages ? ' · ' + saved.pages + '쪽' : ''}`);
+  refresh().catch(console.error);
+}
+replaceInput.addEventListener('change', () => {
+  const s = sheetById(Number(replaceInput.dataset.sheet));
+  const f = replaceInput.files && replaceInput.files[0];
+  replaceInput.value = '';
+  replaceFile(s, f);
+});
 
-  $('upload-btn').disabled = true;
-  statusEl.hidden = false;
-  statusEl.textContent = pending.length + '개 올리는 중...';
+/* 정보 수정 — 제목·아티스트·BPM·메모. 파트·태그는 더 쓰지 않는다 */
+function editInfo(sheet) {
+  if (!sheet) return;
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ei-title">
+      <h3 class="modal-title" id="ei-title">정보 수정</h3>
+      <form class="modal-form">
+        <input name="title" maxlength="80" value="${escapeHtml(sheet.title || '')}" placeholder="제목" aria-label="제목" required />
+        <input name="artist" maxlength="80" value="${escapeHtml(sheet.artist || '')}" placeholder="아티스트" aria-label="아티스트" />
+        <input name="bpm" type="number" min="20" max="300" value="${sheet.bpm || ''}" placeholder="BPM" aria-label="BPM" />
+        <textarea name="note" maxlength="300" placeholder="메모" aria-label="메모">${escapeHtml(sheet.note || '')}</textarea>
+        <p class="form-error" role="alert" hidden></p>
+        <button type="submit" class="pink">저장</button>
+        <button type="button" class="ghost" data-no>취소</button>
+      </form>
+    </div>`;
+  const close = () => { document.removeEventListener('keydown', onKey); backdrop.remove(); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop || e.target.closest('[data-no]')) close(); });
+  const form = backdrop.querySelector('form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+      title: form.elements.title.value.trim(), artist: form.elements.artist.value.trim() || null,
+      bpm: Number(form.elements.bpm.value) || null, note: form.elements.note.value.trim() || null,
+    };
+    const err = form.querySelector('.form-error');
+    if (!body.title) { err.textContent = '제목을 넣어 주세요.'; err.hidden = false; return; }
+    const saved = await Writes.commit(form.querySelector('[type=submit]'), `sheet:${sheet.id}`,
+      () => api.put('/sheets/' + sheet.id, body), (ex) => { err.textContent = ex.message; err.hidden = false; });
+    if (!saved) return;
+    close();
+    refresh().catch(console.error);
+  });
+  document.body.appendChild(backdrop);
+  form.elements.title.focus();
+}
+
+/* ---------- 올리기 — PDF 를 떨어뜨리거나 메뉴의 '올리기…' ---------- */
+async function uploadFiles(fileList, folderId) {
+  const pdfs = [...fileList].filter((f) => /\.pdf$/i.test(f.name || '') || f.type === 'application/pdf');
+  if (!pdfs.length) { say('PDF 파일만 올릴 수 있습니다.'); return; }
+  const who = await Nick.ensure();
+  if (!who) return;
+  const target = folderId === null ? '' : ` → ${(folderById(folderId) || {}).name || '폴더'}`;
+  const meta = [];
+  try {
+    const pdfjs = await getPdfjs();
+    for (let i = 0; i < pdfs.length; i++) {
+      say(`읽는 중 ${i + 1}/${pdfs.length}…`, true);
+      const info = await extractSheetInfo(pdfjs, pdfs[i]);      /* 제목·아티스트·BPM 은 본문에서 */
+      meta.push({ title: info.title, artist: info.artist, bpm: info.bpm, pages: info.pages || null, tags: '' });
+    }
+  } catch (e) { pdfs.forEach((_, i) => { if (!meta[i]) meta[i] = {}; }); }
+  const form = new FormData();
+  form.append('role', lastRole);
+  form.append('uploadedBy', who);
+  if (folderId !== null) form.append('folderId', String(folderId));
+  form.append('meta', JSON.stringify(meta));
+  pdfs.forEach((f) => form.append('files', f));
+  say(`올리는 중 ${pdfs.length}개${target}…`, true);
   try {
     const res = await api.post('/sheets', form);
     const skipped = res.skipped || [];
-    statusEl.textContent = res.created.length + '개 완료' + (skipped.length
-      ? ' · 제외: ' + skipped.map((s) => s.fileName + ' (' + s.reason + ')').join(', ')
-      : '');
-    pending = [];
-    fileInput.value = '';
-    fileFake.textContent = FILE_PICK_LABEL;
-    paintPreview();
-    refresh().catch(console.error);   /* 목록은 기다리지 않는다 */
+    say(`${res.created.length}개 올렸습니다${target}` + (skipped.length ? ' · 제외: ' + skipped.map((s) => `${s.fileName} (${s.reason})`).join(', ') : ''));
   } catch (err) {
-    statusEl.textContent = '실패: ' + (err.message || '');
-  } finally {
-    $('upload-btn').disabled = false;
-    setTimeout(() => { statusEl.hidden = true; }, 4000);
+    say('올리지 못했습니다. ' + (err.message || ''));
   }
-});
-
-/* ---------- 선택 모드 / 일괄 처리 ---------- */
-$('select-toggle').addEventListener('click', () => {
-  selectMode = !selectMode;
-  if (!selectMode) selected.clear();
-  paint();
-});
-
-$('select-all').addEventListener('click', () => {
-  const all = sheets.length > 0 && sheets.every((s) => selected.has(s.id));
-  selected = all ? new Set() : new Set(sheets.map((s) => s.id));
-  paint();
-});
-
-$('bulk-close').addEventListener('click', () => { selected.clear(); paint(); });
-
-/* 돌려받은 악보로 바로 고친다. 검색 조건과 태그 개수는 뒤에서 목록을 다시 받아 맞춘다
-   (전에는 그 목록을 받을 때까지 기다렸다). */
-function putSheets(rows) {
-  rows.forEach((r) => {
-    const at = sheets.findIndex((x) => x.id === r.id);
-    if (at >= 0) sheets[at] = r;
-  });
-  paint();
   refresh().catch(console.error);
 }
-function dropSheets(ids) {
-  sheets = sheets.filter((x) => !ids.includes(x.id));
-  ids.forEach((id) => selected.delete(id));
-  paint();
-  refresh().catch(console.error);
+fileInput.addEventListener('change', () => {
+  const files = fileInput.files;
+  if (files && files.length) uploadFiles(files, cur);
+  fileInput.value = '';
+});
+
+/* ---------- 끌어다 놓기 ----------
+   창 안의 타일을 끌면 옮기기, 밖에서 PDF 를 끌어오면 올리기. dataTransfer 의 종류로 가른다.
+   놓는 자리: 폴더 타일(그 안에) · 경로 글자(그 폴더에) · 빈 곳(보는 폴더에). PDF 를 악보 위에 놓으면 그 악보의 파일 바꾸기. */
+const KIND = 'text/x-sheets';
+const hasFiles = (dt) => dt && [...(dt.types || [])].includes('Files');
+const hasTiles = (dt) => dt && [...(dt.types || [])].includes(KIND);
+let dragKeys = null;
+
+gridEl.addEventListener('dragstart', (e) => {
+  const tile = e.target.closest('.tile');
+  if (!tile || e.target.closest('.tile-rename')) { e.preventDefault(); return; }
+  const key = keyOf(tile);
+  dragKeys = selected.has(key) ? [...selected] : [key];
+  e.dataTransfer.setData(KIND, JSON.stringify(dragKeys));
+  e.dataTransfer.effectAllowed = 'move';
+  tile.classList.add('is-dragging');
+});
+gridEl.addEventListener('dragend', () => {
+  dragKeys = null;
+  explorerEl.querySelectorAll('.is-dragging, .is-over').forEach((el) => el.classList.remove('is-dragging', 'is-over'));
+  explorerEl.classList.remove('is-over');
+});
+
+/* 놓을 곳을 정한다. 돌려주는 것: {folderId} | {sheet} | null */
+function dropTarget(e) {
+  const dt = e.dataTransfer;
+  const files = hasFiles(dt), tiles = hasTiles(dt) || !!dragKeys;
+  if (!files && !tiles) return null;
+  const crumb = e.target.closest('[data-crumb]');
+  if (crumb) return { folderId: crumb.dataset.crumb === 'root' ? null : Number(crumb.dataset.crumb), el: crumb };
+  const tile = e.target.closest('.tile');
+  if (tile && tile.dataset.f) {
+    const id = Number(tile.dataset.f);
+    if (tiles && (dragKeys || []).includes('f:' + id)) return null;      /* 자기 위에 놓기 */
+    return { folderId: id, el: tile };
+  }
+  if (tile && files) return { sheet: sheetById(Number(tile.dataset.s)), el: tile };
+  if (tile) return null;
+  if (!e.target.closest('#grid')) return null;
+  return { folderId: cur, el: null };
 }
-
-async function applyBulk(patch) {
-  if (!selected.size) return;
-  const rows = await Writes.commit(null, 'sheets:bulk',
-    () => api.post('/sheets/bulk', { ids: [...selected], ...patch }));
-  if (rows) putSheets(rows);
-}
-
-$('bulk-delete').addEventListener('click', async () => {
-  if (!selected.size) return;
-  if (!confirm(selected.size + '개를 삭제할까요?')) return;
-  const ids = [...selected];
-  const ok = await Writes.commit($('bulk-delete'), 'sheets:bulk', () => api.post('/sheets/bulk-delete', { ids }));
-  if (ok) dropSheets(ids);
+explorerEl.addEventListener('dragover', (e) => {
+  const t = dropTarget(e);
+  explorerEl.querySelectorAll('.is-over').forEach((el) => el.classList.remove('is-over'));
+  explorerEl.classList.toggle('is-over', !!t && !t.el);
+  if (!t) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = hasFiles(e.dataTransfer) ? 'copy' : 'move';
+  if (t.el) t.el.classList.add('is-over');
 });
-
-listEl.addEventListener('click', async (e) => {
-  const li = e.target.closest('[data-id]');
-  if (selectMode && li) {
-    const id = Number(li.dataset.id);
-    selected.has(id) ? selected.delete(id) : selected.add(id);
-    paint();
-    return;
-  }
-  const edit = e.target.closest('[data-edit]');
-  if (edit) {
-    editingId = Number(edit.dataset.edit);
-    const s = sheets.find((x) => x.id === editingId);
-    editRole = s ? (s.role || '') : '';
-    editTag = (s && s.tags) ? s.tags : '';
-    paint();
-    return;
-  }
-  if (e.target.closest('[data-cancel]')) { editingId = null; paint(); return; }
-  const rep = e.target.closest('[data-replace]');
-  if (rep) { rep.closest('[data-row]').querySelector('[data-replace-file]').click(); return; }
-
-  /* 수정 줄의 파트 / 태그 칩 (둘 다 하나만 고른다) */
-  const roleChip = e.target.closest('[data-erole]');
-  if (roleChip) { editRole = roleChip.dataset.erole; paint(); return; }
-  const tagChip = e.target.closest('[data-etag]');
-  if (tagChip) {
-    const v = tagChip.dataset.etag;
-    editTag = (v === editTag) ? '' : v;   /* 다시 누르면 해제 */
-    paint();
-    return;
-  }
-  const save = e.target.closest('[data-save]');
-  if (save) {
-    const row = save.closest('[data-row]');
-    const body = { role: editRole, tags: editTag };
-    row.querySelectorAll('[data-f]').forEach((i) => {
-      body[i.dataset.f] = i.dataset.f === 'bpm' ? (Number(i.value) || null) : i.value.trim();
-    });
-    const saved = await Writes.commit(save, `sheet:${save.dataset.save}`,
-      () => api.put('/sheets/' + save.dataset.save, body));
-    if (!saved) return;
-    editingId = null;
-    putSheets([saved]);
-    return;
-  }
-  const del = e.target.closest('[data-del]');
-  if (del) {
-    if (!confirm('이 악보를 삭제할까요?')) return;
-    const id = Number(del.dataset.del);
-    const ok = await Writes.commit(del, `sheet:${id}`, () => api.del('/sheets/' + id).then(() => true));
-    if (!ok) return;
-    editingId = null;
-    dropSheets([id]);
-    return;
-  }
-
-  /* 위에서 아무것도 걸리지 않았다면 줄을 연 것이다 — 버튼 없이 줄 자체가 열기다 */
-  const open = e.target.closest('[data-open]');
-  if (open) {
-    const sheet = sheets.find((x) => x.id === Number(open.dataset.open));
-    if (sheet) openViewer(sheet);
+explorerEl.addEventListener('dragleave', (e) => {
+  if (!explorerEl.contains(e.relatedTarget)) {
+    explorerEl.querySelectorAll('.is-over').forEach((el) => el.classList.remove('is-over'));
+    explorerEl.classList.remove('is-over');
   }
 });
-
-/* 파일 바꾸기 — 고른 PDF 를 보내고, 돌려받은 줄(새 쪽수·크기·수정 시각)로 다시 그린다.
-   수정 시각이 바뀌므로 썸네일과 뷰어 주소도 새것이 된다. */
-listEl.addEventListener('change', async (e) => {
-  const input = e.target.closest('[data-replace-file]');
-  if (!input || !input.files || !input.files[0]) return;
-  const id = Number(input.dataset.replaceFile);
-  const file = input.files[0];
-  input.value = '';
-  const btn = listEl.querySelector(`[data-replace="${id}"]`);
-  const form = new FormData();
-  form.append('file', file);
-  const saved = await Writes.commit(btn, `sheet:${id}`, () => api.post('/sheets/' + id + '/file', form));
-  if (!saved) return;
-  editingId = null;
-  putSheets([saved]);
-  statusEl.hidden = false;
-  statusEl.textContent = (saved.title || '악보') + ' 파일을 바꿨습니다' + (saved.pages ? ' · ' + saved.pages + '쪽' : '');
-  setTimeout(() => { statusEl.hidden = true; }, 4000);
+explorerEl.addEventListener('drop', (e) => {
+  const t = dropTarget(e);
+  explorerEl.querySelectorAll('.is-over').forEach((el) => el.classList.remove('is-over'));
+  explorerEl.classList.remove('is-over');
+  if (!t) return;
+  e.preventDefault();
+  if (hasFiles(e.dataTransfer)) {
+    if (t.sheet) replaceFile(t.sheet, e.dataTransfer.files[0]);
+    else uploadFiles(e.dataTransfer.files, t.folderId);
+    return;
+  }
+  let keys = dragKeys;
+  if (!keys) { try { keys = JSON.parse(e.dataTransfer.getData(KIND) || '[]'); } catch { keys = []; } }
+  if (keys && keys.length && 'folderId' in t) move(keys, t.folderId);
 });
+/* 탐색기 밖에 떨어뜨리면 브라우저가 PDF 를 열어 버린다 — 막는다 */
+document.addEventListener('dragover', (e) => { if (hasFiles(e.dataTransfer)) e.preventDefault(); });
+document.addEventListener('drop', (e) => { if (hasFiles(e.dataTransfer)) e.preventDefault(); });
 
 /* ---------- 뷰어 ----------
    서버가 그려준 이미지 한 장을 화면에 꽉 맞춰 보여준다. 스크롤은 없다.
@@ -1134,7 +1021,6 @@ window.addEventListener('resize', () => {
 });
 
 mountChrome('sheets');
-renderTools();
 refresh().catch(console.error);
 
 Pair.init({

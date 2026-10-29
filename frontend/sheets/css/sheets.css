@@ -9,287 +9,79 @@
 /* ---------- 머리 ---------- */
 /* 곡 목록(songs.css)의 .list-head 와 같은 값이다. 값이 같아도 적는다 —
    이 파일만 읽고 최종 모습을 알 수 있어야 한다. */
-.sheets .list-page { max-width: none; }
-.sheets .list-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 14px; }
+.sheets .explorer { max-width: none; }
+.sheets .list-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 12px; }
 .sheets .list-head h1 { font-size: 28px; line-height: 1.15; margin: 7px 0 0; letter-spacing: -0.02em; }
 .sheets .list-head h1 small { font-size: 13px; font-weight: 800; color: var(--teal-deep); margin-left: 9px; vertical-align: 5px; }
 .sheets .overline { display: inline-block; font-size: 9px; letter-spacing: 0.2em; font-weight: 800; color: var(--teal-deep); }
-/* 가끔 하는 일이라 조용히 둔다. 화면의 주된 동작은 목록을 훑고 한 장을 여는 것이다. */
-.sheets .add-link { padding: 8px 2px; border: 0; border-radius: 0; background: none; box-shadow: none;
-  color: var(--ink-muted); font-size: 14px; font-weight: 800; transition: color 0.12s; }
-.sheets .add-link:hover { color: var(--ink); background: none; filter: none; }
+.ex-tools { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* 검색 칸: 입력칸만 경계를 가진다 — 채워진 면과 아래 선 하나 */
+.ex-tools .search { position: relative; display: block; width: min(300px, 50vw); }
+.ex-tools .search svg { position: absolute; left: 10px; top: 50%; width: 15px; height: 15px; transform: translateY(-50%);
+  fill: none; stroke: var(--ink-faint); stroke-width: 2.2; stroke-linecap: round; pointer-events: none; }
+.ex-tools .search-box { width: 100%; margin: 0; padding-left: 32px; }
 
-/* ---------- 검색 줄 ---------- */
-/* 입력칸만 경계를 가진다. 윤곽선이 아니라 채워진 면과 아래 선 하나다. */
-.sheets .tool-line { display: flex; align-items: center; gap: 14px; margin-bottom: 18px;
-  padding: 0; border: 0; border-radius: 0; background: none; }
-.sheets .tool-line .search { flex: 1; display: flex; align-items: center; gap: 9px; min-width: 0;
-  padding: 0 12px; background: var(--paper); border-bottom: 2px solid var(--line); border-radius: 3px 3px 0 0; }
-.sheets .tool-line .search:focus-within { border-bottom-color: var(--teal); }
-.sheets .tool-line .search svg { width: 17px; height: 17px; flex: none; fill: none; stroke: var(--ink-faint); stroke-width: 2; stroke-linecap: round; }
-.sheets .tool-line .search-box { flex: 1; min-width: 0; min-height: 40px; margin: 0;
-  padding: 0; border: 0; background: transparent; border-radius: 0; box-shadow: none;
-  font-size: 14px; font-weight: 600; color: var(--ink); }
-.sheets .tool-line .search-box::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
-/* 메뉴 버튼과 동작 버튼을 검색칸과 같은 높이에 앉힌다 */
-.sheets .tool-line .drop-btn { min-height: 40px; padding: 0 2px; font-size: 13px; font-weight: 800; color: var(--ink-muted); }
-/* .drop.is-set 은 '필터가 걸려 있다', .line-act.is-on 은 '이 동작이 켜져 있다'.
-   둘 다 같은 청록 밑줄로 알린다 — 지금 평소와 다른 상태라는 뜻은 하나다.
-   is-on 은 사이트 관례다(.chip.is-on, .menu-item.is-on). paintPairBtn() 도 이걸 쓴다. */
-.sheets .tool-line .drop-btn:hover, .sheets .tool-line .drop.is-open .drop-btn,
-.sheets .tool-line .drop.is-set .drop-btn, .sheets .tool-line .line-act.is-on { color: var(--ink); }
-.sheets .tool-line .drop.is-set .drop-btn, .sheets .tool-line .line-act.is-on {
-  text-decoration: underline; text-underline-offset: 5px;
-  text-decoration-thickness: 2px; text-decoration-color: var(--teal); }
+/* ---------- 경로 ---------- */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin-bottom: 10px; font-size: 13.5px; font-weight: 800; }
+.crumb { min-height: 0; padding: 4px 6px; border: 0; border-radius: 0; background: none; box-shadow: none;
+  color: var(--ink-muted); font-size: 13.5px; font-weight: 800; }
+.crumb:hover { color: var(--teal-deep); background: none; box-shadow: none; filter: none; }
+.crumb.is-cur { color: var(--ink); }
+.crumb.is-over { background: var(--teal-soft); color: var(--teal-deep); }
+.crumb-sep { color: var(--ink-faint); }
+.crumb-clear { min-height: 0; margin-left: 8px; padding: 2px 6px; border: 0; background: none; box-shadow: none;
+  color: var(--ink-faint); font-size: 12px; font-weight: 700; }
+.crumb-clear:hover { color: var(--pink); background: none; box-shadow: none; filter: none; }
+.ex-status { margin: 0 0 8px; font-size: 12.5px; font-weight: 700; }
+.ex-select { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 12.5px; font-weight: 800; color: var(--teal-deep); }
 
-/* ---------- 올리기 판 ---------- */
-/* 접혀 있다가 펼쳐진다. 상자가 아니라 위아래 선 사이의 여백이다. */
-#upload-body { margin: 0 0 20px; padding: 16px 0 18px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
-
-.file-pick {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 4px;
-  padding: 13px 14px;
-  border-radius: 0;
-  background: var(--empty);
-  color: var(--ink-muted);
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.file-pick:hover { background: var(--hover-2); }
-
-.file-pick.is-drag {
-  background: var(--teal-soft);
-  color: var(--teal-deep);
-  outline: 2px dashed var(--teal);
-  outline-offset: -4px;
-}
-
-/* 미리보기 줄 빼기 버튼 */
-.row-del {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink-faint);
-  font-size: 12px;
-  line-height: 1;
-  box-shadow: none;
-  cursor: pointer;
-}
-.row-del:hover { background: transparent; color: var(--pink); filter: none; }
-
-.preview { margin-top: 12px; }
-.preview-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 8px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--teal-deep);
-}
-.preview-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 320px;
-  overflow-y: auto;
-  border-radius: 0;
-  background: var(--empty);
-}
-.preview-list li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 9px 10px;
-  border-bottom: 1px solid var(--line);
-}
-.preview-list li:last-child { border-bottom: none; }
-.preview-list input { padding: 8px 10px; font-size: 13px; }
-.preview-list input[data-f="title"] { flex: 3 1 160px; min-width: 0; }
-.preview-list input[data-f="artist"] { flex: 2 1 110px; min-width: 0; }
-.preview-list input[data-f="bpm"] { flex: 0 0 74px; }
-.preview-file {
-  flex: 1 1 100%;
-  font-size: 11.5px;
-  color: var(--ink-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* 미리보기 줄마다 붙는 태그 칩 — 본문 칩보다 작게.
-   세로 패딩을 주면 채워진 면의 높이가 줄마다 어긋난다. min-height 로만 줄인다. */
-.row-tags { flex: 1 1 100%; gap: 2px 4px; margin-top: 2px; }
-.row-tags .chip { min-height: 26px; padding: 0 9px; font-size: 11.5px; }
-
-.upload-go { width: 100%; margin-top: 10px; }
-.upload-status { margin: 10px 2px 0; font-size: 12.5px; font-weight: 600; color: var(--teal-deep); }
-
-/* ---------- 목록 ---------- */
-/* 한 줄이 악보 하나다. 1열로 둔다 — 썸네일이 세로로 길어(44×58) 두 열로 앉히면
-   줄 높이가 곡 목록의 두 배가 되면서 한 화면에 열 장도 안 들어온다.
-   상자로 나누지 않고 가로선 하나로 나눈다. 곡 목록과 같은 문법이다. */
-/* 넓은 화면에서는 두 열. 곡 페이지가 1000px 부터 두 열인 것과 같은 분기다.
-   다만 편집 중인 항목은 두 칸을 다 쓴다 — 반 폭이면 입력칸이 좁다. */
-.sheet-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-@media (min-width: 1000px) {
-  .sheet-list {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 12px 20px;
-    align-items: start;
-  }
-  .sheet-item.is-editing { grid-column: 1 / -1; }
-}
-/* 선 하나로만 나눴더니 배경의 민트 번짐과 섞여 묻혔다.
-   일정 목록과 같은 면을 쓴다 — 반투명 흰 면에 흰 테두리 하나. 라운드도 그림자도 없다. */
-.sheet-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 14px;
-  background: #ffffffce;
-  border: 2px solid white;
-}
-.sheet-item[data-open] { cursor: pointer; border-radius: 0; transition: background 0.12s; }
-.sheet-item[data-open]:hover { background: #ffffffee; }
-.sheet-item.is-picked { background: var(--mine); border-radius: 0; }
-.sheet-empty { padding: 18px 0; list-style: none; }
-
-/* 고른 표시. 알약이 아니라 채워진 면이다 — 곡 목록의 '내가 낀 자리' 와 같은 색을 쓴다. */
-.pick-box {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0;
-  background: var(--empty);
-  color: var(--teal-deep);
-  font-size: 12px;
-  font-weight: 800;
-}
-.is-picked .pick-box { background: var(--accent); color: var(--on-accent); }
-
-/* 썸네일. 사선 컷과 청록 글로우를 걷었다 — 줄마다 떠 있으면 목록이 부유한다.
-   못 그린 악보는 이미지만 숨고 장르색 바탕이 남는다. 홈 자켓·곡 리스트와 같은 규칙이다. */
-.sheet-thumb {
-  flex: none;
-  display: block;
-  width: 44px;
-  height: 58px;
-  overflow: hidden;
-  background: linear-gradient(140deg, var(--tone), var(--tone-l));
-}
-.sheet-thumb .th-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top;
-  display: block;
-  background: #fff;
-}
-.sheet-thumb .th-img.is-broken { visibility: hidden; }
-
-.sheet-main { flex: 1; min-width: 0; }
-/* 제목 줄 — 제목, 파트, 태그. 파트는 악보에서 제목 다음으로 중요하므로 바로 옆에 세운다. */
-.sheet-title-row { display: flex; align-items: baseline; gap: 7px; flex-wrap: nowrap; min-width: 0; }
-.sheet-name { font-size: 14.5px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink);
+/* ---------- 타일 격자 ----------
+   폴더가 먼저, 악보가 뒤. 폴더는 아이콘, 악보는 1쪽 그림이 주인공이다.
+   빈 곳이 곧 '보는 폴더에 떨어뜨리는 자리' 라 격자 아래에 여백을 둔다. */
+.ex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 16px;
+  align-content: start; min-height: 260px; padding: 6px 4px 60px; border: 2px dashed transparent; }
+.explorer.is-over .ex-grid { border-color: color-mix(in srgb, var(--teal) 55%, transparent); background: color-mix(in srgb, var(--teal) 5%, transparent); }
+.tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px 8px;
+  border-radius: 0; background: transparent; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  touch-action: manipulation; outline: 2px solid transparent; outline-offset: -2px; }
+.tile:hover { background: #ffffff9c; }
+.tile:focus-visible { outline-color: var(--teal); }
+.tile.is-sel { background: var(--teal-soft); outline-color: var(--teal); }
+.tile.is-over { background: color-mix(in srgb, var(--teal) 16%, #fff); outline-color: var(--teal-deep); }
+.tile.is-dragging { opacity: 0.45; }
+.tile-icon { width: 84px; height: 64px; display: block; }
+.tile-icon svg { width: 100%; height: 100%; fill: color-mix(in srgb, var(--teal) 55%, #fff); stroke: var(--teal-deep); stroke-width: 2; stroke-linejoin: round; }
+.tile.folder .tile-icon { margin-top: 6px; }
+.tile-thumb { display: block; width: 100%; aspect-ratio: 3 / 4; overflow: hidden; background: #ffffffce; border: 1px solid #fff; }
+.tile-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.tile-name { max-width: 100%; font-size: 13.5px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); text-align: center;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sheet-role { flex: none; font-size: 10px; font-weight: 800; letter-spacing: 0.04em;
-  color: var(--teal-deep); white-space: nowrap; }
-/* 태그는 악보를 고르는 단서일 뿐 주인공이 아니다. 알약을 줄마다 빛내면 제목이 안 읽힌다.
-   면을 걷고 글자만 남긴다 — 곡 목록의 .song-tag 와 같은 판단이다. */
-.sheet-tag { flex: none; font-size: 10.5px; font-weight: 800; letter-spacing: -0.01em;
-  color: var(--ink-faint); white-space: nowrap; }
-.sheet-sub { display: flex; align-items: center; gap: 6px; margin-top: 2px;
-  font-size: 11.5px; font-weight: 700; color: var(--ink-faint); }
-.sheets .meta-sep { color: #c3d2de; user-select: none; }
+.tile small { font-size: 11px; font-weight: 700; color: var(--ink-faint); text-align: center; }
+.tile-path { font-size: 10.5px; font-weight: 700; color: var(--teal-deep); opacity: 0.8; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.tile-check { position: absolute; left: 8px; top: 8px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid var(--teal); border-radius: 0; background: #fff; color: var(--teal-deep); font-size: 13px; font-style: normal; font-weight: 800; }
+.tile.is-sel .tile-check { background: var(--teal); color: #fff; }
+/* 그 자리에서 이름 고치기 — 타일 이름 자리에 입력칸 */
+.tile-rename { width: 100%; min-height: 30px; margin: 0; padding: 3px 6px; font-size: 13.5px; font-weight: 800; text-align: center; }
+.ex-empty { grid-column: 1 / -1; margin: 24px 0; font-size: 13px; font-weight: 700; color: var(--ink-faint); text-align: center; line-height: 1.7; }
 
-/* 전체·검색에서 어느 철에 들었는지. 태그처럼 글자만, 색으로 태그와 갈린다 */
-.sheet-folder { flex: none; font-size: 10.5px; font-weight: 800; letter-spacing: -0.01em;
-  color: var(--teal-deep); opacity: 0.8; white-space: nowrap; }
+/* ---------- 우클릭 메뉴 ---------- */
+.ctx-menu { position: fixed; z-index: 60; min-width: 160px; padding: 6px 0; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--card); box-shadow: var(--shadow-md); display: flex; flex-direction: column; }
+.ctx-menu[hidden] { display: none; }
+.ctx-menu .menu-item.is-danger { color: #ef4444; }
+/* 폴더 고르기 창 — 트리를 들여쓴 목록 */
+.pick-list { max-height: 50vh; overflow-y: auto; padding: 6px 0; }
+.pick-list .menu-item[disabled] { opacity: 0.4; cursor: default; }
 
-/* 열기 버튼은 없앴다 — 줄 자체가 열기다. 수정만 옅게 남긴다. */
-.row-edit {
-  flex: none;
-  padding: 6px 2px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink-faint);
-  font-size: 12px;
-  font-weight: 700;
-  min-height: auto;
-  box-shadow: none;
-  cursor: pointer;
+@media (max-width: 600px) {
+  .sheets .list-head { flex-wrap: wrap; align-items: center; }
+  .ex-tools { width: 100%; }
+  .ex-tools .search { flex: 1; width: auto; }
+  .ex-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px 8px; }
+  .tile-icon { width: 64px; height: 50px; }
+  .tile-name { font-size: 12.5px; }
 }
-.row-edit:hover { color: var(--teal-deep); background: transparent; box-shadow: none; filter: none; }
-
-/* 인라인 수정 */
-.sheet-item.is-editing { display: block; padding: 14px; background: #ffffffce; cursor: default; }
-
-/* ---------- 좁은 화면 ----------
-   도구줄에 검색 하나와 버튼 다섯이 들어간다. 한 줄로는 390px 에서 넘치므로
-   검색을 한 줄 통째로 쓰게 하고 버튼은 아래 줄에 나란히 세운다. */
-@media (max-width: 620px) {
-  .sheets .list-head h1 { font-size: 23px; }
-  .sheets .add-link { font-size: 13px; }
-  .sheets .tool-line { flex-wrap: wrap; gap: 0 14px; }
-  .sheets .tool-line .search { flex: 1 1 100%; }
-  .sheets .tool-line .drop-btn { min-height: 34px; font-size: 12.5px; }
-  .sheet-item { gap: 10px; }
-  .sheet-thumb { width: 36px; height: 48px; }
-  .sheet-name { font-size: 13.5px; }
-  /* 파트·태그가 제목을 밀어내지 않게 한 칸씩 줄인다 */
-  .sheet-role, .sheet-tag { font-size: 9.5px; }
-  .sheet-sub { font-size: 11px; gap: 5px; }
-}
-.edit-grid { display: flex; flex-wrap: wrap; gap: 7px; }
-.edit-grid input { flex: 1 1 140px; min-width: 0; }
-.edit-grid input[data-f="bpm"] { flex: 0 0 84px; }
-.edit-actions { display: flex; gap: 7px; flex: 1 1 100%; }
-.edit-actions button { flex: 1; }
-
-/* ---------- 일괄 처리 바 ----------
-   떠 있어야 하지만 떠 보이면 안 된다. 큰 라운드와 번지는 그림자 대신
-   위에 잉크 선 하나를 긋는다 — 목록을 나누는 것과 같은 방법이다.
-   아래 탭 줄은 쓰지 않으므로 바닥에 바로 붙인다. */
-.bulk-bar {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 0;
-  z-index: 40;
-  width: 100%;
-  max-width: 1280px;
-  padding: 12px max(24px, calc((100% - 1280px) / 2 + 32px)) calc(12px + var(--safe-bottom));
-  border-radius: 0;
-  border-top: 2px solid var(--ink);
-  background: #fff;
-}
-.bulk-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 8px;
-}
-.bulk-head strong { font-size: 13.5px; color: var(--teal-deep); }
-.bulk-row { display: flex; align-items: flex-start; gap: 8px; padding-top: 6px; }
-/* 바가 떠 있는 동안 목록 마지막 줄이 그 아래로 숨지 않게 비켜선다.
-   바는 내용에 따라 높이가 변하므로 넉넉히 준다. 켜져 있을 때만 걸린다. */
-body:has(.bulk-bar:not([hidden])) .sheets { padding-bottom: 190px; }
 
 /* ===== 아이패드 페어 =====
    아래 셋은 display 를 직접 지정하므로, 브라우저 기본값인 [hidden]{display:none}
@@ -685,14 +477,3 @@ body.has-fs-cue .pair-lost { top: calc(62px + env(safe-area-inset-top, 0px)); }
 .edit-chips .chip-set { display: flex; flex-wrap: wrap; gap: 2px 4px; flex: 1; }
 .edit-chips .chip { min-height: 26px; padding: 0 9px; font-size: 12px; }
 
-/* ---------- 폴더 줄(파일철, 2026-10-29) ----------
-   칩 한 줄. 고른 것은 .chip.is-on(잉크). 폴더를 골랐을 때만 오른쪽 끝에 다루기 글자 버튼.
-   이름 입력은 줄 안의 작은 칸 — 브라우저 입력창을 띄우지 않는다. */
-.folder-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 10px; }
-.folder-line .chip.folder-add { color: var(--ink-faint); }
-.folder-line .chip.folder-add:hover { color: var(--teal-deep); }
-.folder-acts { display: inline-flex; flex-wrap: wrap; gap: 2px; margin-left: auto; }
-.folder-acts .ghost.mini { padding: 5px 9px; font-size: 12px; }
-.folder-form { display: inline-flex; align-items: center; gap: 6px; }
-.folder-form input { width: 170px; min-height: 32px; margin: 0; padding: 4px 10px; font-size: 13px; }
-.folder-form .pink.mini { min-height: 32px; padding: 0 12px; font-size: 12.5px; }

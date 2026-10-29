@@ -1,4 +1,8 @@
-"""악보. 곡 목록과 독립이고 길드 밖 공용이다. 파트(role)로 나누고 태그와 검색으로 찾는다."""
+"""악보. 곡 목록과 독립이고 길드 밖 공용이다.
+
+탐색기(2026-10-30 사용자 결정): 폴더 트리(sheetFolders.parentId) 안에 악보가 든다. 맨 위는 folderId NULL.
+파트·태그는 화면에서 더 쓰지 않는다(칸은 남아 있다) — 폴더가 그 역할을 한다. 검색은 폴더를 가로지른다.
+권한 확인은 없다(사용자 결정, 2026-10-29)."""
 import hashlib
 import json
 import os
@@ -20,8 +24,8 @@ FOLDER_NAME_MAX = 30
 
 
 def _folder_id(conn, raw):
-    """폴더 값 하나를 읽는다. None·''·'none' 은 미분류. 없는 폴더면 400."""
-    if raw in (None, '', 'none'):
+    """폴더 값 하나를 읽는다. None·''·'root' 는 맨 위. 없는 폴더면 400."""
+    if raw in (None, '', 'root'):
         return None
     try:
         fid = int(raw)
@@ -43,89 +47,89 @@ SHEET_EDITABLE = ('title', 'artist', 'role', 'tags', 'bpm', 'pages', 'note', 'vi
 MAX_SHEET_BYTES = 30 * 1024 * 1024
 
 
-@router.get('/tag-counts')
-def sheet_tag_counts():
-    """필터 칩에 개수를 붙이기 위한 집계."""
-    conn = get_db()
-    rows = conn.execute(
-        'SELECT "tags" AS t, COUNT(*) AS c FROM sheets '
-        "WHERE \"tags\" IS NOT NULL AND \"tags\" <> '' GROUP BY \"tags\""
-    ).fetchall()
-    conn.close()
-    return {r['t']: r['c'] for r in rows}
+# ---------- 폴더 트리 ----------
+def _tree(conn):
+    """모든 폴더. 화면이 경로·하위 목록을 이걸로 만든다."""
+    return [dict(r) for r in conn.execute(
+        'SELECT f."id", f."name", f."parentId", f."createdBy", '
+        '(SELECT count(*) FROM sheets s WHERE s."folderId"=f."id") AS "count", '
+        '(SELECT count(*) FROM sheetFolders c WHERE c."parentId"=f."id") AS "folders" '
+        'FROM sheetFolders f ORDER BY lower(f."name"), f."id"').fetchall()]
 
 
-# ---------- 폴더(파일철) ----------
+def _descendants(conn, folder_id):
+    """folder_id 와 그 아래 모든 폴더 id. 순환 금지(자기 아래로 옮기기)를 가리는 데 쓴다."""
+    out = {folder_id}
+    frontier = [folder_id]
+    while frontier:
+        ph = ','.join('%s' for _ in frontier)
+        rows = conn.execute(f'SELECT "id" FROM sheetFolders WHERE "parentId" IN ({ph})', frontier).fetchall()
+        frontier = [r['id'] for r in rows if r['id'] not in out]
+        out.update(frontier)
+    return out
+
+
 @router.get('/folders')
 def list_folders():
-    """폴더와 각 폴더의 악보 수, 미분류 수, 전체 수. 화면의 폴더 줄이 이걸로 그려진다."""
     conn = get_db()
     try:
-        rows = conn.execute(
-            'SELECT f."id", f."name", f."order", f."createdBy", '
-            '(SELECT count(*) FROM sheets s WHERE s."folderId"=f."id") AS "count" '
-            'FROM sheetFolders f ORDER BY f."order", f."id"').fetchall()
-        unfiled = conn.execute('SELECT count(*) AS n FROM sheets WHERE "folderId" IS NULL').fetchone()['n']
-        total = conn.execute('SELECT count(*) AS n FROM sheets').fetchone()['n']
-        return {'folders': [dict(r) for r in rows], 'unfiled': unfiled, 'total': total}
+        root = conn.execute('SELECT count(*) AS n FROM sheets WHERE "folderId" IS NULL').fetchone()['n']
+        return {'folders': _tree(conn), 'rootCount': root}
     finally:
         conn.close()
 
 
 @router.post('/folders')
 def create_folder(body: dict):
-    name = _folder_name(body.get('name'))
+    """새 폴더. 탐색기처럼 이름은 '새 폴더' 로 바로 만들고 화면에서 그 자리에서 고친다."""
+    name = _folder_name(body.get('name') or '새 폴더')
     conn = get_db()
     try:
-        nxt = conn.execute('SELECT coalesce(max("order"), 0) + 1 AS n FROM sheetFolders').fetchone()['n']
+        parent = _folder_id(conn, body.get('parentId'))
         row = conn.execute(
-            'INSERT INTO sheetFolders ("name","order","createdBy") VALUES (%s,%s,%s) '
-            'RETURNING "id","name","order","createdBy"', (name, nxt, body.get('createdBy'))).fetchone()
+            'INSERT INTO sheetFolders ("name","parentId","createdBy") VALUES (%s,%s,%s) '
+            'RETURNING "id","name","parentId","createdBy"', (name, parent, body.get('createdBy'))).fetchone()
         conn.commit()
-        return {**dict(row), 'count': 0}
-    finally:
-        conn.close()
-
-
-@router.post('/folders/order')
-def order_folders(body: dict):
-    """폴더 순서를 이 목록대로. 목록에 없는 폴더는 뒤에 그대로 남는다."""
-    ids = body_ids(body)
-    conn = get_db()
-    try:
-        for i, fid in enumerate(ids):
-            conn.execute('UPDATE sheetFolders SET "order"=%s WHERE "id"=%s', (i + 1, fid))
-        conn.commit()
-        return {'ok': True}
+        return {**dict(row), 'count': 0, 'folders': 0}
     finally:
         conn.close()
 
 
 @router.put('/folders/{folder_id}')
-def rename_folder(folder_id: int, body: dict):
-    name = _folder_name(body.get('name'))
+def update_folder(folder_id: int, body: dict):
+    """이름 바꾸기(name) · 옮기기(parentId, null 이면 맨 위). 자기 자신이나 자기 아래로는 못 옮긴다."""
     conn = get_db()
     try:
-        cur = conn.execute('UPDATE sheetFolders SET "name"=%s WHERE "id"=%s', (name, folder_id))
-        conn.commit()
-        if cur.rowcount == 0:
+        if not conn.execute('SELECT 1 FROM sheetFolders WHERE "id"=%s', (folder_id,)).fetchone():
             raise HTTPException(404, '폴더를 찾을 수 없습니다.')
-        return {'id': folder_id, 'name': name}
+        if 'name' in body:
+            conn.execute('UPDATE sheetFolders SET "name"=%s WHERE "id"=%s', (_folder_name(body['name']), folder_id))
+        if 'parentId' in body:
+            parent = _folder_id(conn, body.get('parentId'))
+            if parent is not None and parent in _descendants(conn, folder_id):
+                raise HTTPException(400, '폴더를 자기 안으로 옮길 수는 없습니다.')
+            conn.execute('UPDATE sheetFolders SET "parentId"=%s WHERE "id"=%s', (parent, folder_id))
+        conn.commit()
+        row = conn.execute('SELECT "id","name","parentId","createdBy" FROM sheetFolders WHERE "id"=%s', (folder_id,)).fetchone()
+        return dict(row)
     finally:
         conn.close()
 
 
 @router.delete('/folders/{folder_id}')
 def delete_folder(folder_id: int):
-    """폴더만 지운다. 안의 악보는 미분류로 돌아간다(FK ON DELETE SET NULL)."""
+    """폴더만 지운다. 안의 폴더와 악보는 한 단계 위로 올라간다(맨 위면 맨 위로)."""
     conn = get_db()
     try:
-        n = conn.execute('SELECT count(*) AS n FROM sheets WHERE "folderId"=%s', (folder_id,)).fetchone()['n']
-        cur = conn.execute('DELETE FROM sheetFolders WHERE "id"=%s', (folder_id,))
-        conn.commit()
-        if cur.rowcount == 0:
+        row = conn.execute('SELECT "parentId" FROM sheetFolders WHERE "id"=%s', (folder_id,)).fetchone()
+        if not row:
             raise HTTPException(404, '폴더를 찾을 수 없습니다.')
-        return {'ok': True, 'unfiled': n}
+        parent = row['parentId']
+        f = conn.execute('UPDATE sheetFolders SET "parentId"=%s WHERE "parentId"=%s', (parent, folder_id)).rowcount
+        s = conn.execute('UPDATE sheets SET "folderId"=%s, "updatedAt"=now() WHERE "folderId"=%s', (parent, folder_id)).rowcount
+        conn.execute('DELETE FROM sheetFolders WHERE "id"=%s', (folder_id,))
+        conn.commit()
+        return {'ok': True, 'lifted': {'folders': f, 'sheets': s}, 'to': parent}
     finally:
         conn.close()
 
@@ -133,11 +137,13 @@ def delete_folder(folder_id: int):
 @router.get('')
 def list_sheets(q: str | None = None, role: str | None = None, tag: str | None = None,
                 folder: str | None = None):
-    """태그는 하나만 붙으므로 정확히 일치하는 것만 거른다.
-    folder 는 폴더 id 또는 'none'(미분류). 순서는 제목순이다(2026-10-29) — 올린 순서는 파일철로 쓰기에 맞지 않았다."""
+    """folder 는 폴더 id 또는 'root'(맨 위). 검색어(q)가 있으면 폴더를 가로질러 전체에서 찾는다.
+    순서는 제목순이다(2026-10-29) — 올린 순서는 파일철로 쓰기에 맞지 않았다."""
     where = []
     params = []
-    if folder == 'none':
+    if q and q.strip():
+        folder = None
+    if folder == 'root':
         where.append('"folderId" IS NULL')
     elif folder:
         try:
@@ -166,7 +172,7 @@ def list_sheets(q: str | None = None, role: str | None = None, tag: str | None =
 
 @router.post('')
 async def upload_sheets(
-    role: str = Form(...),
+    role: str | None = Form(None),
     tags: str | None = Form(None),
     uploadedBy: str | None = Form(None),
     meta: str | None = Form(None),
@@ -184,6 +190,7 @@ async def upload_sheets(
         per_file = []
 
     tag_text = norm_tag(tags)
+    role = (role or '').strip() or '공용'     # 탐색기는 올릴 때 파트를 묻지 않는다(2026-10-30). 비면 공용
     conn = get_db()
     try:
         folder = _folder_id(conn, folderId)      # 올릴 때 고른 폴더. 없으면 미분류

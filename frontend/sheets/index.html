@@ -14,97 +14,35 @@
 <body>
   <header id="app-header" class="app-bar"></header>
 
+  <!-- 탐색기(2026-10-30). 경로 · 검색 칸 · 폴더 타일 · 악보 타일. 관리는 우클릭(길게 누르기) 메뉴,
+       옮기기는 끌어다 놓기, 올리기는 PDF 를 떨어뜨리는 것. 파트·태그·거르기·칩·일괄 바는 없다. -->
   <div class="container sheets">
-    <section class="list-page">
-      <!-- 곡 목록과 같은 머리. 올리기는 가끔 하는 일이라 조용한 글자 버튼으로 둔다. -->
+    <section class="explorer" id="explorer">
       <div class="list-head">
         <div>
           <span class="overline"><span>SHEET LIBRARY</span></span>
           <h1>악보<small id="list-count"></small></h1>
         </div>
-        <button type="button" class="add-link" id="upload-toggle" aria-expanded="false" aria-controls="upload-body">＋ 악보 올리기</button>
+        <div class="ex-tools">
+          <label class="search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input type="search" id="search" class="search-box" placeholder="제목 · 아티스트" aria-label="악보 검색" autocomplete="off" />
+          </label>
+          <button type="button" class="drop-btn line-act" id="pair-btn">페어</button>
+        </div>
       </div>
-
-      <div id="upload-body" hidden>
-        <div class="field-row">
-          <span class="field-label">파트</span>
-          <div class="chip-set" id="up-role"></div>
-        </div>
-        <div class="field-row">
-          <span class="field-label">태그</span>
-          <div class="chip-set" id="up-tags"></div>
-        </div>
-        <!-- 올릴 폴더. 폴더를 열어 둔 채 올리면 그 폴더가 기본이다 -->
-        <div class="field-row">
-          <span class="field-label">폴더</span>
-          <div class="chip-set" id="up-folder"></div>
-        </div>
-
-        <label class="file-pick" for="file-input">
-          <span id="file-fake">파일 선택 · 드래그</span>
-        </label>
-        <input type="file" id="file-input" accept="application/pdf" multiple hidden />
-
-        <div id="preview" class="preview" hidden>
-          <div class="preview-head">
-            <span id="preview-count"></span>
-            <button type="button" class="ghost mini" id="preview-clear">비우기</button>
-          </div>
-          <ul id="preview-list" class="preview-list"></ul>
-          <button type="button" class="pink upload-go" id="upload-btn">올리기</button>
-        </div>
-        <p class="muted upload-status" id="upload-status" hidden></p>
-      </div>
-
-      <!-- 폴더(파일철, 2026-10-29). 한 단계, 칩 한 줄: 전체 · 미분류 · 폴더들 · ＋.
-           폴더를 골랐을 때만 오른쪽에 이름 바꾸기·순서·지우기가 글자 버튼으로 선다.
-           왼쪽 세로 칸 대신 칩 줄인 이유: 주로 쓰는 세로 아이패드에서 목록 폭을 안 뺏는다. -->
-      <div class="folder-line" id="folder-line"></div>
-
-      <!-- 검색 · 파트 · 태그 · 동작을 한 줄에. 곡 목록과 같은 문법이다 —
-           줄에는 현재 값만 글자로 보이고, 누르면 아래로 메뉴가 열린다. -->
-      <div class="tool-line">
-        <label class="search">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input type="search" id="search" class="search-box" placeholder="제목 · 아티스트 · 태그" aria-label="제목 · 아티스트 · 태그 검색" autocomplete="off" />
-        </label>
-        <div class="drop" id="drop-role">
-          <button type="button" class="drop-btn" data-drop="role"><span id="role-label">파트</span></button>
-          <div class="drop-menu" id="menu-role" hidden></div>
-        </div>
-        <div class="drop" id="drop-tag">
-          <button type="button" class="drop-btn" data-drop="tag"><span id="tag-label">태그</span></button>
-          <div class="drop-menu" id="menu-tag" hidden></div>
-        </div>
-        <button type="button" class="drop-btn line-act" id="select-toggle">선택</button>
-        <button type="button" class="drop-btn line-act" id="select-all" hidden>전체</button>
-        <button type="button" class="drop-btn line-act" id="pair-btn">페어</button>
-      </div>
-
-      <ul id="list" class="sheet-list"></ul>
+      <nav class="crumbs" id="crumbs" aria-label="경로"></nav>
+      <p class="ex-status muted" id="ex-status" hidden></p>
+      <p class="ex-select" id="ex-select" hidden><span id="ex-select-n"></span><button type="button" class="ghost mini" id="ex-select-clear">선택 해제</button></p>
+      <div class="ex-grid" id="grid"></div>
     </section>
   </div>
 
-  <!-- 선택했을 때 뜨는 일괄 처리 바 -->
-  <div class="bulk-bar" id="bulk-bar" hidden>
-    <div class="bulk-head">
-      <strong id="bulk-count">0개 선택됨</strong>
-      <button type="button" class="ghost mini" id="bulk-close">해제</button>
-    </div>
-    <div class="bulk-row">
-      <span class="field-label">태그</span>
-      <div class="chip-set" id="bulk-tags"></div>
-    </div>
-    <div class="bulk-row">
-      <span class="field-label">폴더</span>
-      <div class="chip-set" id="bulk-folder"></div>
-    </div>
-    <div class="bulk-row">
-      <span class="field-label">파트</span>
-      <div class="chip-set" id="bulk-role"></div>
-      <button type="button" class="ghost mini danger" id="bulk-delete">삭제</button>
-    </div>
-  </div>
+  <!-- 우클릭(길게 누르기) 메뉴 — 사이트 부품. 브라우저 기본 메뉴는 막는다 -->
+  <div class="ctx-menu" id="ctx" role="menu" hidden></div>
+  <!-- 끌어 놓을 수 없는 기기용 파일 고르기. 메뉴의 '올리기…'·'파일 바꾸기' 가 연다 -->
+  <input type="file" id="file-input" accept="application/pdf,.pdf" multiple hidden />
+  <input type="file" id="replace-input" accept="application/pdf,.pdf" hidden />
 
   <!-- 아이패드 페어 — 1번이 QR을 띄우고 2번이 스캔하면 홀/짝쪽으로 나눠 본다 -->
   <div class="pair-modal" id="pair-modal" hidden>
