@@ -1134,13 +1134,12 @@ function layout() {
   pageImg.style.height = Math.round(ih * s) + 'px';
 }
 
-/* flash 를 주면 쪽수 뱃지가 잠깐 떠오른다 — 이 기기의 쪽이 실제로 바뀌었을 때만.
-   페어에서 넘겨도 내 쪽이 그대로면(치는 중인 기기) 악보 위에 아무것도 띄우지 않는다 — 옆 기기가 넘어가는 게 곧 피드백이다. */
+/* flash 를 주면 쪽수 뱃지가 잠깐 떠오른다 — 넘길 때마다, 쪽이 그대로인 기기에도(3쪽짜리 끝의 2번 기기).
+   안 띄우면 렉인지 끝인지 구분이 안 된다(2026-10-30 사용자). */
 function showPage(n, flash) {
   if (!currentSheet) return;
   pageNo = Math.min(Math.max(1, n), maxStep());
   const p = stepPage(pageNo);
-  if (flash && p === shownPage && !pageImg.hidden) flash = false;
   if (p > pageTotal) {
     /* 홀수 쪽수 악보의 마지막 펼침 — 보조 화면엔 짝수쪽이 없다 */
     pageImg.removeAttribute('src');
