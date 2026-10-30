@@ -78,3 +78,113 @@ function eventKindText(e) {
   const crests = (e.guilds || []).map((g) => guildMark(g, 16, 'event-guild')).join('');
   return `${label}${crests ? ' ' + crests : ''}`;
 }
+
+
+/* ---------- 홈 배너 (2026-10-30) ----------
+   홈 '모임 · 일정' 은 표가 아니라 배너다. 이 사이트의 문법은 리듬 게임(tokens.css --skew)이고, 곡 선택이
+   자켓 캐러셀인데 그 아래 일정만 웹 표였다. 한 화면에 두 세계가 있어서 어느 쪽으로도 안 읽혔다.
+   일정표(/schedule/)는 비교하고 훑는 화면이라 표를 그대로 둔다. 배너는 홈만 쓴다.
+
+   배너 하나 = 날짜 블록(길드색) | 제목 · 한 줄 | 로고(오른쪽 가장자리에 크게 걸려 잘린다) | 도장.
+     길드 합주       길드색이 바탕. 로고가 얼굴이라 다른 장식은 없다.
+     정기합주·정기공연·밴드 행사   길드가 없어 그 자리가 비니 공연장(빛으로 그린 무대)이 바탕이다. CSS 가 그린다.
+     다른 길드       같은 배너에 채도만 낮고 도장이 없다. 숨기지 않는다 — 다른 길드가 언제 뭘 하는지 보이는 것이 공동체다.
+   도장:
+     참석   확정 일정. 그 자리에서 토글한다(누르면 쾅 찍힌다). 날짜만 정해지고 시간·장소가 비어도 누를 수 있다.
+     투표   날짜 투표. 토글이 아니다 — 날짜를 골라야 하므로 누르면 상세(/schedule/?event=)로 간다. 기표인(卜) 모양.
+     상태 글자  '길드장 투표 중' 처럼 내가 할 수 있는 게 없을 때. 오른쪽 위 띠.
+   아직 안 한 일만 점선으로 숨 쉰다(강조색). 한 일은 조용히 찍혀 있다. */
+
+/* 전체 일정의 계절. 그 일정의 달로 정한다(투표 중이면 후보 첫날). 겨울 12–2, 봄 3–5, 여름 6–8, 가을 9–11.
+   색·풍경은 eventcard.css 의 .bn.season-* 가 갖는다. 길드 합주는 길드색이라 계절을 타지 않는다. */
+function bannerSeason(e) {
+  const iso = e.date || ((e.dates || []).map((d) => d.date).sort()[0]) || '';
+  const m = Number(iso.slice(5, 7)) || (new Date().getMonth() + 1);
+  return m === 12 || m <= 2 ? 'winter' : m <= 5 ? 'spring' : m <= 8 ? 'summer' : 'autumn';
+}
+/* 색 블록 위 글자색. 밝은 길드색(분열밴드 #ffd6f0)에는 잉크, 어두운 색에는 흰색. */
+function bannerInk(hex) {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return '#ffffff';
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#1b2a45' : '#ffffff';
+}
+function bannerToday() { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date()); }
+/* 투표 중인 일정에서 표가 가장 많이 모인 날. schedule.js votesOn 과 같은 셈법 — 정기합주·정기공연은 길드 표, 그 밖은 사람 표. */
+function bannerLeadingDate(e) {
+  const union = ['regular', 'concert'].includes(eventKind(e));
+  const list = union ? (e.guildAvails || []) : (e.avails || []);
+  const n = {};
+  list.forEach((a) => { n[a.date] = (n[a.date] || 0) + 1; });
+  let best = null;
+  Object.keys(n).sort().forEach((d) => { if (!best || n[d] > n[best]) best = d; });
+  return best ? { date: best, count: n[best], unit: union ? '길드' : '명' } : null;
+}
+function bannerDateHtml(e) {
+  if (e.status === 'confirmed' && e.date) {
+    const d = new Date(`${e.date}T00:00:00`), wk = d.getDay(), today = e.date === bannerToday();
+    const yr = Number(e.date.slice(0, 4)) === new Date().getFullYear() ? '' : `<i>'${e.date.slice(2, 4)}</i>`;
+    return `<span class="bn-date${today ? ' is-today' : ''}"><b>${yr}${d.getDate()}</b><small>${today ? '오늘' : EV_DOW[wk]}</small></span>`;
+  }
+  const dates = (e.dates || []).map((d) => d.date).sort();
+  const f = dates[0], l = dates[dates.length - 1];
+  let range = f ? evMonthDay(f) : '';
+  if (f && l && l !== f) { const [, fm] = f.split('-').map(Number), [, lm, ld] = l.split('-').map(Number); range += '–' + (lm === fm ? ld : evMonthDay(l)); }
+  return `<span class="bn-date is-poll"><b>${range}</b><small>투표 중</small></span>`;
+}
+/* 한 줄 부제. 확정은 시간 · 장소(없으면 비운다 — '미정' 을 글자로 쓰지 않는다), 투표는 유력 날짜, 전체 일정은 길드 수. */
+function bannerSub(e) {
+  const kind = eventKind(e);
+  const parts = [];
+  if (e.status === 'confirmed') {
+    if (e.startTime) parts.push(e.startTime + (e.endTime ? ' – ' + e.endTime : ''));
+    if (e.place) parts.push(e.place);
+    if (e.songs && e.songs.length) parts.push(`${e.songs.length}곡`);
+  } else {
+    const lead = bannerLeadingDate(e);
+    if (lead) { const d = new Date(`${lead.date}T00:00:00`); parts.push(`유력 ${evMonthDay(lead.date)} ${EV_DOW[d.getDay()]} · ${lead.count}${lead.unit}`); }
+  }
+  if (kind !== 'guild' && (e.guilds || []).length) parts.unshift(`길드 ${e.guilds.length}곳`);
+  return parts.map(escapeHtml).join(' · ');
+}
+function bannerArt(e) {
+  const g = e.guild;
+  if (!g) return `<span class="bn-artwrap"><span class="bn-art is-site"><img src="/assets/logo.png" alt="" /></span></span>`;
+  if (g.hasImage) return `<span class="bn-artwrap"><span class="bn-art"><img src="${g.imageUrl || `/api/guilds/${encodeURIComponent(g.slug)}/image`}" alt="" /></span></span>`;
+  const crest = typeof crestFor === 'function' && crestFor(g, 160);
+  return crest ? `<span class="bn-artwrap"><span class="bn-art is-crest">${crest}</span></span>` : '';
+}
+const BN_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12.5l4 4L18 8"/></svg>';
+/* opts: { me, myGuildIds:Set, href }  — 길드 소속은 호출하는 화면이 안다(홈은 guilds 를 들고 있다). */
+function eventBanner(e, opts = {}) {
+  const kind = eventKind(e), me = opts.me || '', mine = opts.myGuildIds || new Set();
+  const other = kind === 'guild' && !(e.guildId && mine.has(e.guildId));
+  const g = kind === 'guild' ? e.guild : null;
+  /* 길드 합주만 인라인 색. 전체 일정은 계절 클래스가 --g 를 정하므로 인라인으로 덮지 않는다 */
+  const style = g ? `--g:${escapeHtml(g.color || '#1b2a45')};--on:${bannerInk(g.color || '#1b2a45')}` : '';
+  const season = g ? '' : ' season-' + bannerSeason(e);
+  const tags = [];
+  if (e.status === 'confirmed' && e.date === bannerToday()) tags.push('<span class="bn-tag today"><span>오늘</span></span>');
+  if (kind !== 'guild') tags.push(`<span class="bn-tag kind-${kind}"><span>${EVENT_KIND[kind]}</span></span>`);
+  /* 오른쪽: 도장 또는 상태 글자 */
+  let right = '';
+  if (!other) {
+    if (e.status === 'confirmed') {
+      const on = !!me && e.avails.some((a) => a.date === e.date && a.nickname === me);
+      right = `<button type="button" class="bn-stamp" aria-pressed="${on}" data-attend="${e.id}" aria-label="참석"><span>${BN_CHECK}참석</span></button>`;
+    } else if (['regular', 'concert'].includes(kind)) {
+      const leader = !!me && (e.guilds || []).some((x) => x.leader === me);
+      if (leader) {
+        const on = (e.guilds || []).some((x) => x.leader === me && (e.guildAvails || []).some((a) => a.guildId === x.id));
+        right = `<a class="bn-stamp vote" aria-pressed="${on}" href="${opts.href || '#'}" aria-label="투표"><span><b>卜</b>투표</span></a>`;
+      } else right = '<span class="bn-state">길드장 투표 중</span>';
+    } else {
+      const on = !!me && e.avails.some((a) => a.nickname === me);
+      right = `<a class="bn-stamp vote" aria-pressed="${on}" href="${opts.href || '#'}" aria-label="투표"><span><b>卜</b>투표</span></a>`;
+    }
+  }
+  const sub = bannerSub(e);
+  return `<div class="bn kind-${kind}${season}${other ? ' is-other' : ''}${e.status !== 'confirmed' ? ' is-poll' : ''}" role="link" tabindex="0" data-event="${e.id}" data-href="${escapeHtml(opts.href || '')}"${style ? ` style="${style}"` : ''}>`
+    + `${bannerDateHtml(e)}${bannerArt(e)}${g ? '' : '<span class="bn-fx"></span>'}<span class="bn-txt">${tags.join('')}<span class="bn-ttl">${escapeHtml(e.title)}</span>${sub ? `<span class="bn-sub">${sub}</span>` : ''}</span>${right}</div>`;
+}
