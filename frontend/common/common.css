@@ -861,7 +861,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}/* 
    것을 전부 눌러서, 파일을 읽어서는 실제 모습을 알 수 없었다. */.song-item:target{outline:3px solid var(--teal);outline-offset:3px}.modal,.profile-modal{border-radius:8px}.modal-backdrop{backdrop-filter:blur(5px)}.tool-line{background:#edf6fa;padding:10px;border:1px solid #dbe8ee;border-radius:4px}.member-list{gap:16px}
 /* 멤버 목록 격자. 넓은 쪽부터 좁은 쪽 순서로 읽는다. 뒤 규칙이 앞을 덮는다.
    540px 분기는 800px 분기가 늘 뒤에 와서 덮으므로 실제로 걸리는 일이 없다. 기록만 남긴다. */
-.member-list{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));column-gap:24px;gap:16px}.pf-preview img,.avatar-chip img{object-fit:contain!important}
+.member-list{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));column-gap:24px;gap:16px}
 /* 일정 페이지의 2열은 여기 있던 body:has(#calendar) 격자였다. 달력을 걷어내면서
    페이지 전체를 가르지 않고, 상세 안에서 곡 표와 합주실을 가르는 쪽으로 옮겼다
    (schedule.css 의 .ps-split). 페이지를 가르면 아코디언이 반쪽 폭이 된다. */

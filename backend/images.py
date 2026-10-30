@@ -1,33 +1,32 @@
 """사진 한 장을 화면에 올릴 수 있는 크기로 줄인다.
 
-멤버 프로필 사진과 길드 문장이 같은 규칙을 쓴다. 전에는 members.py 안에만 있어서
-길드가 쓰려면 복사해야 했다 — 복사하면 한쪽만 고쳐질 자리가 생긴다.
+멤버 프로필 사진과 길드 문장이 같은 규칙을 쓴다.
 
-전체 구도를 유지한 채 투명한 정사각 캔버스에 맞춘다. 잘라 내지 않는다 —
-무엇을 남길지는 화면의 자르기 창(crop.js)에서 사용자가 이미 정했다.
+원칙(2026-10-30): **자르지 않는다.** 비율 그대로 긴 변 512px 로만 줄여 저장하고,
+원·육각 같은 모양은 보여 줄 때 CSS/SVG 마스크로 씌운다. 전에는 화면(crop.js)이 올릴 때
+육각·원으로 잘라 보냈고 서버는 그것만 저장해서, 나중에 네모로 쓰려 하니 원본이 없었다.
+그래서 2026-10-30 이전에 올린 그림은 모서리가 투명한 육각/원이다 — 다시 올리면 원본이 된다.
 """
 import io
 
 from fastapi import HTTPException
 from PIL import Image, ImageOps
 
-SIDE = 256                 # 무대에 서는 캐릭터도, 길드 문장도 이보다 크게 볼 일이 없다
+SIDE = 512                 # 긴 변. 길드 홈 머리·프로필 크게 보기까지 이 정도면 된다
 MAX_UPLOAD = 8 * 1024 * 1024
-MAX_STORED = 200 * 1024
+MAX_STORED = 300 * 1024
 
 
-def square_webp(data):
-    """전체 구도를 유지해 투명한 256px 캔버스에 맞춘다."""
+def fit_webp(data):
+    """비율 그대로 긴 변 SIDE 안에 들어오게만 줄인다. 캔버스를 덧대지도, 자르지도 않는다. 알파는 그대로."""
     try:
         im = Image.open(io.BytesIO(data))
         im = ImageOps.exif_transpose(im)
         im = im.convert('RGBA') if im.mode in ('RGBA', 'LA', 'P') else im.convert('RGB')
     except Exception:
         raise HTTPException(400, '이미지 파일이 아닙니다.')
-    im = ImageOps.contain(im, (SIDE, SIDE), method=Image.LANCZOS)
-    canvas = Image.new('RGBA', (SIDE, SIDE), (0, 0, 0, 0))
-    canvas.paste(im, ((SIDE - im.width) // 2, (SIDE - im.height) // 2))
-    im = canvas
+    if im.width > SIDE or im.height > SIDE:
+        im = ImageOps.contain(im, (SIDE, SIDE), method=Image.LANCZOS)
     for q in (85, 70, 55, 40):
         buf = io.BytesIO()
         im.save(buf, 'WEBP', quality=q, method=4)

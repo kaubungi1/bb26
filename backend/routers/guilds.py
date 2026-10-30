@@ -7,7 +7,7 @@ from psycopg.types.json import Json
 from db import get_db
 import imageserve
 import listcache
-from images import MAX_UPLOAD, square_webp
+from images import MAX_UPLOAD, fit_webp
 from guildtheme import THEMES, cache_clear
 
 router = APIRouter()
@@ -232,7 +232,7 @@ def remove_member(slug: str, member_id: int):
 # ---------- 길드 문장 사진 ----------
 # 문양 서른여섯 개 안에서만 고르게 두면 길드마다 같은 그림이 겹친다.
 # 사진을 올리면 그게 문양을 이긴다 — 프로필의 사진 > 이모지 > 첫 글자와 같은 규칙이다.
-# 줄이는 규칙은 images.py 한 곳에 있고 멤버 프로필 사진과 똑같다.
+# 줄이는 규칙은 images.py 한 곳에 있고 멤버 프로필 사진과 똑같다. 자르지 않고 비율 그대로 저장한다(2026-10-30).
 @router.post('/{slug}/image')
 async def upload_crest(slug: str, nickname: str = '', file: UploadFile = File(...)):
     data = await file.read(MAX_UPLOAD + 1)
@@ -240,7 +240,7 @@ async def upload_crest(slug: str, nickname: str = '', file: UploadFile = File(..
         raise HTTPException(400, '파일이 비어 있습니다.')
     if len(data) > MAX_UPLOAD:
         raise HTTPException(400, '8MB 아래로 올려주세요.')
-    webp = square_webp(data)
+    webp = fit_webp(data)
     conn = get_db()
     try:
         row = conn.execute('SELECT "id" FROM guilds WHERE "slug"=%s', (slug,)).fetchone()

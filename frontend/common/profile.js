@@ -142,12 +142,12 @@ async function openProfileEditor(nickname, opts = {}) {
       /* 값을 먼저 비운다. 같은 파일을 다시 골라도 change 가 뜬다. */
       e.target.value = '';
       if (f.size > 8 * 1024 * 1024) { alert('8MB 아래로 올려주세요.'); return; }
-      const cropped = await openCropper(f);
-      if (!cropped) return;                 /* 자르기를 취소했다. 여기서 끝낸다. */
-      imageFile = new File([cropped], 'avatar.png', { type: 'image/png' });
+      if (!/^image\//.test(f.type || '')) { alert('이미지 파일만 올릴 수 있습니다.'); return; }
+      /* 자르지 않고 원본을 올린다(2026-10-30). 원은 보여 줄 때 CSS 가 씌운다 */
+      imageFile = f;
       removeImage = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      objectUrl = URL.createObjectURL(cropped);
+      objectUrl = URL.createObjectURL(f);
       previewUrl = objectUrl;
       backdrop.querySelector('#pf-clear').classList.remove('is-off');
       paintPreview();

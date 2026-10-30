@@ -51,8 +51,8 @@ async function openGuildEditor(guild = null) {
             </div>
             <span class="field-label">문장</span>
             <!-- 서른여섯 문양 안에서만 고르면 길드가 늘수록 같은 그림이 겹친다.
-                 사진을 올리면 그게 문양을 이긴다. 자르기는 프로필과 같은 창을 쓰되
-                 틀만 육각이다(crop.js 의 shape='hex'). -->
+                 사진을 올리면 그게 문양을 이긴다. 자르지 않고 원본을 올리며(2026-10-30),
+                 육각은 보여 줄 때 crest.js 가 씌운다. -->
             <div class="gs-photo">
               <label class="gs-photo-pick">
                 <input type="file" accept="image/*" id="gs-photo" />
@@ -186,14 +186,15 @@ async function openGuildEditor(guild = null) {
         const f = e.target.files && e.target.files[0];
         e.target.value = '';
         if (!f) return;
-        const cut = await openCropper(f, 'hex');
-        if (!cut) return;
-        /* 올라가는 동안 방금 자른 그림을 먼저 보여 준다. 실패하면 원래대로 돌린다. */
+        /* 자르지 않고 원본을 그대로 올린다(2026-10-30). 육각은 보여 줄 때 crest.js 가 씌운다.
+           올라가는 동안 고른 그림을 먼저 보여 준다. 실패하면 원래대로 돌린다. */
+        if (!/^image\//.test(f.type || '')) { photoNote.textContent = '이미지 파일만 올릴 수 있습니다.'; return; }
+        if (f.size > 8 * 1024 * 1024) { photoNote.textContent = '8MB 아래로 올려주세요.'; return; }
         const before = { url: photoUrl, has: hasPhoto };
-        photoUrl = URL.createObjectURL(cut);
+        photoUrl = URL.createObjectURL(f);
         setPhoto(true);
         const fd = new FormData();
-        fd.append('file', cut, 'crest.png');
+        fd.append('file', f, f.name || 'crest');
         try {
           const up = await api.post(`/guilds/${encodeURIComponent(g.slug)}/image?nickname=${encodeURIComponent(nickname)}`, fd);
           photoUrl = up.imageUrl || null;

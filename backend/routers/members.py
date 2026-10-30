@@ -10,7 +10,7 @@ from db import get_db
 import admin
 import imageserve
 import listcache
-from images import MAX_UPLOAD, square_webp
+from images import MAX_UPLOAD, fit_webp
 
 router = APIRouter()
 
@@ -198,7 +198,7 @@ async def upload_image(nickname: str, file: UploadFile = File(...)):
         raise HTTPException(400, '파일이 비어 있습니다.')
     if len(data) > MAX_UPLOAD:
         raise HTTPException(400, '8MB 아래로 올려주세요.')
-    webp = square_webp(data)
+    webp = fit_webp(data)
     conn = get_db()
     conn.execute(
         'INSERT INTO members ("nickname", "image", "imageUpdatedAt") VALUES (%s,%s,now()) '
