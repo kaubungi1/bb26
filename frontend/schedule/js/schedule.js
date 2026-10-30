@@ -695,7 +695,7 @@ function renderPollView() {
   } else {
     pollMeta.textContent = `후보 ${ev.dates.length}일${f ? ' · ' + monthDay(f) : ''}${l && l !== f ? ' ~ ' + monthDay(l) : ''}${ev.createdBy ? ' · ' + ev.createdBy : ''}`;
     pollHintEl.textContent = guildVote(ev)
-      ? '길드장이 자기 길드 열(점선)을 탭해 가능 표시 · 확정되면 각자 참가하기'
+      ? '길드장이 투표하는 일정 · 확정되면 각자 참가하기'
       : '내 열(점선)을 탭해 가능 표시 · 날짜를 탭하면 그날 되는 곡';
     if (!playableDate || !ev.dates.some((dr) => dr.date === playableDate)) playableDate = bestDate(ev);
   }

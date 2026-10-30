@@ -147,7 +147,7 @@ function nextPractice() {
   if (lines.length) {
     html += `<ul class="np-lines" aria-label="다른 일정">${lines.map((e) => {
       const when = e.status === 'poll' ? '날짜 투표 중' : dayLabel(e.date) + (e.startTime ? ' ' + esc(e.startTime) : '');
-      const what = UNION.includes(e.kind) ? (e.status === 'poll' ? `길드장(${esc(guild.leader || '없음')})이 길드 이름으로 찍습니다` : `참석 ${e.avails.filter((a) => a.date === e.date).length}`)
+      const what = UNION.includes(e.kind) ? (e.status === 'poll' ? '길드장이 투표 중' : `참석 ${e.avails.filter((a) => a.date === e.date).length}`)
         : e.kind === 'band' ? '밴드 행사' : (e.status === 'poll' ? `${e.dates.length}일 중` : `참석 ${e.avails.filter((a) => a.date === e.date).length}`);
       return `<li><a href="${Site.base}/schedule/?event=${e.id}"><b>${esc(e.title)}</b><span>${when} · ${what}</span><i>→</i></a></li>`;
     }).join('')}</ul>`;
@@ -190,7 +190,7 @@ function unionVoteCard(e, head, more) {
   const ours = (d) => (e.guildAvails || []).some((a) => a.date === d && a.guildId === guild.id);
   const marked = days.filter(ours).length;
   return `<section class="next-practice is-poll is-union" data-event="${e.id}">
-    <div class="np-head">${head(e)}<p class="np-when">길드 투표 · 우리 길드가 되는 날을 눌러 주세요 · ${days.length}일 중 ${marked}일</p></div>
+    <div class="np-head">${head(e)}<p class="np-when">우리 길드가 되는 날을 골라 주세요 · ${days.length}일 중 ${marked}일</p></div>
     <div class="np-days">${days.map((d) =>
       `<button type="button" class="np-day${ours(d) ? ' is-on' : ''}" data-gavail="${esc(d)}" aria-pressed="${ours(d)}">${dayLabel(d)}</button>`).join('')}</div>
     <div class="np-act">${more(e)}</div></section>`;
