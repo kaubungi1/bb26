@@ -417,3 +417,15 @@
 .home .meeting .sched-date.is-poll{color:var(--ink-muted);line-height:1.25}
 .home .meeting .sched-date em{display:block;margin-top:1px;font-style:normal;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:var(--ink-faint)}
 .home .meeting.is-poll>b{color:var(--ink-faint)}
+
+/* 다른 길드의 일정 — 내가 누를 수 없는 것은 카드가 아니라 아래 작은 줄(2026-10-30) */
+.home .other-guilds{display:flex;flex-direction:column;gap:2px;margin-top:12px}
+.home .og-label{margin:0 0 4px;font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--ink-faint)}
+.home .og-line{display:flex;align-items:baseline;gap:10px;padding:6px 14px;font-size:12px;font-weight:700;color:var(--ink-muted);text-decoration:none}
+.home .og-line .sched-date{flex:none;width:76px;font-size:12px;font-weight:800;color:var(--ink-muted)}
+.home .og-line .sched-date em{display:none}
+.home .og-line b{flex:none;color:var(--ink)}
+.home .og-line span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.home .og-line span .guild-mark{display:inline-flex;vertical-align:middle;line-height:0}
+.home .og-line:hover b{color:var(--teal-deep)}
+@media(max-width:600px){.home .og-line .sched-date{width:52px}}

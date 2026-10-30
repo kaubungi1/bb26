@@ -239,3 +239,14 @@
   .guild .g-sec-head h2 { font-size: 18px; }
   .guild .g-empty-title { font-size: 14px; }
 }
+
+/* NEXT 아래 다른 일정 한 줄씩 — 정기합주(길드장이 찍음)·밴드 행사·우리 길드의 둘째 일정(2026-10-30) */
+.guild .next-wrap { display: flex; flex-direction: column; gap: 10px; }
+.guild .np-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.guild .np-lines a { display: flex; align-items: baseline; gap: 10px; padding: 7px 2px; border-top: 1px solid var(--line);
+  font-size: 12.5px; font-weight: 700; color: var(--ink-muted); text-decoration: none; }
+.guild .np-lines li:first-child a { border-top: 0; }
+.guild .np-lines a b { flex: none; color: var(--ink); }
+.guild .np-lines a span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guild .np-lines a i { font-style: normal; color: var(--ink-faint); }
+.guild .np-lines a:hover b { color: var(--accent-deep); }

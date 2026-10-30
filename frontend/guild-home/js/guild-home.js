@@ -118,58 +118,82 @@ function head() {
 /* ---------- 다음 합주 ----------
    참석과 날짜 투표가 같은 API 하나다. 여기서 끝난다 — 일정 페이지로 나가지 않는다(§9.2).
    새 일정 만들기와 확정은 가끔 하는 일이라 일정 페이지에 그대로 둔다. */
+/* NEXT (2026-10-30 사용자 결정): 큰 카드는 **우리 길드 일정**만 — 확정된 합주(참석 단추)가 있으면 그것, 없으면 우리 길드의 날짜 투표.
+   정기합주·정기공연·밴드 행사는 그 아래 작은 한 줄. 길드장(관리자)에게만 정기합주 투표가 카드로 펼쳐진다(자기 일이라).
+   전에는 가장 가까운 일정 하나를 크게 띄워서, 길드원이 누를 수도 없는 정기합주 투표가 제일 컸다. */
+const UNION = ['regular', 'concert'];
+const isOwn = (e) => !UNION.includes(e.kind) && e.kind !== 'band';
+
 function nextPractice() {
-  const e = upcoming()[0];
-  /* 지금 13개 길드가 전부 이 상태다. 빈 화면이 기본 화면이므로 한 줄로 흘리지 않는다 —
-     무엇이 없는지, 그래서 뭘 하면 되는지를 말한다. */
-  if (!e) {
-    return `<section class="next-practice is-none">
+  const all = upcoming();
+  const own = all.filter(isOwn);
+  const others = all.filter((e) => !isOwn(e));
+  const me = Nick.get();
+  const leader = !!me && (me === guild.leader || AdminSeen.visible());
+  const ownSorted = [...own.filter((e) => e.status !== 'poll'), ...own.filter((e) => e.status === 'poll')];
+  const main = ownSorted[0] || null;
+  const leaderCards = leader ? others.filter((e) => e.status === 'poll' && UNION.includes(e.kind)) : [];
+  const lines = [...ownSorted.slice(1), ...others.filter((e) => !leaderCards.includes(e))];
+  const head = (e) => `<span class="overline"><span>NEXT</span></span><h2>${esc(e.title)}</h2>`;
+  const more = (e) => `<a href="${Site.base}/schedule/?event=${e.id}">일정 자세히 →</a>`;
+
+  let html = main ? (main.status !== 'poll' ? confirmedCard(main, me, head, more) : ownPollCard(main, me, head, more))
+    : `<section class="next-practice is-none">
       <span class="overline"><span>NEXT</span></span>
       <p class="g-empty-title">잡힌 합주가 없습니다</p>
       <p class="g-empty-sub">날짜 후보를 올리면 단원들이 되는 날을 고릅니다.</p>
       <a class="g-cta" href="${Site.base}/schedule/">합주 날짜 잡기 →</a></section>`;
+  html += leaderCards.map((e) => unionVoteCard(e, head, more)).join('');
+  if (lines.length) {
+    html += `<ul class="np-lines" aria-label="다른 일정">${lines.map((e) => {
+      const when = e.status === 'poll' ? '날짜 투표 중' : dayLabel(e.date) + (e.startTime ? ' ' + esc(e.startTime) : '');
+      const what = UNION.includes(e.kind) ? (e.status === 'poll' ? `길드장(${esc(guild.leader || '없음')})이 길드 이름으로 찍습니다` : `참석 ${e.avails.filter((a) => a.date === e.date).length}`)
+        : e.kind === 'band' ? '밴드 행사' : (e.status === 'poll' ? `${e.dates.length}일 중` : `참석 ${e.avails.filter((a) => a.date === e.date).length}`);
+      return `<li><a href="${Site.base}/schedule/?event=${e.id}"><b>${esc(e.title)}</b><span>${when} · ${what}</span><i>→</i></a></li>`;
+    }).join('')}</ul>`;
   }
-  const me = Nick.get();
-  const head = `<span class="overline"><span>NEXT</span></span><h2>${esc(e.title)}</h2>`;
-  const more = `<a href="${Site.base}/schedule/?event=${e.id}">일정 자세히 →</a>`;
-  if (e.status !== 'poll') {
-    const going = e.avails.some((a) => a.nickname === me && a.date === e.date);
-    const who = e.avails.filter((a) => a.date === e.date);
-    const when = dayLabel(e.date)
-      + (e.startTime ? ' · ' + esc(e.startTime) + (e.endTime ? ' ~ ' + esc(e.endTime) : '') : '')
-      + (e.place ? ' · ' + esc(e.place) : '');
-    return `<section class="next-practice" data-event="${e.id}">
-      <div class="np-head">${head}<p class="np-when">${when}</p></div>
+  return `<div class="next-wrap">${html}</div>`;
+}
+
+function confirmedCard(e, me, head, more) {
+  const going = e.avails.some((a) => a.nickname === me && a.date === e.date);
+  const who = e.avails.filter((a) => a.date === e.date);
+  const when = dayLabel(e.date)
+    + (e.startTime ? ' · ' + esc(e.startTime) + (e.endTime ? ' ~ ' + esc(e.endTime) : '') : '')
+    + (e.place ? ' · ' + esc(e.place) : '');
+  return `<section class="next-practice" data-event="${e.id}">
+      <div class="np-head">${head(e)}<p class="np-when">${when}</p></div>
       <div class="np-who">${who.length
         ? who.map((a) => `<span class="np-face">${avatarChip(a.nickname)}<span>${esc(a.nickname)}</span></span>`).join('')
         : '<span class="muted">아직 아무도 없습니다</span>'}</div>
       <div class="np-act">
         <button type="button" class="np-go${going ? ' is-on' : ''}" data-avail="${esc(e.date)}" aria-pressed="${going}">${going ? '참석 취소' : '참석'}</button>
-        ${more}</div></section>`;
-  }
+        ${more(e)}</div></section>`;
+}
+
+/* 우리 길드의 날짜 투표 — 사람마다 찍는다 */
+function ownPollCard(e, me, head, more) {
   const days = e.dates.map((d) => d.date).filter((d) => d >= today()).sort();
-  /* 정기합주·정기공연은 길드가 투표한다(2026-10-19). 사람 수 대신 우리 길드가 찍은 날만 ✓.
-     길드장(과 관리자)만 눌러 우리 길드 표를 켜고 끈다. 다른 길드원에게는 보기만 — 누를 것이 없다. */
-  if (['regular', 'concert'].includes(e.kind)) {
-    const canVote = !!me && (me === guild.leader || AdminSeen.visible());
-    const ours = (d) => (e.guildAvails || []).some((a) => a.date === d && a.guildId === guild.id);
-    const marked = days.filter(ours).length;
-    const note = canVote ? `길드 투표 · 우리 길드가 되는 날을 눌러 주세요` : `길드 투표 · 길드장(${esc(guild.leader || '없음')})이 길드 이름으로 찍습니다`;
-    return `<section class="next-practice is-poll" data-event="${e.id}">
-    <div class="np-head">${head}<p class="np-when">${note} · ${days.length}일 중 ${marked}일</p></div>
-    <div class="np-days">${days.map((d) => (canVote
-      ? `<button type="button" class="np-day${ours(d) ? ' is-on' : ''}" data-gavail="${esc(d)}" aria-pressed="${ours(d)}">${dayLabel(d)}</button>`
-      : `<span class="np-day is-static${ours(d) ? ' is-on' : ''}">${dayLabel(d)}${ours(d) ? '<i>✓</i>' : ''}</span>`)).join('')}</div>
-    <div class="np-act">${more}</div></section>`;
-  }
   return `<section class="next-practice is-poll" data-event="${e.id}">
-    <div class="np-head">${head}<p class="np-when">날짜 투표 중 · ${days.length}일 중 되는 날</p></div>
+    <div class="np-head">${head(e)}<p class="np-when">날짜 투표 중 · ${days.length}일 중 되는 날</p></div>
     <div class="np-days">${days.map((d) => {
       const n = e.avails.filter((a) => a.date === d).length;
       const on = e.avails.some((a) => a.nickname === me && a.date === d);
       return `<button type="button" class="np-day${on ? ' is-on' : ''}" data-avail="${esc(d)}" aria-pressed="${on}">${dayLabel(d)}<i>${n}</i></button>`;
     }).join('')}</div>
-    <div class="np-act">${more}</div></section>`;
+    <div class="np-act">${more(e)}</div></section>`;
+}
+
+/* 정기합주·정기공연의 길드 투표(2026-10-19) — 길드장(관리자)만 보는 카드. 우리 길드가 되는 날을 눌러 켜고 끈다 */
+function unionVoteCard(e, head, more) {
+  const days = e.dates.map((d) => d.date).filter((d) => d >= today()).sort();
+  const ours = (d) => (e.guildAvails || []).some((a) => a.date === d && a.guildId === guild.id);
+  const marked = days.filter(ours).length;
+  return `<section class="next-practice is-poll is-union" data-event="${e.id}">
+    <div class="np-head">${head(e)}<p class="np-when">길드 투표 · 우리 길드가 되는 날을 눌러 주세요 · ${days.length}일 중 ${marked}일</p></div>
+    <div class="np-days">${days.map((d) =>
+      `<button type="button" class="np-day${ours(d) ? ' is-on' : ''}" data-gavail="${esc(d)}" aria-pressed="${ours(d)}">${dayLabel(d)}</button>`).join('')}</div>
+    <div class="np-act">${more(e)}</div></section>`;
 }
 
 /* ---------- 파티창 ----------
