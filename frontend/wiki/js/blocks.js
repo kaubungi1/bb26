@@ -132,6 +132,13 @@ const WikiBlocks = (() => {
       if (blank(block)) Wiki.dropBlock(a.cid);
       else if (changed || block.rev === 0) Wiki.save(a.cid);
     }
+    /* 고치던 칸을 닫는다. 그대로 두면 블록을 떠난 뒤에도 그 칸에 글이 써지는데, 그 글은 어디에도 옮겨지지 않는다 */
+    a.box.querySelectorAll('[data-plain]').forEach((n) => {
+      n.removeAttribute('contenteditable');
+      delete n.dataset.plain;
+      delete n.dataset.rich;
+      delete n.dataset.hint;
+    });
     WikiRender.paintAll();
   }
 
@@ -265,6 +272,21 @@ const WikiBlocks = (() => {
         return;
       }
     }
+    if (box && box !== afterBox && box.isConnected) continueBelow(box, true);      /* 넣은 그림 아래에서 바로 이어 쓴다 */
+  }
+
+  /* 블록 바로 아래에서 이어 쓴다. 아래가 빈 문단이면 그 문단으로, 아니면 빈 문단을 하나 만든다.
+     만든 빈 문단은 아무것도 쓰지 않으면 저장되지 않는다. */
+  function continueBelow(box, focus) {
+    let next = box.nextElementSibling;
+    while (next && !next.classList.contains('wk-block')) next = next.nextElementSibling;
+    const below = next && Wiki.block(next.dataset.cid);
+    const empty = below && TEXT_KINDS.includes(below.kind) && !WikiRender.HEAD[below.kind] && !below.data.runs.length && !Wiki.locked(next);
+    if (!empty) {
+      next = Wiki.addBlock({ cid: Wiki.newCid(), kind: 'p', data: { runs: [] }, rev: 0 }, box);
+      WikiRender.paintAll();
+    }
+    if (focus) WikiEdit.enter(next, 'start');
   }
 
   async function setInfoImage(box) {
@@ -299,17 +321,19 @@ const WikiBlocks = (() => {
       const v = url && youtubeId(url);
       if (!v) return url && alert('유튜브 주소가 아닙니다.');
       const block = fresh({ v });
-      Wiki.addBlock(block, afterBox);
+      const made = Wiki.addBlock(block, afterBox);
       Wiki.save(block.cid);
-      return WikiRender.paintAll();
+      WikiRender.paintAll();
+      return continueBelow(made, true);
     }
     if (kind === 'embed') {
       const title = await Wiki.ask(anchor, { placeholder: '끼울 문서 제목', titles: true });
       if (!title || !title.trim()) return;
       const block = fresh({ title: title.trim().slice(0, 60) });
-      Wiki.addBlock(block, afterBox);
+      const made = Wiki.addBlock(block, afterBox);
       Wiki.save(block.cid);
-      return WikiRender.paintAll();
+      WikiRender.paintAll();
+      return continueBelow(made, true);
     }
     const data = kind === 'lyric' ? { verses: [] }
       : kind === 'table' ? { rows: [['', ''], ['', '']], head: true }
@@ -531,6 +555,14 @@ const WikiBlocks = (() => {
       if (e.target.closest('.wk-info-pick') || (act && act.box === box && e.target.closest('.wk-info-pic'))) { setInfoImage(box); return; }
       if (e.target.closest('a') || !getSelection().isCollapsed) return;
       if (act && act.box === box) return;
+      /* 영상·틀은 고칠 칸이 없다. 눌러서 고른 뒤 Enter 를 치면 아래에 새 줄이 생긴다 */
+      if (box.dataset.kind === 'yt' || box.dataset.kind === 'embed') {
+        Wiki.settle();
+        Wiki.activate(box);
+        box.tabIndex = -1;
+        box.focus({ preventScroll: true });
+        return;
+      }
       if (e.target.closest(CLICKABLE)) activate(box, { x: e.clientX, y: e.clientY });
     });
 
@@ -559,14 +591,28 @@ const WikiBlocks = (() => {
       if (e.key === 'Backspace' && e.target.closest('.wk-lyr') && getSelection().isCollapsed && lyricBack(e.target)) { e.preventDefault(); return; }
       if (e.key === 'Tab' && e.target.closest('td, th')) { e.preventDefault(); moveCell(e.target, 0, e.shiftKey ? -1 : 1); }
     });
+    body.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.isComposing || Wiki.readonly) return;
+      const box = e.target.classList && e.target.classList.contains('wk-block') ? e.target : null;
+      if (!box || box.parentElement !== body || Wiki.locked(box)) return;
+      e.preventDefault();
+      continueBelow(box, true);
+    });
     body.addEventListener('beforeinput', (e) => {
       if (!act || !e.target.dataset || !e.target.dataset.plain) return;
-      if (e.inputType === 'insertParagraph') {
+      /* 글자만 받는 한 줄 칸(plaintext-only)에서는 Enter 가 문단 나누기가 아니라 줄바꿈(insertLineBreak)으로 온다. 같은 Enter 로 본다. */
+      if (e.inputType === 'insertParagraph' || (e.inputType === 'insertLineBreak' && e.target.matches(ONE_LINE))) {
         e.preventDefault();
         if (e.target.closest('td, th')) moveCell(e.target, 1, 0);        /* 표에서 Enter: 아래 칸으로 */
         else if (e.target.closest('.wk-lyr')) lyricEnter(e.target);      /* 가사에서 Enter: 다음 줄, 번역 줄에서는 다음 소절 */
-        else deactivate();
-      } else if (e.inputType === 'insertLineBreak' && e.target.matches(ONE_LINE)) e.preventDefault();
+        else {
+          /* 그림 설명에서 Enter: 설명을 끝내고 그림 아래에서 이어 쓴다. 그 밖의 한 줄 칸(정보 상자·접기 제목)은 닫기만 한다 */
+          const box = act.box;
+          const caption = e.target.matches('.wk-cap');
+          deactivate();
+          if (caption && box.isConnected) continueBelow(box, true);
+        }
+      }
     });
     body.addEventListener('input', (e) => {
       /* 정보 상자: 마지막 줄에 쓰기 시작하면 빈 줄이 하나 더 생긴다. '줄 더하기' 단추가 필요 없다. */
@@ -594,5 +640,5 @@ const WikiBlocks = (() => {
     });
   }
 
-  return { init, deactivate, insert, insertImages, setKind, closeMenu, active: () => act };
+  return { init, deactivate, insert, insertImages, setKind, continueBelow, closeMenu, active: () => act };
 })();

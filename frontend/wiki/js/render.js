@@ -405,9 +405,15 @@ const WikiRender = (() => {
       }
     };
     const boxes = [...body.querySelectorAll(':scope > .wk-block')];
+    /* 글이 아닌 블록(그림·영상·표…) 바로 뒤에 글이 오지 않으면 그 아래에 쓸 자리를 보여 준다. 없으면 그림을 넣은 뒤
+       이어 쓸 길이 손잡이 메뉴뿐이다(2026-11-13 사용자 지적: 사진·영상을 넣고 다음 줄로 넘어가기 어렵다). */
+    let lone = null;
     for (const box of boxes) {
       const block = Wiki.block(box.dataset.cid);
       if (!block) continue;
+      const body_text = TEXT_KINDS.includes(block.kind) && !HEAD[block.kind];
+      if (lone && !body_text && editing) hint(lone.cid, lone.depth, box);
+      lone = null;
       if (HEAD[block.kind]) {
         const e = Math.min(HEAD[block.kind], state.open + 1);
         close(e, box);
@@ -425,8 +431,10 @@ const WikiRender = (() => {
         delete box.dataset.head;
         box.dataset.depth = state.open;
         if (stack.length) stack[stack.length - 1].filled = true;
+        if (!body_text) lone = { cid: block.cid, depth: state.open };
       }
     }
+    if (lone && editing) hint(lone.cid, lone.depth, null);
     close(1, null);
     if (editing) {
       /* 분류에 들지 않는 맨 앞 글의 자리 */

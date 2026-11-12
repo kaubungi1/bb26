@@ -201,7 +201,10 @@ const WikiEdit = (() => {
   async function enter(box, at) {
     if (Wiki.readonly || Wiki.locked(box)) return;
     const host = box.querySelector('.wk-text');
-    if (!host || (cur && cur.host === host)) return;
+    if (!host) return;
+    /* 이미 고치는 문단이면 초점만 되돌린다. 문단 아래 빈 곳을 누르면 초점이 먼저 빠지는데, 여기서 되돌리지 않으면
+       '떠났다'고 보고 그 문단을 닫는다 — 빈 줄이었다면 줄이 사라진다. */
+    if (cur && cur.host === host) { host.focus({ preventScroll: true }); return; }
     if (!Nick.get() && !(await Nick.ensure())) return;
     Wiki.settle();
     const block = Wiki.block(box.dataset.cid);
@@ -415,6 +418,7 @@ const WikiEdit = (() => {
         WikiRender.retype(c.box, 'yt');
         Wiki.save(c.cid);
         WikiRender.paintAll();
+        WikiBlocks.continueBelow(c.box, true);        /* 영상 아래에서 바로 이어 쓴다 */
         return;
       }
       const sel = getSelection();

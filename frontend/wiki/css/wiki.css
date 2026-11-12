@@ -449,6 +449,10 @@ td[data-plain]:focus, th[data-plain]:focus, .wk-info-k[data-plain]:focus, .wk-in
 .wk-doc.is-readonly .k-table[data-al="r"] { float: right; clear: right; max-width: 46%; margin: 0 0 14px 20px; }
 .wk-doc.is-editing-doc .k-table[data-al="r"] .wk-table table { margin-left: auto; }
 
+/* 눌러서 고른 영상·틀(고칠 칸이 없는 블록). Enter 를 치면 아래에 새 줄이 생긴다 */
+.wk-doc.is-editing-doc .wk-body > .wk-block:focus { outline: none; }
+.wk-doc.is-editing-doc .wk-body > .wk-block:focus > .wk-yt, .wk-doc.is-editing-doc .wk-body > .wk-block:focus > .wk-embed { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* ---------- 좁은 화면 ---------- */
 @media (max-width: 1000px) {
   .wk-wrap { grid-template-columns: minmax(0, 1fr); }
