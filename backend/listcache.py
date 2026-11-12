@@ -33,6 +33,9 @@ EVENTS = ('events', 'eventdates', 'eventavails', 'eventsongs', 'eventlineups', '
           'eventlineupskips', 'eventguildavails')
 MEMBERS = ('members', 'guildmembers', 'guilds', 'sessions', 'sessionsupports', 'songs')
 GUILDS = ('guilds', 'guildmembers')
+# 위키. 블록(wikiblocks)은 넣지 않는다 — 제목 목록은 본문과 무관하고, 최근 바뀜은 판(wikirevisions)이 알려 준다.
+WIKI_TITLES = ('wikipages', 'wikialiases')
+WIKI_RECENT = ('wikirevisions', 'wikipages')
 
 PRUNE_OVER = 5000      # changeLog 가 이만큼 쌓이면 테이블마다 마지막 줄만 남긴다
 GZIP_MIN = 1024

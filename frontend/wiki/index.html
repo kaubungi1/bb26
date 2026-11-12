@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>불법위키 - 불법이륙</title>
+  <!-- 이 화면은 /wiki/<문서 제목> 어디서나 뜬다(backend/main.py wiki_page). 그래서 주소는 전부 / 로 시작한다. -->
+  <link rel="stylesheet" href="/common/tokens.css?v=4" />
+  <link rel="stylesheet" href="/common/themes.css?v=4" />
+  <link rel="stylesheet" href="/common/common.css?v=4" />
+  <link rel="stylesheet" href="/common/profile.css?v=4" />
+  <link rel="stylesheet" href="/wiki/css/wiki.css?v=2" />
+</head>
+<body>
+  <header id="app-header" class="app-bar"></header>
+  <!-- 위키 줄. 사이트 메뉴 아래에 위키 안의 길이 따로 있다: 최근 변경 · 아무 문서나 · 분류 · 찾기 -->
+  <div class="wk-bar">
+    <div class="wk-bar-in">
+      <a class="wk-brand" href="/wiki/">불법위키</a>
+      <a href="/wiki/">최근 변경</a>
+      <a id="wk-new" href="/wiki/">새 문서</a>
+      <a id="wk-random" href="/wiki/">아무 문서나</a>
+      <a href="/wiki/%EB%B6%84%EB%A5%98%3A">분류</a>
+      <form id="wk-find" class="wk-find" role="search" autocomplete="off">
+        <input id="wk-q" type="search" placeholder="문서 찾기" aria-label="문서 찾기" maxlength="60" />
+        <button type="submit">이동</button>
+        <div id="wk-suggest" class="wk-suggest" hidden></div>
+      </form>
+    </div>
+  </div>
+  <main class="wiki wk-wrap">
+    <div class="wk-main">
+      <div id="wk-view"></div>
+    </div>
+    <aside class="wk-side" aria-label="최근 변경">
+      <h2>최근 변경</h2>
+      <div id="wk-side-list"></div>
+    </aside>
+  </main>
+  <p id="wk-status" class="wk-status" role="status" aria-live="polite" hidden></p>
+  <nav id="app-tabbar" class="tab-bar"></nav>
+  <script src="/common/common.js?v=4"></script>
+  <script src="/common/profile.js?v=4"></script>
+  <script src="/wiki/js/autolink.js?v=2"></script>
+  <script src="/wiki/js/render.js?v=2"></script>
+  <script src="/wiki/js/editor.js?v=2"></script>
+  <script src="/wiki/js/table.js?v=2"></script>
+  <script src="/wiki/js/lyric.js?v=2"></script>
+  <script src="/wiki/js/blocks.js?v=2"></script>
+  <script src="/wiki/js/tools.js?v=2"></script>
+  <script src="/wiki/js/namu.js?v=2"></script>
+  <script src="/wiki/js/history.js?v=2"></script>
+  <script src="/wiki/js/wiki.js?v=2"></script>
+</body>
+</html>

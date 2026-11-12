@@ -192,17 +192,96 @@ CREATE TABLE IF NOT EXISTS songComments (
   "body" TEXT NOT NULL,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- 불법위키(routers/wiki.py). 문서는 제목으로 만들고, 본문은 블록의 줄이다.
+-- key 는 제목에서 띄어쓰기·기호·대소문자를 지운 열쇠다(wikitext.key). 띄어쓰기만 다른 문서가 둘 생기지 않는다.
+-- deleted 는 지움 표시다. 지운 문서도 본문과 이력이 그대로 남아 누구나 되살린다.
+-- 블록을 고쳐도 이 표는 건드리지 않는다 — 제목 목록(폴링)이 문단 하나에 다시 만들어지지 않게.
+CREATE TABLE IF NOT EXISTS wikiPages (
+  "id" SERIAL PRIMARY KEY,
+  "title" TEXT NOT NULL,
+  "key" TEXT NOT NULL UNIQUE,
+  "categories" JSONB NOT NULL DEFAULT '[]',
+  "deleted" BOOLEAN NOT NULL DEFAULT false,
+  "createdBy" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 문서의 다른 이름(넘겨주기). 본문에서 이 이름으로 불러도 그 문서로 간다. 열쇠는 제목과 한 공간을 쓴다.
+CREATE TABLE IF NOT EXISTS wikiAliases (
+  "id" SERIAL PRIMARY KEY,
+  "pageId" INTEGER NOT NULL REFERENCES wikiPages("id") ON DELETE CASCADE,
+  "alias" TEXT NOT NULL,
+  "key" TEXT NOT NULL UNIQUE,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 블록. cid 는 화면이 만든 번호라 같은 저장을 두 번 보내도 한 줄이다. pos 는 순서(사이에 끼우려고 실수).
+-- rev 는 고칠 때마다 오르고, 화면이 보던 번호와 다르면 충돌이다. text·textKey 는 찾기와 역링크가 읽는다.
+CREATE TABLE IF NOT EXISTS wikiBlocks (
+  "id" SERIAL PRIMARY KEY,
+  "pageId" INTEGER NOT NULL REFERENCES wikiPages("id") ON DELETE CASCADE,
+  "cid" TEXT NOT NULL,
+  "pos" DOUBLE PRECISION NOT NULL,
+  "kind" TEXT NOT NULL,
+  "data" JSONB NOT NULL,
+  "text" TEXT NOT NULL DEFAULT '',
+  "textKey" TEXT NOT NULL DEFAULT '',
+  "rev" INTEGER NOT NULL DEFAULT 1,
+  "updatedBy" TEXT,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE ("pageId", "cid")
+);
+
+-- 판. 고친 뒤의 문서 전체(snapshot)와 무엇을 썼는지의 요약(notes). 한 사람이 이어 고치면 한 줄로 묶인다.
+-- 문서의 판 번호(304 판정)도 마지막 줄의 (id, updatedAt) 이다.
+CREATE TABLE IF NOT EXISTS wikiRevisions (
+  "id" SERIAL PRIMARY KEY,
+  "pageId" INTEGER NOT NULL REFERENCES wikiPages("id") ON DELETE CASCADE,
+  "nickname" TEXT NOT NULL,
+  "snapshot" JSONB NOT NULL,
+  "notes" JSONB NOT NULL DEFAULT '[]',
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 위키 그림. 긴 변 512px WebP(images.py). 문서를 지워도 남긴다 — 되살리거나 되돌리면 다시 쓰인다.
+CREATE TABLE IF NOT EXISTS wikiImages (
+  "id" SERIAL PRIMARY KEY,
+  "image" BYTEA NOT NULL,
+  "width" INTEGER,
+  "height" INTEGER,
+  "nickname" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 문서마다 딸린 토론. 곡 한마디와 같은 구조다.
+CREATE TABLE IF NOT EXISTS wikiTalks (
+  "id" SERIAL PRIMARY KEY,
+  "pageId" INTEGER NOT NULL REFERENCES wikiPages("id") ON DELETE CASCADE,
+  "nickname" TEXT NOT NULL,
+  "body" TEXT NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 """
 
 
 # 이미 만들어진 DB를 새 구조로 맞춘다. 전부 멱등이라 매 기동마다 돌려도 무해하다.
 # 변경 번호를 남기는 테이블. 폴링되는 목록이 읽는 테이블은 모두 여기 있어야 한다(listcache.py).
 # pairs 는 뺀다 — 악보 넘길 때마다 써서 잦고, 어느 목록도 읽지 않는다.
+# 위키는 제목 목록(wikiPages·wikiAliases)과 최근 바뀜(wikiRevisions)만 폴링된다. 블록·토론·그림은 어느 목록도 읽지 않는다.
 CHANGE_TRACKED = ('songs', 'sessions', 'sessionSupports', 'songComments', 'sheets', 'events', 'eventDates',
                   'eventAvails', 'eventSongs', 'eventLineups', 'guilds', 'guildMembers', 'guildDrawings',
-                  'members', 'eventGuilds', 'eventLineupSkips', 'eventGuildAvails', 'sheetFolders')
+                  'members', 'eventGuilds', 'eventLineupSkips', 'eventGuildAvails', 'sheetFolders',
+                  'wikiPages', 'wikiAliases', 'wikiRevisions')
 
 MIGRATIONS = [
+    'CREATE INDEX IF NOT EXISTS idx_wikiblocks_page ON wikiBlocks ("pageId", "pos")',
+    'CREATE INDEX IF NOT EXISTS idx_wikirevisions_page ON wikiRevisions ("pageId", "id")',
+    'CREATE INDEX IF NOT EXISTS idx_wikirevisions_recent ON wikiRevisions ("updatedAt" DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_wikialiases_page ON wikiAliases ("pageId")',
+    'CREATE INDEX IF NOT EXISTS idx_wikitalks_page ON wikiTalks ("pageId", "id")',
     'CREATE INDEX IF NOT EXISTS idx_songcomments_song ON songComments ("songId", "id")',
     # 길드 꾸미기: 테마 이름과 문장(육각 틀 + 문양 + 색 둘)을 한 칸에 담는다.
     # {"theme":"miku","crest":{"shape":"wing","bg":"#00b8ad","fg":"#ffffff"}}

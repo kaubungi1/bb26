@@ -728,7 +728,7 @@ function mountChrome(activeKey) {
       const inGuild = !!Site.slug;
       const homeLabel = inGuild ? ((Site.info && Site.info.name) || Site.slug) : '홈';
       const inside = [['home',homeLabel,Site.base+'/'],['songs','곡',Site.base+'/songs/'],['schedule','모임 · 일정',Site.base+'/schedule/']];
-      const outside = [['sheets','악보','/sheets/'],['guilds','길드','/guilds/'],['members','멤버','/members/']];
+      const outside = [['sheets','악보','/sheets/'],['guilds','길드','/guilds/'],['members','멤버','/members/'],['wiki','위키','/wiki/']];
       if (AdminSeen.visible()) outside.push(['admin','관리','/admin/']);
       const link = ([key,label,href],out) => `<a href="${href}"${key===activeKey?' aria-current="page"':''}${out&&inGuild?' class="is-out"':''}><span>${escapeHtml(label)}</span></a>`;
       header.innerHTML = brand() +

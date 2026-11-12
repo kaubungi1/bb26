@@ -1,0 +1,463 @@
+/* 불법위키.
+
+   나무위키의 문서 틀을 따른다(2026-11-13 사용자 결정, 시안 Temp/phase2-check/wiki_mock.html).
+     위키 줄        사이트 메뉴 아래의 색 띠. 최근 변경 · 아무 문서나 · 분류 · 찾기
+     문서           테두리 있는 흰 면. 제목, 오른쪽에 편집·토론·역사 단추 묶음, 최근 수정 시각, 분류 상자,
+                    목차, 번호 붙은 문단 제목과 [편집], 오른쪽 정보 상자, 문서 끝 각주
+     옆             최근 변경 목록(넓은 화면)
+   처음에는 사이트의 다른 화면처럼 여백 넓은 흰 카드에 '누르면 써지는' 글을 올렸는데, 위키가 아니라 메모장으로 보였다.
+   위키는 읽는 문서가 먼저다. 그래서 읽는 화면에는 편집의 흔적(손잡이·입력칸)이 하나도 없다.
+
+   AI_MEMORY §9.3 은 박스·둥근 테두리를 지양하라고 하지만, 여기의 상자(분류·목차·정보 상자·표·단추 묶음)는
+   위키의 문법이다. 홈 배너가 게임의 문법인 것과 같은 예외다. 색은 사이트 것(tokens.css)을 쓴다:
+   위키 줄과 정보 상자 머리는 강조색, 글자는 잉크색. 링크만 위키식 파랑·빨강이다 — 본문에서 링크가 한눈에 갈려야 한다. */
+
+body.wiki-page {
+  --wk-link: #0275d8;
+  --wk-new: #dc2f4b;            /* 아직 없는 문서 */
+  --wk-line: #ccd6de;
+  --wk-line-2: #e3e9ee;
+  --wk-soft: #f5f8fa;
+  --wk-text: #212529;
+  background: #e9eef2;
+}
+
+/* 공통 단추·입력칸 모양(채운 청록, 46px)을 걷는다. 위키의 단추는 전부 여기서 정한다. 띄우는 것들은 body 에 붙으므로 따로 적는다. */
+.wiki button, .wk-bar button, .wk-menu button, .wk-pop button {
+  min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
+  color: inherit; font: inherit; filter: none; cursor: pointer;
+}
+.wiki input, .wk-bar input, .wk-pop input {
+  width: auto; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; font: inherit; color: var(--wk-text);
+}
+.wiki input:focus, .wk-bar input:focus, .wk-pop input:focus { box-shadow: none; outline: none; cursor: text; }
+.wiki button:active, .wk-bar button:active { transform: none; }
+
+/* ---------- 위키 줄 ---------- */
+.wk-bar { background: var(--accent-deep); color: #fff; }
+.wk-bar-in { max-width: 1200px; margin: 0 auto; padding: 0 16px; min-height: 44px; display: flex; align-items: center; gap: 2px; }
+.wk-bar a { padding: 11px 12px; color: #fff; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.wk-bar a:hover { background: #ffffff24; }
+.wk-bar .wk-brand { padding-left: 0; margin-right: 10px; font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+.wk-bar .wk-brand:hover { background: none; }
+.wk-find { position: relative; margin-left: auto; display: flex; }
+.wk-bar .wk-find input { width: 220px; height: 30px; padding: 0 10px; background: #fff; font-size: 14px; }
+.wk-bar .wk-find button { height: 30px; padding: 0 10px; background: #fff; border-left: 1px solid var(--wk-line); color: var(--ink-2); font-size: 13px; }
+.wk-suggest { position: absolute; z-index: 30; top: calc(100% + 2px); left: 0; right: 0; display: flex; flex-direction: column;
+  background: #fff; border: 1px solid var(--wk-line); box-shadow: 0 4px 10px #1b2a4526; }
+.wk-suggest[hidden] { display: none; }
+.wk-bar .wk-suggest a { padding: 8px 10px; font-size: 14px; color: var(--wk-link); white-space: normal; }
+.wk-bar .wk-suggest a.is-new { color: var(--wk-new); }
+.wk-bar .wk-suggest a:hover { background: var(--wk-soft); }
+
+/* ---------- 틀: 문서 + 옆 줄 ---------- */
+.wk-wrap { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 16px; align-items: start;
+  color: var(--wk-text); font-size: 15px; line-height: 1.6; }
+.wk-doc { background: #fff; border: 1px solid var(--wk-line); padding: 20px 24px 28px; }
+.wk-side { background: #fff; border: 1px solid var(--wk-line); font-size: 13px; }
+.wk-side h2 { margin: 0; padding: 9px 12px; font-size: 13px; font-weight: 700; border-bottom: 1px solid var(--wk-line); background: var(--wk-soft); }
+.wk-side a { display: flex; justify-content: space-between; gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--wk-line-2); color: var(--wk-text); text-decoration: none; }
+.wk-side a:last-child { border-bottom: 0; }
+.wk-side a:hover .wk-side-doc { text-decoration: underline; }
+.wk-side a.is-gone .wk-side-doc { color: var(--ink-faint); text-decoration: line-through; }
+.wk-side-doc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-side-when { flex: none; font-size: 12px; color: var(--ink-faint); }
+.wk-status { position: fixed; z-index: 80; right: 16px; bottom: 16px; margin: 0; padding: 8px 12px; background: var(--ink-fill); color: var(--on-ink); font-size: 13px; }
+.wk-status[hidden] { display: none; }
+
+/* ---------- 링크 ---------- */
+.wk-link, .wk-text a[href^="wiki:"] { color: var(--wk-link); text-decoration: none; cursor: pointer; }
+.wk-link:hover { text-decoration: underline; }
+.wk-link.is-new { color: var(--wk-new); }
+.wk-ext, .wk-text a[href^="http"] { color: var(--wk-link); text-decoration: none; }
+.wk-ext::after { content: '↗'; font-size: 0.8em; margin-left: 1px; }
+.wk-ext:hover { text-decoration: underline; }
+.wk-nolink { color: inherit; text-decoration: underline dotted var(--ink-faint); text-underline-offset: 3px; }
+
+/* ---------- 문서 머리 ---------- */
+.wk-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.wk-doc h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; outline: none; min-width: 2em; overflow-wrap: anywhere; }
+.wk-doc h1[contenteditable] { box-shadow: 0 2px 0 var(--accent); cursor: text; }
+.wk-btns { display: flex; flex: none; margin-top: 6px; border: 1px solid var(--wk-line); border-radius: 4px; overflow: hidden; }
+.wk-btns[hidden] { display: none; }
+.wiki .wk-btns button { padding: 6px 12px; border-left: 1px solid var(--wk-line); background: #fff; font-size: 14px; color: var(--wk-text); }
+.wiki .wk-btns button:first-child { border-left: 0; }
+.wiki .wk-btns button:hover, .wiki .wk-btns button[aria-pressed="true"] { background: var(--wk-soft); }
+.wk-btns button[data-act="more"]::before { content: ''; display: inline-block; vertical-align: middle; border-top: 5px solid currentColor; border-left: 4px solid transparent; border-right: 4px solid transparent; }
+.wk-stamp { margin: 4px 0 0; text-align: right; font-size: 13px; color: var(--ink-faint); }
+.wk-via { margin: 6px 0 0; font-size: 13px; color: var(--ink-faint); }
+.wk-stamp[hidden], .wk-via[hidden] { display: none; }
+
+.wk-meta { margin-top: 14px; }
+.wk-meta[hidden] { display: none; }
+.wk-cats { padding: 6px 12px; border: 1px solid var(--wk-line); font-size: 14px; }
+.wk-cats-sep { color: var(--ink-faint); }
+.wk-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 12px; border: 1px solid var(--wk-line); font-size: 14px; }
+.wk-meta-row + .wk-meta-row { border-top: 0; }
+.wk-meta-label { flex: none; width: 70px; font-weight: 700; color: var(--ink-2); }
+.wk-chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 4px 1px 8px; background: var(--wk-soft); border: 1px solid var(--wk-line-2); }
+.wiki .wk-chip-x { width: 18px; height: 20px; font-size: 15px; line-height: 1; color: var(--ink-faint); }
+.wiki .wk-chip-x:hover, .wiki .wk-chip-x:focus-visible { color: var(--wk-new); }
+.wiki .wk-meta-add { flex: 1; min-width: 120px; height: 26px; padding: 0 6px; border-bottom: 1px solid var(--wk-line); font-size: 14px; }
+.wiki .wk-meta-add:focus { border-bottom-color: var(--accent); }
+
+.wk-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: -20px -24px 18px; padding: 10px 24px;
+  background: var(--ink-fill); color: var(--on-ink); font-size: 14px; font-weight: 700; }
+.wk-banner[hidden] { display: none; }
+.wk-banner span { margin-right: auto; }
+.wiki .wk-banner button { font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+
+.wk-missing { margin: 22px 0 6px; }
+.wk-missing[hidden] { display: none; }
+.wk-missing p { margin: 0 0 12px; color: var(--ink-muted); }
+.wiki .wk-make { padding: 7px 14px; border: 1px solid var(--wk-line); border-radius: 4px; background: #fff; font-size: 14px; }
+.wiki .wk-make:hover { background: var(--wk-soft); }
+
+.wk-toc { display: inline-block; min-width: 190px; margin: 16px 0 0; padding: 12px 20px 12px 16px; border: 1px solid var(--wk-line); font-size: 14px; }
+.wk-toc[hidden] { display: none; }
+.wk-toc-head { display: block; margin-bottom: 6px; font-size: 17px; }
+.wk-toc ol { margin: 0; padding: 0; list-style: none; }
+.wk-toc li { padding: 1px 0; }
+.wk-toc li.is-sub2 { padding-left: 16px; }
+.wk-toc li.is-sub3 { padding-left: 32px; }
+.wk-toc a { color: var(--wk-text); text-decoration: none; }
+.wk-toc a:hover { text-decoration: underline; }
+.wk-toc-num { color: var(--wk-link); }
+
+/* ---------- 본문 ---------- */
+.wk-body { display: flow-root; margin-top: 16px; }
+.wk-block { position: relative; margin: 0 0 10px; }
+/* 들여쓰기는 블록이 아니라 글 칸에 건다. 편집 상자의 옆선이 블록의 배경이라, 블록을 밀면 선이 같이 밀린다. */
+.wk-block[data-lv="1"] > .wk-text { margin-left: 26px; }
+.wk-block[data-lv="2"] > .wk-text { margin-left: 52px; }
+.wk-block[data-lv="3"] > .wk-text { margin-left: 78px; }
+.wk-text { position: relative; min-height: 1.6em; white-space: pre-wrap; outline: none; overflow-wrap: anywhere; }
+
+/* 면이나 선을 가진 블록은 오른쪽에 뜬 정보 상자 옆으로 비켜 선다. 그냥 두면 정보 상자를 덮는다
+   (블록이 position:relative 라 뜬 상자보다 위에 그려진다). 문단·목록은 글자만 있어 정보 상자를 감싸고 흐른다. */
+.k-h2, .k-h3, .k-h4, .k-notice, .k-quote, .k-table, .k-embed, .k-img, .k-yt { display: flow-root; }
+
+.k-h2 { margin: 26px 0 12px; }
+.k-h3 { margin: 20px 0 10px; }
+.k-h4 { margin: 16px 0 8px; }
+.k-h2 > .wk-text { padding: 0 52px 5px 0; border-bottom: 1px solid var(--wk-line); font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.35; }
+.k-h3 > .wk-text { padding: 0 52px 4px 0; border-bottom: 1px solid var(--wk-line-2); font-size: 21px; font-weight: 700; line-height: 1.4; }
+.k-h4 > .wk-text { padding: 0 52px 3px 0; border-bottom: 1px solid var(--wk-line-2); font-size: 17px; font-weight: 700; line-height: 1.45; }
+.k-h2 > .wk-text[data-num]::before, .k-h3 > .wk-text[data-num]::before, .k-h4 > .wk-text[data-num]::before { content: attr(data-num); margin-right: 8px; color: var(--wk-link); }
+
+/* 문단 제목의 [편집]. 읽는 화면에서만 보인다. */
+.wiki .wk-sec { display: none; position: absolute; z-index: 1; right: 0; bottom: 8px; font-size: 13px; font-weight: 400; color: var(--ink-faint); }
+.wk-sec::before { content: '['; } .wk-sec::after { content: ']'; }
+.wiki .wk-sec:hover { color: var(--wk-link); }
+.wk-doc.is-readonly:not(.is-gone):not(.is-preview) .wk-body > .k-h2 > .wk-sec,
+.wk-doc.is-readonly:not(.is-gone):not(.is-preview) .wk-body > .k-h3 > .wk-sec,
+.wk-doc.is-readonly:not(.is-gone):not(.is-preview) .wk-body > .k-h4 > .wk-sec { display: block; }
+
+.k-ul, .k-ol { margin-bottom: 2px; }
+.k-ul > .wk-text, .k-ol > .wk-text { padding-left: 24px; }
+.k-ul > .wk-text::before { content: ''; position: absolute; left: 9px; top: 0.65em; width: 5px; height: 5px; border-radius: 50%; background: var(--wk-text); }
+.wk-block[data-lv="1"].k-ul > .wk-text::before, .wk-block[data-lv="3"].k-ul > .wk-text::before { background: none; box-shadow: inset 0 0 0 1px var(--wk-text); }
+.k-ol > .wk-text::before { content: attr(data-num); position: absolute; left: 0; width: 20px; text-align: right; font-variant-numeric: tabular-nums; }
+.k-ol > .wk-text:not([data-num])::before { content: '·'; }
+
+.k-quote > .wk-text { padding: 6px 12px; border-left: 4px solid var(--wk-line); background: var(--wk-soft); color: var(--ink-2); }
+.k-notice > .wk-text { padding: 9px 14px; border: 1px solid var(--wk-line); border-left: 5px solid var(--wk-new); background: var(--wk-soft); font-size: 14px; }
+
+.wk-fn { font-size: 12px; line-height: 0; color: var(--wk-link); user-select: none; }
+.wk-fn a { color: inherit; text-decoration: none; }
+.wk-fn a:hover { text-decoration: underline; }
+
+/* 표 */
+.wk-table { position: relative; margin: 6px 0 14px; }
+.wk-table-scroll { overflow-x: auto; }
+.wk-table table { border-collapse: collapse; font-size: 14px; }
+.wk-table td, .wk-table th { min-width: 64px; padding: 5px 10px; border: 1px solid var(--wk-line); vertical-align: top; text-align: left; white-space: pre-wrap; }
+.wk-table th { background: var(--wk-soft); font-weight: 700; text-align: center; }
+.wiki .wk-add { display: none; position: absolute; background: var(--wk-soft); color: var(--ink-muted); font-size: 14px; font-weight: 700; line-height: 1; }
+.wiki .wk-add:hover { background: var(--accent-soft); color: var(--ink); }
+.k-table.is-editing .wk-table { padding: 0 24px 24px 0; }
+.k-table.is-editing .wk-add { display: block; }
+.wiki .wk-add-col { top: 0; right: 0; bottom: 24px; width: 20px; }
+.wiki .wk-add-row { left: 0; right: 24px; bottom: 0; height: 20px; }
+
+/* 정보 상자 — 문서 오른쪽 위 */
+.k-infobox { float: right; clear: right; width: 300px; margin: 0 0 14px 20px; }
+.wk-info { border: 1px solid var(--wk-line); background: #fff; font-size: 14px; }
+.wk-info-title { padding: 8px 10px; background: var(--accent-deep); color: #fff; font-size: 16px; font-weight: 700; text-align: center; }
+.wk-info-title:empty:not([data-plain]) { display: none; }
+.wk-info-pic img { display: block; width: 100%; height: auto; }
+.wiki .wk-info-pick { display: block; width: 100%; padding: 22px 0; background: var(--wk-soft); color: var(--ink-faint); font-size: 13px; }
+.wiki .wk-info-pick:hover { color: var(--wk-text); }
+.wk-info-row { display: grid; grid-template-columns: 84px minmax(0, 1fr); border-top: 1px solid var(--wk-line); }
+.wk-info-k { padding: 6px 9px; background: var(--wk-soft); border-right: 1px solid var(--wk-line); font-weight: 700; text-align: center; }
+.wk-info-v { padding: 6px 9px; white-space: pre-wrap; }
+
+/* 그림 · 영상 */
+.wk-fig { margin: 6px 0 14px; max-width: 440px; }
+.wk-fig img { display: block; max-width: 100%; height: auto; }
+.wk-cap { padding-top: 4px; font-size: 13px; color: var(--ink-muted); }
+.wk-cap:empty:not([data-plain]) { display: none; }
+.wk-yt { position: relative; max-width: 560px; aspect-ratio: 16 / 9; margin: 6px 0 14px; background: #10151f; }
+.wiki .wk-yt-play { position: absolute; inset: 0; width: 100%; height: 100%; }
+.wk-yt-play img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.wk-yt-mark { position: absolute; left: 50%; top: 50%; width: 62px; height: 44px; margin: -22px 0 0 -31px; border-radius: 8px; background: #10151fd9; }
+.wk-yt-mark::after { content: ''; position: absolute; left: 24px; top: 12px; border-left: 17px solid #fff; border-top: 10px solid transparent; border-bottom: 10px solid transparent; }
+.wk-yt iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+/* 접기 */
+.wk-fold { display: grid; grid-template-columns: 28px minmax(0, 1fr); margin: 6px 0 12px; border: 1px solid var(--wk-line); }
+.wiki .wk-fold-tog { grid-row: 1; align-self: stretch; color: var(--ink-muted); }
+.wk-fold-tog::before { content: ''; display: inline-block; border-left: 7px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; transition: transform 0.12s; }
+.wk-fold.is-open > .wk-fold-tog::before { transform: rotate(90deg); }
+.wk-fold-title { padding: 6px 10px 6px 0; font-weight: 700; }
+.wk-fold-body { display: none; grid-column: 1 / -1; padding: 8px 12px; border-top: 1px solid var(--wk-line); }
+.wk-fold.is-open > .wk-fold-body { display: block; }
+
+/* 틀 — 다른 문서를 끼운 것 */
+.wk-embed { position: relative; margin: 10px 0 14px; padding: 12px 14px 4px; border: 1px dashed var(--wk-line); }
+.wk-embed-src { position: absolute; right: 10px; top: -10px; padding: 0 6px; background: #fff; font-size: 12px; color: var(--ink-faint); text-decoration: none; }
+.wk-embed-src:hover { color: var(--wk-link); }
+.wk-embed-src.is-new { color: var(--wk-new); }
+.wk-embed-body:empty { min-height: 22px; }
+.wk-embed-body .k-infobox { float: none; width: auto; margin: 0 0 12px; }
+
+/* ---------- 편집 상태 ---------- */
+/* 도구 줄. 문서 위에 붙어 따라 내려온다. */
+.wk-toolbar { position: sticky; top: 0; z-index: 15; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+  margin: -20px -24px 18px; padding: 8px 12px; background: var(--wk-soft); border-bottom: 1px solid var(--wk-line); }
+.wk-toolbar[hidden] { display: none; }
+.wk-tool-group { display: flex; border: 1px solid var(--wk-line); border-radius: 4px; overflow: hidden; background: #fff; }
+.wiki .wk-tool { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 30px; padding: 0 8px;
+  border-left: 1px solid var(--wk-line-2); font-size: 13px; color: var(--wk-text); white-space: nowrap; }
+.wiki .wk-tool:first-child { border-left: 0; }
+.wiki .wk-tool:hover { background: var(--wk-soft); }
+.wiki .wk-tool.is-on { background: var(--accent-soft); font-weight: 700; }
+.wiki .wk-tool.is-icon { font-size: 15px; }
+.wk-tool svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* 저장·취소: 도구와 다른 무게로 둔다. 저장은 늘 색이 차 있다 — 편집을 끝내는 길은 이것 하나다. */
+.wk-tool-end { display: flex; gap: 6px; margin-left: auto; }
+.wiki .wk-tool-end .wk-tool { height: 32px; padding: 0 14px; border: 1px solid var(--wk-line); border-radius: 4px; background: #fff; font-size: 14px; }
+.wiki .wk-tool-end .wk-tool-save { background: var(--accent-deep); border-color: var(--accent-deep); color: #fff; font-weight: 700; }
+.wiki .wk-tool-end .wk-tool-save:hover { filter: brightness(1.08); }
+.wiki .wk-tool:disabled { opacity: 0.5; cursor: default; }
+
+/* 고칠 수 있는 블록: 손을 올리면 옅은 면, 고치는 중이면 왼쪽 강조선. 읽는 화면에는 아무것도 없다. */
+.wk-doc.is-editing-doc .wk-body > .wk-block > .wk-text { cursor: text; }
+.wk-doc.is-editing-doc .wk-body > .wk-block:not(.is-editing):hover > .wk-text { background: var(--wk-soft); }
+.wk-doc.is-editing-doc .wk-body > .wk-block.is-editing > .wk-text { background: #eefafb; box-shadow: inset 0 -2px 0 var(--accent); }
+/* 블록이 빈 문단 하나뿐일 때의 안내. 사이에 끼는 줄(.wk-deco)이 있어 only-child 로는 못 고른다. */
+.wk-doc.is-editing-doc .wk-body > .wk-block:nth-child(1 of .wk-block):nth-last-child(1 of .wk-block) > .wk-text:empty::before { content: '내용을 입력하세요'; color: var(--ink-faint); }
+
+/* ---------- 분류 상자 (편집 상태에서만) ----------
+   분류(대·중·소) 하나가 상자 하나다. 상자 안의 상자가 아래 분류이고, 들여쓴 만큼이 단계다(2026-11-13 사용자 결정).
+   상자의 끝에는 '+ 2.2. 중분류' 처럼 그 자리에 생길 번호를 말하는 단추가 있다. 읽는 화면에는 상자가 없다.
+
+   DOM 은 블록이 한 줄로 선 그대로이고, 상자는 줄마다 달린 깊이(data-depth)로 그린다(render.js layout).
+     옆선      깊이 d 인 줄은 바깥 상자 d 개의 옆선을 배경으로 긋고 그만큼 안으로 들인다.
+               상자 하나의 폭: 왼쪽 띠 4px + 안여백 12px = 16px, 오른쪽 안여백 12px + 선 1px = 13px
+     윗변      제목 줄의 글 칸(data-head)이 제 상자의 띠·윗선·옆선을 직접 그린다. 그 줄 자체는 바깥 상자의 깊이다.
+     아랫변    상자를 닫는 줄(.wk-secend)의 안쪽 칸이 띠·옆선·아랫선을 그린다. 더하기 단추가 그 안에 든다. */
+.wk-doc.is-editing-doc .wk-body { --c1: var(--accent-deep); --c2: #5fb3ba; --c3: #b9dfe2; --ln: var(--wk-line); margin-top: 14px; }
+.wk-doc.is-editing-doc .wk-body > .wk-block,
+.wk-doc.is-editing-doc .wk-body > .wk-deco { margin: 0; padding-top: 4px; padding-bottom: 4px; background-repeat: no-repeat; }
+.wk-doc.is-editing-doc .wk-body > [data-depth="1"] { padding-left: 16px; padding-right: 13px;
+  background-image: linear-gradient(var(--c1), var(--c1)), linear-gradient(var(--ln), var(--ln));
+  background-size: 4px 100%, 1px 100%; background-position: 0 0, 100% 0; }
+.wk-doc.is-editing-doc .wk-body > [data-depth="2"] { padding-left: 32px; padding-right: 26px;
+  background-image: linear-gradient(var(--c1), var(--c1)), linear-gradient(var(--ln), var(--ln)),
+    linear-gradient(var(--c2), var(--c2)), linear-gradient(var(--ln), var(--ln));
+  background-size: 4px 100%, 1px 100%, 4px 100%, 1px 100%; background-position: 0 0, 100% 0, 16px 0, calc(100% - 13px) 0; }
+.wk-doc.is-editing-doc .wk-body > [data-depth="3"] { padding-left: 48px; padding-right: 39px;
+  background-image: linear-gradient(var(--c1), var(--c1)), linear-gradient(var(--ln), var(--ln)),
+    linear-gradient(var(--c2), var(--c2)), linear-gradient(var(--ln), var(--ln)),
+    linear-gradient(var(--c3), var(--c3)), linear-gradient(var(--ln), var(--ln));
+  background-size: 4px 100%, 1px 100%, 4px 100%, 1px 100%, 4px 100%, 1px 100%;
+  background-position: 0 0, 100% 0, 16px 0, calc(100% - 13px) 0, 32px 0, calc(100% - 26px) 0; }
+
+/* 제목 줄 = 상자의 머리 */
+.wk-doc.is-editing-doc .wk-body > .wk-block[data-head] { padding-top: 8px; padding-bottom: 0; }
+.wk-doc.is-editing-doc .wk-body > .wk-block[data-head] > .wk-text { padding: 6px 30px 6px 12px; background: var(--wk-soft);
+  border: 1px solid var(--ln); border-left: 4px solid var(--c1); border-bottom-color: var(--wk-line-2); font-size: 20px; line-height: 1.4; }
+.wk-doc.is-editing-doc .wk-body > .wk-block[data-head="2"] > .wk-text { border-left-color: var(--c2); font-size: 17px; }
+.wk-doc.is-editing-doc .wk-body > .wk-block[data-head="3"] > .wk-text { border-left-color: var(--c3); font-size: 15px; }
+.wk-doc.is-editing-doc .wk-body > .wk-block[data-head] > .wk-text:empty::after { content: '제목'; color: var(--ink-faint); font-weight: 400; }
+.wk-doc.is-editing-doc .wk-body > .wk-block[data-head].is-editing > .wk-text { background: #eefafb; }
+
+/* 상자를 닫는 줄 + 그 분류에 아래 분류를 더하는 단추 */
+.wk-doc.is-editing-doc .wk-body > .wk-secend { padding-top: 0; padding-bottom: 10px; }
+.wk-secend-in { min-height: 8px; padding: 2px 12px 8px; border: 1px solid var(--ln); border-top: 0; border-left: 4px solid var(--c1); }
+.wk-secend-in[data-head="2"] { border-left-color: var(--c2); }
+.wk-secend-in[data-head="3"] { border-left-color: var(--c3); }
+.wiki .wk-add-sec { padding: 3px 10px; border: 1px dashed var(--ln); border-radius: 4px; font-size: 13px; color: var(--ink-2); }
+.wiki .wk-add-sec:hover { border-style: solid; border-color: var(--accent-deep); background: var(--wk-soft); }
+.wk-add-sec b { margin: 0 2px 0 5px; color: var(--wk-link); font-weight: 700; }
+.wk-add-plus { color: var(--ink-faint); }
+.wk-doc.is-editing-doc .wk-body > .wk-add-top { padding-top: 2px; padding-bottom: 0; }
+.wiki .wk-add-top .wk-add-sec { display: block; width: 100%; padding: 8px; font-size: 14px; text-align: center; }
+
+/* 아직 글이 없는 분류 */
+.wk-doc.is-editing-doc .wk-body > .wk-ph { color: var(--ink-faint); cursor: text; }
+.wk-doc.is-editing-doc .wk-body > .wk-ph:hover { color: var(--ink-muted); }
+
+/* 구역 편집: 그 구역 밖의 더하기·안내는 감춘다 */
+.wk-doc.is-scoped .wk-deco:not(.in-scope) .wk-add-sec, .wk-doc.is-scoped .wk-ph:not(.in-scope), .wk-doc.is-scoped .wk-add-top { display: none; }
+.wk-doc.is-scoped .wk-body > .wk-deco:not(.in-scope) { opacity: 0.38; }
+
+/* 손잡이는 상자 안쪽 오른쪽에 선다 */
+.wk-doc.is-editing-doc .wk-body > [data-depth="1"] > .wk-grip { right: 15px; }
+.wk-doc.is-editing-doc .wk-body > [data-depth="2"] > .wk-grip { right: 28px; }
+.wk-doc.is-editing-doc .wk-body > [data-depth="3"] > .wk-grip { right: 41px; }
+.wk-doc.is-editing-doc .wk-body > [data-head] > .wk-grip { top: 15px; margin-right: 6px; }
+/* 편집 중에는 정보 상자를 띄우지 않는다. 뜬 상자는 줄의 옆선 배경과 겹친다. 읽는 화면에서는 오른쪽 위에 뜬다. */
+.wk-doc.is-editing-doc .k-infobox { float: none; width: 300px; max-width: 100%; }
+.wk-doc.is-scoped .wk-body > .wk-block:not(.in-scope) { opacity: 0.38; }
+.wk-doc.is-scoped .wk-body > .wk-block:not(.in-scope) > .wk-text { cursor: default; background: none !important; }
+.wk-doc.is-gone .wk-body { opacity: 0.5; }
+
+/* 손잡이. 편집 상태에서 손을 올리거나 그 블록을 고치는 동안만 보인다. 누르면 옮기기·지우기·표 손질이 나온다. */
+.wiki .wk-grip { display: none; position: absolute; z-index: 1; right: 2px; top: 5px; width: 14px; height: 22px; opacity: 0; color: var(--ink-faint);
+  background-image: radial-gradient(currentColor 1.3px, transparent 1.6px); background-size: 6px 6px; background-position: 1px 2px; cursor: pointer; }
+.wk-doc.is-editing-doc .wk-body > .wk-block > .wk-grip { display: block; }
+.wk-body > .wk-block:hover > .wk-grip, .wk-body > .wk-block.is-active > .wk-grip { opacity: 1; }
+.wiki .wk-grip:hover { color: var(--wk-text); }
+.wk-doc.is-scoped .wk-body > .wk-block:not(.in-scope) > .wk-grip { display: none; }
+.wk-tail { min-height: 56px; cursor: text; }
+.wk-tail[hidden] { display: none; }
+
+[data-plain] { outline: none; min-height: 1.4em; white-space: pre-wrap; cursor: text; }
+td[data-plain]:focus, th[data-plain]:focus, .wk-info-k[data-plain]:focus, .wk-info-v[data-plain]:focus,
+.wk-cap[data-plain]:focus, .wk-fold-title[data-plain]:focus { background: var(--accent-soft); }
+.wk-info-title[data-plain]:focus { box-shadow: inset 0 -2px 0 #fff; }
+[data-plain]:empty::before { content: attr(data-hint); color: var(--ink-faint); }
+.wk-info-title[data-plain]:empty::before { color: #ffffffb0; }
+
+/* 저장 못 한 블록·겹쳐 쓴 블록 */
+.wk-flag { display: flex; flex-wrap: wrap; gap: 4px 14px; clear: both; padding: 4px 0 2px; font-size: 13px; color: #a52b3d; }
+.wiki .wk-flag button { font-weight: 700; color: var(--wk-text); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- 문서 끝 ---------- */
+.wk-notes { clear: both; margin-top: 26px; padding-top: 10px; border-top: 1px solid var(--wk-line); font-size: 14px; }
+.wk-notes[hidden] { display: none; }
+.wk-notes ol { margin: 0; padding: 0; list-style: none; }
+.wk-notes li:target { background: var(--accent-soft); }
+.wk-note-num { color: var(--wk-link); }
+.wk-back { clear: both; margin-top: 18px; font-size: 13px; color: var(--ink-muted); }
+.wk-back[hidden] { display: none; }
+.wk-back summary { cursor: pointer; }
+.wk-back > div { display: flex; flex-wrap: wrap; gap: 4px 14px; padding-top: 8px; font-size: 14px; }
+.wk-back .loading { padding: 4px 0; }
+
+/* ---------- 역사 · 토론 ---------- */
+.wk-panel { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--wk-line); background: var(--wk-soft); }
+.wk-panel[hidden] { display: none; }
+.wk-history, .wk-talk { margin: 0; padding: 0; list-style: none; }
+.wk-history li { padding: 8px 0; border-top: 1px solid var(--wk-line-2); }
+.wk-history li:first-child { border-top: 0; padding-top: 0; }
+.wk-history-head { display: flex; align-items: baseline; gap: 10px; font-size: 14px; }
+.wk-history-head span { font-size: 12px; color: var(--ink-faint); }
+.wiki .wk-history-head button { margin-left: auto; font-size: 13px; color: var(--wk-link); }
+.wiki .wk-history-head button:hover { text-decoration: underline; }
+.wk-history p, .wk-recent-lines p { margin: 2px 0 0; overflow-wrap: anywhere; }
+.wk-history p.is-note, .wk-recent-lines p.is-note { font-size: 13px; color: var(--ink-muted); }
+.wk-talk li { display: flex; align-items: baseline; gap: 9px; padding: 4px 0; }
+.wk-talk li b { flex: none; font-size: 13px; }
+.wk-talk-body { min-width: 0; overflow-wrap: anywhere; }
+.wk-talk-when { flex: none; margin-left: auto; font-size: 12px; color: var(--ink-faint); }
+.wk-talk-form { margin-top: 8px; }
+.wiki .wk-talk-form input { width: 100%; height: 34px; padding: 0 10px; background: #fff; border: 1px solid var(--wk-line); font-size: 14px; }
+.wiki .wk-talk-form input:focus { border-color: var(--accent); }
+
+/* ---------- 첫 화면 · 찾은 결과 · 분류 ---------- */
+.wk-home h1 { font-size: 28px; margin-bottom: 8px; }
+.wk-recent, .wk-found-list { margin: 0; padding: 0; list-style: none; }
+.wk-recent li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 16px; padding: 9px 0; border-top: 1px solid var(--wk-line-2); }
+.wk-recent-doc { font-weight: 700; }
+.wk-recent li.is-gone .wk-recent-doc { color: var(--ink-faint); text-decoration: line-through; }
+.wk-recent-who { font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+.wk-recent-lines { grid-column: 1 / -1; }
+.wk-found { margin-bottom: 30px; }
+.wk-found-list li { padding: 7px 0; border-top: 1px solid var(--wk-line-2); }
+.wk-found-list p { margin: 2px 0 0; font-size: 14px; color: var(--ink-muted); overflow-wrap: anywhere; }
+.wk-found-note { font-size: 13px; color: var(--ink-faint); }
+.wk-none { color: var(--ink-faint); }
+
+/* ---------- 띄우는 것: 블록 메뉴 · 작은 입력창 ---------- */
+.wk-menu { position: fixed; z-index: 60; width: 232px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 4px 0;
+  background: #fff; color: #212529; border: 1px solid #ccd6de; box-shadow: 0 4px 12px #1b2a4533; font-size: 14px; }
+.wk-menu-group { display: flex; flex-wrap: wrap; padding: 4px 6px; }
+.wk-menu-group + .wk-menu-group { border-top: 1px solid #e3e9ee; }
+.wk-menu-label { flex: 0 0 100%; padding: 2px 6px 3px; font-size: 11px; font-weight: 700; color: #64768b; }
+.wk-menu button { padding: 6px 8px; white-space: nowrap; }
+.wk-menu button:hover { background: #f5f8fa; }
+.wk-menu button.is-on { font-weight: 700; color: var(--accent-deep); }
+.wk-pop { position: fixed; z-index: 70; padding: 0 10px; background: #fff; border: 1px solid var(--accent-deep); box-shadow: 0 4px 12px #1b2a4533; }
+.wk-pop input { width: min(300px, calc(100vw - 40px)); height: 36px; font-size: 14px; }
+
+/* ---------- 글자 꾸밈: 윗글자 · 색 고르는 판 ---------- */
+/* 글자색·배경색·크기는 조각마다 style 로 온다(render.js styled). 여기에는 윗글자와 도구만 있다. */
+.wk-body ruby { ruby-position: over; }
+.wk-body rt { font-size: 0.55em; font-weight: 400; color: var(--ink-muted); user-select: none; }
+.wk-ink { display: inline-block; min-width: 14px; border-bottom: 3px solid var(--wk-new); line-height: 1.1; font-weight: 700; }
+.wk-ink.is-bg { border-bottom: 0; padding: 0 3px; background: #fff3a3; }
+.wk-tool sup, .wk-tool sub { font-size: 10px; }
+.wk-pop.wk-palette { display: grid; grid-template-columns: repeat(10, 22px); gap: 4px; padding: 8px; }
+.wk-pop .wk-swatch { width: 22px; height: 22px; border: 1px solid #ccd6de; border-radius: 3px; }
+.wk-pop .wk-swatch:hover { outline: 2px solid var(--accent-deep); outline-offset: 1px; }
+.wk-pop .wk-swatch-none { grid-column: 1 / -1; padding: 4px 0; border: 1px solid #ccd6de; border-radius: 3px; font-size: 13px; }
+.wk-pop .wk-swatch-none:hover { background: #f5f8fa; }
+/* 표의 칸: 줄을 바꿔 쓴 칸(나무위키에서 온 가사)이 그대로 보이게 */
+.wk-table td, .wk-table th { overflow-wrap: anywhere; }
+
+/* ---------- 가사 ----------
+   한 소절 = 원문 · 발음 · 번역. 원문은 강조색의 옅은 면에 굵게, 발음은 작은 회색, 번역은 보통 글씨. 가운데에 놓는다.
+   선은 소절 사이에만 있고 절이 바뀌는 곳(.is-gap)에는 빈 띠를 둔다. 표처럼 줄마다 칸을 치면 어디가 한 소절인지 안 보인다. */
+.k-lyric { display: flow-root; }
+.wk-lyr { max-width: 620px; margin: 10px auto 16px; border: 1px solid var(--wk-line); text-align: center; }
+.wk-v { padding-bottom: 9px; border-top: 1px solid var(--wk-line-2); }
+.wk-v:first-child { border-top: 0; }
+.wk-v.is-gap { border-top: 0; }
+.wk-v.is-gap::before { content: ''; display: block; height: 14px; background: var(--wk-soft); border-top: 1px solid var(--wk-line-2); border-bottom: 1px solid var(--wk-line-2); }
+.wk-lo { padding: 7px 12px 5px; background: var(--accent-soft); font-size: 17px; font-weight: 700; line-height: 2; }
+.wk-lr { padding: 6px 12px 0; font-size: 13px; color: var(--ink-muted); }
+.wk-lt { padding: 1px 12px 0; }
+.wk-lo, .wk-lr, .wk-lt { overflow-wrap: anywhere; }
+.wk-lyr [data-plain]:focus { box-shadow: inset 0 -2px 0 var(--accent); }
+.wk-lr[data-plain]:focus, .wk-lt[data-plain]:focus { background: #eefafb; }
+
+/* ---------- 표를 놓는 자리 ---------- */
+.k-table[data-al="c"] .wk-table table { margin-left: auto; margin-right: auto; }
+/* 오른쪽: 정보 상자처럼 본문 오른쪽에 뜨고 글이 왼쪽으로 흐른다. 편집 중에는 띄우지 않는다(줄의 옆선 배경과 겹친다). */
+.wk-doc.is-readonly .k-table[data-al="r"] { float: right; clear: right; max-width: 46%; margin: 0 0 14px 20px; }
+.wk-doc.is-editing-doc .k-table[data-al="r"] .wk-table table { margin-left: auto; }
+
+/* ---------- 좁은 화면 ---------- */
+@media (max-width: 1000px) {
+  .wk-wrap { grid-template-columns: minmax(0, 1fr); }
+  .wk-side { display: none; }            /* 최근 변경은 위키 줄에서 간다 */
+}
+@media (max-width: 680px) {
+  .wk-wrap { padding: 8px; }
+  .wk-doc { padding: 14px 14px 22px; }
+  .wk-banner { margin: -14px -14px 14px; padding: 9px 14px; }
+  .wk-bar-in { flex-wrap: wrap; padding: 0 8px; }
+  .wk-bar a { padding: 10px 8px; font-size: 13px; }
+  .wk-find { order: 5; flex: 1 1 100%; margin: 0 0 8px; }
+  .wk-bar .wk-find input { flex: 1; width: auto; }
+  .wk-head { flex-wrap: wrap; gap: 6px; }
+  .wk-doc h1 { font-size: 27px; flex: 1 1 100%; }
+  .wk-btns { margin-top: 0; }
+  .wk-stamp { text-align: left; }
+  .k-infobox { float: none; width: auto; margin: 0 0 14px; }
+  .wk-toc { display: block; }
+  .k-h2 > .wk-text { font-size: 22px; }
+  .k-h3 > .wk-text { font-size: 18px; }
+  .wk-block[data-lv="1"] > .wk-text { margin-left: 18px; }
+  .wk-block[data-lv="2"] > .wk-text { margin-left: 36px; }
+  .wk-block[data-lv="3"] > .wk-text { margin-left: 54px; }
+  .k-h4 > .wk-text { font-size: 16px; }
+  /* 도구 줄은 한 줄로 두고 옆으로 민다. 저장·취소는 오른쪽에 붙어 늘 보인다. */
+  .wk-toolbar { flex-wrap: nowrap; overflow-x: auto; margin: -14px -14px 14px; padding: 6px 0 6px 8px; }
+  .wk-tool-group { flex: none; }
+  /* 오른쪽 끝에 딱 붙인다. 틈이 있으면 그 사이로 뒤의 단추가 비친다. */
+  .wk-tool-end { position: sticky; right: 0; margin-left: auto; padding: 0 8px 0 10px; background: var(--wk-soft); box-shadow: -10px 0 8px var(--wk-soft); }
+}

@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 import metrics
 from db import init_db
 from guildtheme import theme_of
-from routers import comments, drawings, events, guilds, members, pairs, sessions, sheets, songs
+from routers import comments, drawings, events, guilds, members, pairs, sessions, sheets, songs, wiki
 from routers import admin as admin_router
 from routers import songadmin
 from routers import metrics as metrics_router
@@ -34,6 +34,7 @@ ROUTERS = [
     (guilds, '/api/guilds', '길드'),
     (drawings, '/api/guilds', '길드 낙서'),
     (members, '/api/members', '멤버'),
+    (wiki, '/api/wiki', '위키'),
     (metrics_router, '/api/stats', '계측'),
     (admin_router, '/api/admin', '관리'),
     (songadmin, '/api/admin', '곡 정리'),
@@ -56,6 +57,21 @@ def index():
 @app.get('/guild/{slug}')
 def guild_root(slug: str):
     return RedirectResponse(f'/guild/{slug}/')
+
+
+# ---------- 위키 문서 주소 ----------
+WIKI_DIR = os.path.join(FRONTEND_DIR, 'wiki')
+
+
+@app.get('/wiki/{title:path}')
+def wiki_page(title: str):
+    """/wiki/<문서 제목> 은 전부 같은 화면(frontend/wiki/index.html)이다. 화면이 주소에서 제목을 읽는다.
+    이 라우트가 /wiki/ 아래를 전부 받으므로 화면의 CSS·JS(/wiki/css/…, /wiki/js/…)도 여기를 지난다 —
+    그 파일이 실제로 있으면 그대로 내준다. 폴더 밖을 가리키는 주소는 화면으로 떨어진다."""
+    full = os.path.normpath(os.path.join(WIKI_DIR, title))
+    if title and full.startswith(WIKI_DIR + os.sep) and os.path.isfile(full):
+        return FileResponse(full)
+    return FileResponse(os.path.join(WIKI_DIR, 'index.html'))
 
 
 # ---------- 길드 테마를 첫 그림에 박아 보내기 ----------
@@ -152,6 +168,9 @@ def _classify(scope, start, tally):
         tally.client = metrics.client_of(ua)
         # 길드 주소는 슬러그마다 갈라지지 않게 묶는다
         tally.path = '/guild/{slug}/' + path.split('/', 3)[3] if path.startswith('/guild/') and path.count('/') >= 3 else path
+        # 위키 문서 주소도 제목마다 갈라지지 않게 묶는다. 화면 파일(/wiki/css/…, /wiki/js/…)은 그대로 둔다.
+        if path.startswith('/wiki/') and not path.startswith(('/wiki/css/', '/wiki/js/')) and path != '/wiki/':
+            tally.path = '/wiki/{title}'
 
 
 class TrafficMeter:
