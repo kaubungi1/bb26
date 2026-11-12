@@ -88,7 +88,7 @@ const Site = (() => {
    길드가 고르는 프리셋. 값은 common/themes.css 에 있고 여기서는 이름만 건다.
    지금은 주소로만 건다 — 길드가 고른 테마를 저장할 칸(guilds.theme)이 아직 없다.
    목록에 있는 이름만 받는다. 자유 문자열을 그대로 꽂으면 CSS 주입이 된다. */
-const THEMES = ['takeoff', 'miku', 'melody', 'city', 'temple', 'wood', 'nature', 'medieval', 'sea', 'deepsea'];
+const THEMES = ['takeoff', 'raple', 'miku', 'melody', 'city', 'nature'];   /* 서버 backend/guildtheme.py THEMES 와 같다 */
 function applyTheme(name) {
   if (THEMES.includes(name)) document.documentElement.dataset.theme = name;
   else delete document.documentElement.dataset.theme;

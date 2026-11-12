@@ -145,9 +145,8 @@ async function openGuildEditor(guild = null) {
        서버도 같은 목록으로 거른다(routers/guilds.py). 세 곳이 어긋나면
        화면에서는 고를 수 있는데 저장이 안 되는 상태가 된다. */
     if (canStyle) {
-      const THEME_NAMES = { '': '기본', takeoff: '불법이륙', miku: '미쿠', melody: '마이멜로디',
-        city: '도시', temple: '신전', wood: '원목', nature: '산', medieval: '중세',
-        sea: '바다', deepsea: '심해' };
+      const THEME_NAMES = { '': '기본', takeoff: '불법이륙', raple: '라플', miku: '미쿠', melody: '마이멜로디',
+        city: '도시', nature: '산' };
       const $$ = (s) => backdrop.querySelector(s);
       const bgIn = $$('#gs-bg'), fgIn = $$('#gs-fg');
 

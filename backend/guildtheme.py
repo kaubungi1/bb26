@@ -15,7 +15,8 @@ from db import get_db
 
 # frontend/common/themes.css 와 frontend/common/common.js 의 THEMES 를 따라간다.
 # 한쪽만 고치면 화면에서는 고를 수 있는데 서버가 버리는 상태가 된다.
-THEMES = {'takeoff', 'miku', 'melody', 'city', 'temple', 'wood', 'nature', 'medieval', 'sea', 'deepsea'}
+# 신전·원목·중세·바다·심해는 뺐다(2026-11-13) — 고른 길드가 없었다. 옛 값이 DB 에 남아 있어도 여기서 걸러져 기본 화면이 된다.
+THEMES = {'takeoff', 'raple', 'miku', 'melody', 'city', 'nature'}
 
 _CACHE: dict[str, str] | None = None
 
