@@ -40,7 +40,7 @@ body.wiki-page {
 .wk-bar a:hover { background: #ffffff24; }
 .wk-bar .wk-brand { padding-left: 0; margin-right: 10px; font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
 .wk-bar .wk-brand:hover { background: none; }
-.wk-find { position: relative; margin-left: auto; display: flex; }
+.wk-find { position: relative; margin-left: 10px; display: flex; }
 .wk-bar .wk-find input { width: 220px; height: 30px; padding: 0 10px; background: #fff; font-size: 14px; }
 .wk-bar .wk-find button { height: 30px; padding: 0 10px; background: #fff; border-left: 1px solid var(--wk-line); color: var(--ink-2); font-size: 13px; }
 .wk-suggest { position: absolute; z-index: 30; top: calc(100% + 2px); left: 0; right: 0; display: flex; flex-direction: column;
@@ -369,6 +369,25 @@ td[data-plain]:focus, th[data-plain]:focus, .wk-info-k[data-plain]:focus, .wk-in
 
 /* ---------- 첫 화면 · 찾은 결과 · 분류 ---------- */
 .wk-home h1 { font-size: 28px; margin-bottom: 8px; }
+
+/* 문서 목록(위키의 첫 화면). 첫 글자로 묶어 여러 단으로 흘린다. 머리 오른쪽에 '새 문서' 단추. */
+.wk-list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--wk-line); }
+.wk-list-head h1 { margin: 0; }
+.wk-list-head h1 small { margin-left: 10px; font-size: 14px; font-weight: 400; color: var(--ink-faint); }
+.wk-list { columns: 3 200px; column-gap: 28px; }
+.wk-list-group { break-inside: avoid; margin: 0 0 16px; }
+.wk-list-group h2 { margin: 0 0 4px; padding-bottom: 3px; border-bottom: 1px solid var(--wk-line-2); font-size: 15px; font-weight: 700; color: var(--accent-deep); }
+.wk-list-group ul { margin: 0; padding: 0; list-style: none; }
+.wk-list-group li { padding: 2px 0; overflow-wrap: anywhere; }
+
+/* 새 문서 단추. 위키에서 가장 기본인 동작이라 글자 링크가 아니라 채운 단추로 둔다 — 링크들 사이에 끼워 두었더니 묻혔다.
+   위키 줄에서는 색 띠 위라 흰 면, 문서 목록 머리에서는 강조색 면이다. */
+.wk-bar .wk-new, .wiki .wk-new { flex: none; height: 30px; padding: 0 14px; border-radius: 4px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.wk-new::before { content: '+'; margin-right: 6px; font-weight: 400; }
+.wk-bar .wk-new { margin-left: auto; background: #fff; color: var(--accent-deep); }
+.wk-bar .wk-new:hover { background: var(--accent-soft); }
+.wiki .wk-new { height: 34px; background: var(--accent-deep); color: #fff; }
+.wiki .wk-new:hover { filter: brightness(1.08); }
 .wk-recent, .wk-found-list { margin: 0; padding: 0; list-style: none; }
 .wk-recent li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 16px; padding: 9px 0; border-top: 1px solid var(--wk-line-2); }
 .wk-recent-doc { font-weight: 700; }
@@ -442,6 +461,7 @@ td[data-plain]:focus, th[data-plain]:focus, .wk-info-k[data-plain]:focus, .wk-in
   .wk-bar-in { flex-wrap: wrap; padding: 0 8px; }
   .wk-bar a { padding: 10px 8px; font-size: 13px; }
   .wk-find { order: 5; flex: 1 1 100%; margin: 0 0 8px; }
+  .wk-bar .wk-new { order: 4; margin-left: auto; }
   .wk-bar .wk-find input { flex: 1; width: auto; }
   .wk-head { flex-wrap: wrap; gap: 6px; }
   .wk-doc h1 { font-size: 27px; flex: 1 1 100%; }

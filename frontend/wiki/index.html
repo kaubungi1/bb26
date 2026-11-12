@@ -13,14 +13,16 @@
 </head>
 <body>
   <header id="app-header" class="app-bar"></header>
-  <!-- 위키 줄. 사이트 메뉴 아래에 위키 안의 길이 따로 있다: 최근 변경 · 아무 문서나 · 분류 · 찾기 -->
+  <!-- 위키 줄. 사이트 메뉴 아래에 위키 안의 길이 따로 있다: 문서 목록 · 최근 변경 · 아무 문서나 · 분류 · 찾기 · 새 문서.
+       '새 문서' 는 글자 링크가 아니라 채운 단추로 찾기 칸 왼쪽에 둔다 — 링크들 사이에 끼워 두었더니 묻혀서 안 보였다. -->
   <div class="wk-bar">
     <div class="wk-bar-in">
       <a class="wk-brand" href="/wiki/">불법위키</a>
-      <a href="/wiki/">최근 변경</a>
-      <a id="wk-new" href="/wiki/">새 문서</a>
+      <a href="/wiki/">문서 목록</a>
+      <a href="/wiki/?v=recent">최근 변경</a>
       <a id="wk-random" href="/wiki/">아무 문서나</a>
       <a href="/wiki/%EB%B6%84%EB%A5%98%3A">분류</a>
+      <button type="button" id="wk-new" class="wk-new">새 문서</button>
       <form id="wk-find" class="wk-find" role="search" autocomplete="off">
         <input id="wk-q" type="search" placeholder="문서 찾기" aria-label="문서 찾기" maxlength="60" />
         <button type="submit">이동</button>

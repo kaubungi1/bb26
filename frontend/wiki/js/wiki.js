@@ -1,7 +1,7 @@
 /* 불법위키 — 화면의 뼈대. 주소 읽기, 문서 열기, 읽기/편집 전환, 저장, 첫 화면(최근 변경)·찾기·분류.
 
    주소
-     /wiki/              최근 변경.  ?q= 가 붙으면 찾은 결과
+     /wiki/              문서 목록.  ?v=recent 는 최근 변경, ?q= 는 찾은 결과
      /wiki/<제목>        문서. 없는 제목이면 '아직 없는 문서' — 새 문서 만들기를 누르면 편집 상태로 들어간다
      /wiki/분류:<이름>   그 분류의 문서 목록.  /wiki/분류: 는 분류 전체
    위키 안의 이동은 주소만 바꾸고 화면을 갈아 끼운다(제목 목록을 다시 받지 않는다).
@@ -701,14 +701,75 @@ const Wiki = {
     else WikiBlocks.insert(box, 'p');
   },
 
-  /* ---------- 첫 화면: 최근 변경 · 찾은 결과 ---------- */
-  home(query) {
+  /* ---------- 첫 화면: 문서 목록 ----------
+     위키에 들어오면 문서 목록이 먼저 뜬다(2026-11-13 사용자 결정. 처음에는 최근 변경이 첫 화면이었다).
+     가나다순이고 첫 글자(ㄱ·ㄴ·ㄷ… A·B·C… 숫자·기타)로 묶는다. 이미 받아 둔 제목 목록으로 그리므로 요청이 늘지 않는다.
+     최근 수정순으로는 세우지 않는다 — 그러려면 제목 목록에 수정 시각을 실어야 하고, 그러면 문단 하나를 고칠 때마다
+     모든 탭이 제목 목록을 다시 받는다. 최근 것은 옆의 목록과 '최근 변경' 화면에서 본다. */
+  initial(title) {
+    const ch = (title || '').trim().charAt(0);
+    const code = ch.charCodeAt(0);
+    if (code >= 0xAC00 && code <= 0xD7A3) {
+      /* 한글 음절의 첫소리. 된소리(ㄲ·ㄸ·ㅃ·ㅆ·ㅉ)는 예사소리 묶음에 넣는다(사전 순서와 같다) */
+      return 'ㄱㄱㄴㄷㄷㄹㅁㅂㅂㅅㅅㅇㅈㅈㅊㅋㅌㅍㅎ'[Math.floor((code - 0xAC00) / 588)];
+    }
+    if (/[a-z]/i.test(ch)) return ch.toUpperCase();
+    if (/[0-9]/.test(ch)) return '0-9';
+    return '기타';
+  },
+  list() {
     const { el } = WikiRender;
     this.seq += 1;
-    this.view = 'home';
+    this.view = 'list';
     this.doc = null;
     this.live = null;
     document.title = '불법위키 - 불법이륙';
+    const pages = WikiLinks.all();
+    const card = el('section', 'wk-doc wk-home');
+    const head = el('div', 'wk-list-head');
+    const h1 = el('h1', '', '문서 목록');
+    h1.append(el('small', '', pages.length ? `${pages.length}개` : ''));
+    const make = el('button', 'wk-new', pages.length ? '새 문서' : '첫 문서 만들기');
+    make.type = 'button';
+    head.append(h1, make);
+    card.append(head);
+    const order = [...'ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎABCDEFGHIJKLMNOPQRSTUVWXYZ', '0-9', '기타'];
+    const groups = new Map();
+    for (const p of pages) {
+      const key = this.initial(p.title);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(p);
+    }
+    const box = el('div', 'wk-list');
+    box.id = 'wk-list';
+    for (const key of order) {
+      const items = groups.get(key);
+      if (!items) continue;
+      const group = el('section', 'wk-list-group');
+      group.append(el('h2', '', key));
+      const ul = el('ul');
+      items.sort((a, b) => a.title.localeCompare(b.title, 'ko')).forEach((p) => {
+        const li = el('li');
+        const a = el('a', 'wk-link', p.title);
+        a.href = this.href(p.title);
+        li.append(a);
+        ul.append(li);
+      });
+      group.append(ul);
+      box.append(group);
+    }
+    card.append(box);
+    this.$('wk-view').replaceChildren(card);
+  },
+
+  /* ---------- 최근 변경(전체) · 찾은 결과 ---------- */
+  home(query) {
+    const { el } = WikiRender;
+    this.seq += 1;
+    this.view = 'recent';
+    this.doc = null;
+    this.live = null;
+    document.title = `${query ? `'${query}' 찾기` : '최근 변경'} - 불법위키`;
     const card = el('section', 'wk-doc wk-home');
     if (query) {
       const found = el('div', 'wk-found');
@@ -798,7 +859,7 @@ const Wiki = {
       return a;
     }));
     const list = this.$('wk-recent');
-    if (!list || this.view !== 'home') return;
+    if (!list || this.view !== 'recent') return;
     list.replaceChildren(...this.recent.map((r) => {
       const li = el('li', r.page.deleted ? 'is-gone' : '');
       const a = el('a', 'wk-recent-doc wk-link', r.page.title);
@@ -848,6 +909,7 @@ const Wiki = {
     WikiLinks.set(got.data);
     if (this.view === 'doc' && this.doc && document.getElementById('wk-body')) WikiRender.paintAll();
     else if (this.view === 'category') this.category(this.categoryName);
+    else if (this.view === 'list') { const y = scrollY; this.list(); scrollTo(0, y); }
   },
 
   /* ---------- 주소 ---------- */
@@ -868,7 +930,9 @@ const Wiki = {
     this.suggest('');
     this.status('');
     if (!rest || rest.startsWith('분류:')) this.makeNext = false;
-    if (!rest) this.home(new URLSearchParams(location.search).get('q') || '');
+    const query = new URLSearchParams(location.search);
+    if (!rest && (query.get('q') || query.get('v') === 'recent')) this.home(query.get('q') || '');
+    else if (!rest) this.list();
     else if (rest.startsWith('분류:')) this.category(rest.slice(3).trim());
     else this.open(rest);
   },
@@ -920,10 +984,13 @@ const Wiki = {
       q.blur();
       this.go(page ? this.href(page.title) : `/wiki/?q=${encodeURIComponent(text)}`);
     });
-    /* 새 문서: 제목을 묻고 그 문서의 편집 화면으로 간다. 같은 제목(띄어쓰기만 다른 것 포함)이 있으면 그 문서로 간다. */
-    this.$('wk-new').addEventListener('click', async (e) => {
+    /* 새 문서: 제목을 묻고 그 문서의 편집 화면으로 간다. 같은 제목(띄어쓰기만 다른 것 포함)이 있으면 그 문서로 간다.
+       단추는 위키 줄과 문서 목록 머리 두 곳에 있다(.wk-new). */
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.wk-new');
+      if (!btn) return;
       e.preventDefault();
-      const asked = await this.ask(e.currentTarget.getBoundingClientRect(), { placeholder: '새 문서의 제목', titles: true });
+      const asked = await this.ask(btn.getBoundingClientRect(), { placeholder: '새 문서의 제목', titles: true });
       const title = (asked || '').replace(/\s+/g, ' ').trim().slice(0, 60);
       if (!title || !WikiLinks.key(title)) return;
       if (title.startsWith('분류:')) { alert('쓸 수 없는 제목입니다.'); return; }
