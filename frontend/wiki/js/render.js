@@ -91,7 +91,10 @@ const WikiRender = (() => {
           ctx.notes.push(r.f);
           const a = el('a', '', `[${ctx.notes.length}]`);
           a.href = `#wk-note-${ctx.notes.length}`;
-          a.title = r.f;
+          /* 내용은 마우스를 올리거나 누르면 판으로 뜬다(wiki.js noteShow). 브라우저 기본 풍선말(title)은 쓰지 않는다 —
+             한참 뒤에 뜨고 모양도 사이트와 다르다. 화면 읽기 프로그램에는 이름으로 내용을 알려 준다. */
+          a.setAttribute('aria-label', `각주 ${ctx.notes.length}: ${r.f}`);
+          sup.dataset.n = ctx.notes.length;
           sup.append(a);
         } else {
           sup.contentEditable = 'false';

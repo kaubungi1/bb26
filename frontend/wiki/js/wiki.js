@@ -341,6 +341,74 @@ const Wiki = {
     this.paintHead();
   },
 
+  /* ---------- 각주 판 ----------
+     본문의 각주 번호에 마우스를 올리면 바로 그 자리에 내용이 뜬다. 누르면 판이 떠 있는 채로 남는다 —
+     마우스가 없는 기기에서는 누르는 것이 보는 방법이다. 바깥을 누르면 닫힌다.
+     처음에는 브라우저 기본 풍선말(title)과 '문서 맨 아래 각주로 가는 링크' 뿐이어서, 올리면 한참 뒤에 윈도우 풍선이 뜨고
+     누르면 읽던 자리를 잃고 맨 아래로 내려갔다(2026-11-13 사용자 지적).
+     문서 끝의 각주 목록은 그대로 있다. 판 안의 번호를 누르면 그때 목록으로 간다. */
+  note: null,           /* { pop, sup, pinned } */
+  noteTimer: 0,
+  noteShow(sup, pinned) {
+    const { el } = WikiRender;
+    if (this.note && this.note.sup === sup) { this.note.pinned = this.note.pinned || pinned; clearTimeout(this.noteTimer); return; }
+    this.noteHide();
+    const pop = el('div', 'wk-fnpop');
+    pop.setAttribute('role', 'tooltip');
+    const n = sup.dataset.n;
+    /* 틀로 끼운 문서의 각주는 이 문서의 각주 목록에 없다. 번호만 보여 준다 */
+    const listed = !sup.closest('.wk-embed-body');
+    const num = el(listed ? 'a' : 'span', 'wk-fnpop-num', `[${n}]`);
+    if (listed) num.href = `#wk-note-${n}`;
+    pop.append(num);
+    /* 각주 안의 문서 이름도 링크로 */
+    for (const seg of WikiLinks.split(sup.dataset.f || '', new Set(), this.doc ? this.doc.id : 0)) {
+      if (!seg.page) { pop.append(document.createTextNode(seg.t)); continue; }
+      const a = el('a', 'wk-link', seg.t);
+      a.href = this.href(seg.page.title);
+      pop.append(a);
+    }
+    document.body.append(pop);
+    const rect = sup.getBoundingClientRect();
+    const below = rect.bottom + 6 + pop.offsetHeight <= innerHeight - 8 || rect.top < pop.offsetHeight + 14;
+    pop.style.left = `${Math.round(Math.max(8, Math.min(rect.left, innerWidth - pop.offsetWidth - 8)) + scrollX)}px`;
+    pop.style.top = `${Math.round((below ? rect.bottom + 6 : rect.top - pop.offsetHeight - 6) + scrollY)}px`;
+    pop.addEventListener('pointerenter', () => clearTimeout(this.noteTimer));
+    pop.addEventListener('pointerleave', () => this.noteHideSoon());
+    this.note = { pop, sup, pinned };
+  },
+  noteHide() {
+    clearTimeout(this.noteTimer);
+    if (this.note) this.note.pop.remove();
+    this.note = null;
+  },
+  noteHideSoon() {
+    clearTimeout(this.noteTimer);
+    if (!this.note || this.note.pinned) return;
+    this.noteTimer = setTimeout(() => { if (this.note && !this.note.pinned) this.noteHide(); }, 220);
+  },
+  wireNotes(body) {
+    const numberOf = (e) => {
+      const sup = e.target.closest && e.target.closest('.wk-fn[data-n]');
+      return sup && body.contains(sup) ? sup : null;
+    };
+    body.addEventListener('pointerover', (e) => { const sup = numberOf(e); if (sup && e.pointerType === 'mouse') this.noteShow(sup, false); });
+    body.addEventListener('pointerout', (e) => { if (numberOf(e)) this.noteHideSoon(); });
+    /* 번호를 누르면 맨 아래로 내려가지 않고 판을 띄워 둔다. 편집 중인 문단의 각주는 editor.js 가 고치는 창을 연다 */
+    body.addEventListener('click', (e) => {
+      const sup = numberOf(e);
+      if (!sup) return;
+      e.preventDefault();
+      this.noteShow(sup, true);
+    });
+    if (this.notesWired) return;
+    this.notesWired = true;
+    document.addEventListener('pointerdown', (e) => {
+      if (this.note && !this.note.pop.contains(e.target) && !this.note.sup.contains(e.target)) this.noteHide();
+    }, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.noteHide(); });
+  },
+
   /* ---------- 멤버 문서의 프로필 표 ----------
      문서 제목이 멤버 닉네임과 글자 그대로 같으면(띄어쓰기·대소문자도 같아야 한다. 다른 이름으로는 안 된다)
      나무위키 인물 문서의 프로필 표 같은 정보 상자가 자동으로 생긴다(2026-11-13 사용자 결정: 대부분 만들 줄 모른다).
@@ -572,6 +640,7 @@ const Wiki = {
     WikiBlocks.init(body);
     WikiPanel.init();
     WikiTools.init(this.$('wk-toolbar'));
+    this.wireNotes(body);
     this.$('wk-tools').addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]');
       if (!act) return;
@@ -687,7 +756,9 @@ const Wiki = {
         meta.append(line);
       };
       row('분류', cats, 'categories', '분류 더하기');
-      row('다른 이름', this.draft.aliases, 'aliases', '다른 이름 더하기');
+      /* 화면에서는 '리다이렉트' 라고 부른다. 처음에는 '다른 이름' 이라 적었는데, 리다이렉트를 찾는 사람이 이 칸이
+         그것인 줄 아무도 알아보지 못했다(2026-11-13 사용자 지적). 코드와 DB 에서는 그대로 aliases 다. */
+      row('리다이렉트', this.draft.aliases, 'aliases', '이 문서로 넘어올 이름 더하기');
     } else if (cats.length && !this.editing) {
       const line = el('div', 'wk-cats');
       line.append(document.createTextNode('분류: '));
@@ -875,7 +946,7 @@ const Wiki = {
       case 'profile': return `프로필 표 자동 넣기를 ${t}`;
       case 'embed': return `틀: ${t}`;
       case 'title': return `제목을 '${t}'(으)로`;
-      case 'alias': return t ? `다른 이름: ${t}` : '다른 이름을 비움';
+      case 'alias': return t ? `리다이렉트: ${t}` : '리다이렉트를 비움';
       case 'cats': return t ? `분류: ${t}` : '분류를 비움';
       case 'delete': return '문서를 지움';
       case 'restore': return '문서를 되살림';
@@ -972,6 +1043,7 @@ const Wiki = {
     this.draft = null;
     this.doc = null;
     WikiBlocks.closeMenu();
+    this.noteHide();
     this.suggest('');
     this.status('');
     if (!rest || rest.startsWith('분류:')) this.makeNext = false;

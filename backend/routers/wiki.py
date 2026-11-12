@@ -305,7 +305,7 @@ def update_page(page_id: int, body: dict):
                 for a in wanted:
                     other = _taken(conn, wikitext.key(a), page_id)
                     if other:
-                        raise HTTPException(409, f"'{a}' 은(는) '{other}' 문서가 이미 씁니다.")
+                        raise HTTPException(409, f"'{a}' 은(는) 이미 '{other}' 문서로 가는 이름입니다.")
                 conn.execute('DELETE FROM wikiAliases WHERE "pageId"=%s', (page_id,))
                 for a in wanted:
                     conn.execute('INSERT INTO wikiAliases ("pageId","alias","key") VALUES (%s,%s,%s)',

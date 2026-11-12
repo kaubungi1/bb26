@@ -473,6 +473,15 @@ td[data-plain]:focus, th[data-plain]:focus, .wk-info-k[data-plain]:focus, .wk-in
 /* 멤버 문서의 프로필 표(아직 문서에 넣지 않은 것). 여느 정보 상자와 같은 모양이다. */
 .wk-virtual { position: relative; }
 
+/* ---------- 각주 판: 번호에 마우스를 올리거나 누르면 그 자리에 뜬다 ---------- */
+.wk-fnpop { position: absolute; z-index: 58; max-width: min(380px, calc(100vw - 24px)); padding: 8px 12px; background: #fff; color: #212529;
+  border: 1px solid #ccd6de; border-radius: 4px; box-shadow: 0 4px 14px #1b2a4533; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.wk-fnpop-num { margin-right: 6px; color: var(--wk-link, #0275d8); text-decoration: none; }
+a.wk-fnpop-num:hover { text-decoration: underline; }
+.wk-fnpop a.wk-link { color: var(--wk-link, #0275d8); text-decoration: none; }
+.wk-fnpop a.wk-link:hover { text-decoration: underline; }
+.wk-fn[data-n] { cursor: pointer; }
+
 /* ---------- 좁은 화면 ---------- */
 @media (max-width: 1000px) {
   .wk-wrap { grid-template-columns: minmax(0, 1fr); }
