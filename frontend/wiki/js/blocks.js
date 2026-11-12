@@ -59,12 +59,6 @@ const WikiBlocks = (() => {
       plain(box.querySelector('.wk-info-title'), data.title, '제목');
       const rows = box.querySelector('.wk-info-rows');
       rows.replaceChildren(...data.rows.map(([k, v]) => infoRow(k, v)), infoRow('', ''));
-      const pic = box.querySelector('.wk-info-pic');
-      if (!data.image) {
-        const pick = el('button', 'wk-info-pick', '그림');
-        pick.type = 'button';
-        pic.replaceChildren(pick);
-      }
     } else if (block.kind === 'img') {
       plain(box.querySelector('.wk-cap'), data.caption, '설명');
     } else if (block.kind === 'fold') {
@@ -80,7 +74,7 @@ const WikiBlocks = (() => {
     if (block.kind === 'infobox') {
       const rows = [...box.querySelectorAll('.wk-info-row')]
         .map((row) => [read(row.children[0], true), read(row.children[1])]).filter(([k, v]) => k || v);
-      return { title: read(box.querySelector('.wk-info-title'), true), image: data.image, rows };
+      return { title: read(box.querySelector('.wk-info-title'), true), image: data.image, ...(data.noFace ? { noFace: true } : {}), rows };
     }
     if (block.kind === 'img') return { image: data.image, caption: read(box.querySelector('.wk-cap'), true) };
     if (block.kind === 'lyric') return WikiLyric.collect(box.querySelector('.wk-lyr'));
@@ -289,6 +283,44 @@ const WikiBlocks = (() => {
     if (focus) WikiEdit.enter(next, 'start');
   }
 
+  /* ---------- 블록 지우기 · 고르기 ----------
+     지우는 길은 셋이다. 블록 위의 '× 지우기'(편집 중 늘 보인다), 블록을 고른 뒤 Backspace·Delete, 손잡이 메뉴.
+     지운 블록은 '취소' 로도, 저장한 뒤에는 이력으로도 되돌릴 수 있다 — 그래서 되묻지 않는다.
+     byKey: 키보드로 지웠으면 바로 아래 글에 커서를 세워 이어 쓰게 한다. */
+  function remove(box, byKey) {
+    Wiki.settle();
+    const cid = box.dataset.cid;
+    let next = box.nextElementSibling;
+    while (next && !next.classList.contains('wk-block')) next = next.nextElementSibling;
+    const nextCid = next && next.dataset.cid;
+    hideTools();
+    if (Wiki.block(cid)) Wiki.dropBlock(cid);
+    WikiRender.paintAll();
+    if (!byKey || !nextCid) return;
+    const below = Wiki.block(nextCid);
+    const belowBox = Wiki.boxOf(nextCid);
+    if (below && belowBox && TEXT_KINDS.includes(below.kind) && !Wiki.locked(belowBox)) WikiEdit.enter(belowBox, 'start');
+  }
+
+  /* 블록을 고른다: 테두리가 서고 키를 받는다. Enter 는 아래에 새 줄, Backspace·Delete 는 지우기 */
+  function select(box) {
+    Wiki.settle();
+    if (!box.isConnected) return;
+    Wiki.activate(box);
+    box.tabIndex = -1;
+    box.focus({ preventScroll: true });
+  }
+
+  /* 정보 상자의 사진을 뺀다. 멤버 문서가 대신 보여 주는 사이트 프로필 사진도 같이 꺼진다(noFace) */
+  function dropInfoImage(box) {
+    Wiki.settle();
+    const block = Wiki.block(box.dataset.cid);
+    if (!block) return;
+    block.data = { ...block.data, image: null, noFace: true };
+    Wiki.save(block.cid);
+    WikiRender.paintAll();
+  }
+
   async function setInfoImage(box) {
     const cid = box.dataset.cid;
     const [file] = await pickFiles(false);
@@ -298,7 +330,8 @@ const WikiBlocks = (() => {
       Wiki.settle();
       const block = Wiki.block(cid);
       if (!block) return;
-      block.data = { ...block.data, image: id };
+      const { noFace, ...rest } = block.data;
+      block.data = { ...rest, image: id };
       Wiki.save(cid);
       WikiRender.paintAll();
     } catch (err) {
@@ -648,12 +681,6 @@ const WikiBlocks = (() => {
         ['소절 지우기', () => { if (row.parentElement.children.length > 1) { row.remove(); Wiki.touch(); } }],
       ]);
     }
-    if (block.kind === 'infobox') {
-      group('정보 상자', block.data.image
-        ? [['그림 바꾸기', () => setInfoImage(box)],
-          ['그림 빼기', () => { Wiki.settle(); const b = Wiki.block(block.cid); b.data = { ...b.data, image: null }; if (blank(b)) Wiki.dropBlock(b.cid); else Wiki.save(b.cid); WikiRender.paintAll(); }]]
-        : [['그림 넣기', () => setInfoImage(box)]]);
-    }
     group('아래에 넣기', INSERTS.map(([k, label]) => [label, (anchor) => insert(box, k, anchor)]));
     group('', [
       ['위로', () => move(box, -1)],
@@ -710,7 +737,10 @@ const WikiBlocks = (() => {
       if (Wiki.readonly || Wiki.locked(box)) return;
       const grip = e.target.closest('.wk-grip');
       if (grip) { openMenu(box, grip); return; }
-      if (e.target.closest('.wk-info-pick') || (act && act.box === box && e.target.closest('.wk-info-pic'))) { setInfoImage(box); return; }
+      if (e.target.closest('.wk-del')) { remove(box, false); return; }
+      const pic = e.target.closest('[data-pic]');
+      if (pic && pic.dataset.pic === 'drop') { dropInfoImage(box); return; }
+      if (pic || (act && act.box === box && e.target.closest('.wk-info-pic'))) { setInfoImage(box); return; }
       if (e.target.closest('a') || !getSelection().isCollapsed) return;
       if (act && act.box === box) return;
       /* 영상·틀은 고칠 칸이 없다. 눌러서 고른 뒤 Enter 를 치면 아래에 새 줄이 생긴다 */
@@ -746,14 +776,19 @@ const WikiBlocks = (() => {
     body.addEventListener('keydown', (e) => {
       if (!act || !e.target.dataset || !e.target.dataset.plain || e.isComposing || e.keyCode === 229) return;
       if (e.key === 'Escape') { e.preventDefault(); deactivate(); return; }
+      /* 그림: 설명이 빈 칸에서 Backspace·Delete 를 누르면 그림을 지운다. 누르고 있어서 반복되는 키는 세지 않는다 —
+         설명을 지우던 손이 그림까지 지우지 않게 */
+      if ((e.key === 'Backspace' || e.key === 'Delete') && !e.repeat && e.target.classList.contains('wk-cap') && !read(e.target, true)) { e.preventDefault(); remove(act.box, true); return; }
       if (e.key === 'Backspace' && e.target.closest('.wk-lyr') && getSelection().isCollapsed && lyricBack(e.target)) { e.preventDefault(); return; }
       if (e.key === 'Tab' && e.target.closest('td, th')) { e.preventDefault(); moveCell(e.target, 0, e.shiftKey ? -1 : 1); }
     });
+    /* 고른 블록(테두리가 선 블록): Enter 는 아래에 새 줄, Backspace·Delete 는 그 블록을 지운다 */
     body.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' || e.isComposing || Wiki.readonly) return;
+      if (!['Enter', 'Backspace', 'Delete'].includes(e.key) || e.isComposing || Wiki.readonly) return;
       const box = e.target.classList && e.target.classList.contains('wk-block') ? e.target : null;
       if (!box || box.parentElement !== body || Wiki.locked(box)) return;
       e.preventDefault();
+      if (e.key !== 'Enter') { remove(box, true); return; }
       continueBelow(box, true);
     });
     body.addEventListener('beforeinput', (e) => {
@@ -798,5 +833,5 @@ const WikiBlocks = (() => {
     });
   }
 
-  return { init, deactivate, insert, insertImages, setKind, continueBelow, closeMenu, active: () => act };
+  return { init, deactivate, insert, insertImages, setKind, continueBelow, select, closeMenu, active: () => act };
 })();

@@ -304,7 +304,11 @@ def block(kind, data):
                 clean.append([k, v])
         if len(clean) > INFO_ROWS:
             raise Bad(f'정보 상자는 {INFO_ROWS}줄까지입니다.')
-        return {'title': line(data.get('title'), TITLE_MAX), 'image': _image(data.get('image')), 'rows': clean}
+        out = {'title': line(data.get('title'), TITLE_MAX), 'image': _image(data.get('image')), 'rows': clean}
+        # noFace: 멤버 문서의 정보 상자가 대신 보여 주는 사이트 프로필 사진을 편집에서 뺐다. 그림을 올리면 뜻이 없어 지운다.
+        if data.get('noFace') is True and not out['image']:
+            out['noFace'] = True
+        return out
     # embed
     return {'title': title(data.get('title'))}
 

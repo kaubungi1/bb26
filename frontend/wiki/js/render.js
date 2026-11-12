@@ -182,13 +182,20 @@ const WikiRender = (() => {
     const sec = el('button', 'wk-sec', '편집');
     sec.type = 'button';
     sec.tabIndex = -1;
-    box.append(grip, sec, skeleton(block.kind));
+    /* 이 블록 지우기. 글이 아닌 블록(그림·영상·표…)에서, 편집 중에는 늘 보인다(wiki.css).
+       처음에는 지우기가 손잡이 메뉴 속에만 있어서 그림을 지울 길을 아무도 찾지 못했다(2026-11-13 사용자 지적).
+       글자는 CSS 가 그린다 — 단추 안에 글자를 두면 블록의 글을 읽을 때 같이 읽힌다. */
+    const del = el('button', 'wk-del');
+    del.type = 'button';
+    del.tabIndex = -1;
+    del.setAttribute('aria-label', '이 블록 지우기');
+    box.append(grip, sec, del, skeleton(block.kind));
     return box;
   }
 
   /* 블록의 내용 칸. 손잡이·[편집]·저장 실패 표시를 뺀 하나다. */
   function content(box) {
-    return [...box.children].find((c) => !c.matches('.wk-grip, .wk-sec, .wk-flag'));
+    return [...box.children].find((c) => !c.matches('.wk-grip, .wk-sec, .wk-del, .wk-flag'));
   }
 
   /* 종류가 바뀌면(문단 → 소제목, 문단 → 유튜브) 뼈대를 갈아 끼운다. */
@@ -255,7 +262,8 @@ const WikiRender = (() => {
       box.querySelector('.wk-info-title').replaceChildren(document.createTextNode(data.title || ''));
       const pic = box.querySelector('.wk-info-pic');
       /* 그림을 안 올린 멤버 문서의 정보 상자는 사이트의 프로필 사진을 보여 준다 */
-      const face = !data.image && !ctx.depth ? Wiki.memberOf(ctx.doc) : null;
+      /* noFace: 그 사진을 편집에서 뺐다. 다시 대신 보여 주지 않는다 */
+      const face = !data.image && !data.noFace && !ctx.depth ? Wiki.memberOf(ctx.doc) : null;
       if (data.image || (face && face.hasImage)) {
         let img = pic.querySelector('img');
         if (!img) { pic.replaceChildren(); img = document.createElement('img'); pic.append(img); }
@@ -267,6 +275,17 @@ const WikiRender = (() => {
           img.hidden = false; img.alt = '';
         }
       } else pic.replaceChildren();
+      /* 편집 중에는 사진 아래에 '바꾸기 · 빼기' 가, 사진이 없으면 '그림 넣기' 가 늘 보인다.
+         처음에는 '그림 빼기' 가 손잡이 메뉴 속에 있었고, 대신 보여 주는 프로필 사진은 뺄 길이 아예 없었다(2026-11-13 사용자 지적). */
+      pic.querySelectorAll('.wk-info-picbar, .wk-info-pick').forEach((n) => n.remove());
+      if (!Wiki.readonly && !ctx.depth) {
+        const btn = (cls, act, label) => { const b = el('button', cls); b.type = 'button'; b.dataset.pic = act; b.setAttribute('aria-label', label); return b; };
+        if (pic.querySelector('img')) {
+          const bar = el('div', 'wk-info-picbar');
+          bar.append(btn('wk-info-picset', 'set', '그림 바꾸기'), btn('wk-info-picdrop', 'drop', '그림 빼기'));
+          pic.append(bar);
+        } else pic.append(btn('wk-info-pick', 'set', '그림 넣기'));
+      }
       const rows = box.querySelector('.wk-info-rows');
       rows.replaceChildren();
       for (const [k, v] of data.rows) {

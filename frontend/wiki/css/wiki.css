@@ -189,6 +189,14 @@ body.wiki-page {
 .wk-info-pic img { display: block; width: 100%; height: auto; }
 .wiki .wk-info-pick { display: block; width: 100%; padding: 22px 0; background: var(--wk-soft); color: var(--ink-faint); font-size: 13px; }
 .wiki .wk-info-pick:hover { color: var(--wk-text); }
+.wk-info-pick::before { content: '그림 넣기'; }
+.wk-info-picbar { display: flex; border-top: 1px solid var(--wk-line); }
+.wiki .wk-info-picbar button { flex: 1; padding: 6px 0; background: var(--wk-soft); color: var(--wk-text); font-size: 13px; }
+.wiki .wk-info-picbar button + button { border-left: 1px solid var(--wk-line); }
+.wiki .wk-info-picbar button:hover { background: #e3eaf0; }
+.wk-info-picset::before { content: '바꾸기'; }
+.wk-info-picdrop::before { content: '빼기'; }
+.wiki .wk-info-picdrop { color: #c0392b; }
 .wk-info-row { display: grid; grid-template-columns: 84px minmax(0, 1fr); border-top: 1px solid var(--wk-line); }
 .wk-info-k { padding: 6px 9px; background: var(--wk-soft); border-right: 1px solid var(--wk-line); font-weight: 700; text-align: center; }
 .wk-info-v { padding: 6px 9px; white-space: pre-wrap; }
@@ -452,7 +460,7 @@ td[data-plain]:focus, th[data-plain]:focus, .wk-info-k[data-plain]:focus, .wk-in
 
 /* 눌러서 고른 영상·틀(고칠 칸이 없는 블록). Enter 를 치면 아래에 새 줄이 생긴다 */
 .wk-doc.is-editing-doc .wk-body > .wk-block:focus { outline: none; }
-.wk-doc.is-editing-doc .wk-body > .wk-block:focus > .wk-yt, .wk-doc.is-editing-doc .wk-body > .wk-block:focus > .wk-embed { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wk-doc.is-editing-doc .wk-body > .wk-block:focus > :is(.wk-yt, .wk-embed, .wk-fig, .wk-table, .wk-info, .wk-lyr, .wk-fold) { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- 줄 도구: 표·정보 상자의 줄에 마우스를 대면 뜨는 + − ⋮⋮ ----------
    블록 안이 아니라 화면 위에 띄운다(blocks.js). 표 위쪽에는 칸의 + − 가 뜬다. 끄는 동안 놓일 자리에 선을 긋는다. */
@@ -472,6 +480,13 @@ td[data-plain]:focus, th[data-plain]:focus, .wk-info-k[data-plain]:focus, .wk-in
 .wk-dropline[hidden] { display: none; }
 /* 멤버 문서의 프로필 표(아직 문서에 넣지 않은 것). 여느 정보 상자와 같은 모양이다. */
 .wk-virtual { position: relative; }
+
+/* ---------- 블록 지우기: 글이 아닌 블록 위에, 편집 중에는 늘 보인다 ---------- */
+.wiki .wk-del { display: none; margin: 0 0 3px; padding: 1px 8px; border: 1px solid var(--wk-line); border-radius: 3px; background: #fff; color: #c0392b; font-size: 12px; line-height: 1.6; }
+.wk-del::before { content: '\00D7  지우기'; white-space: pre; }
+.wiki .wk-del:hover { background: #fdecea; border-color: #e6b0aa; }
+.wk-doc.is-editing-doc .wk-body > .wk-block:is(.k-img, .k-yt, .k-table, .k-fold, .k-infobox, .k-embed, .k-lyric) > .wk-del { display: block; }
+.wk-doc.is-scoped .wk-body > .wk-block:not(.in-scope) > .wk-del { display: none; }
 
 /* ---------- 각주 판: 번호에 마우스를 올리거나 누르면 그 자리에 뜬다 ---------- */
 .wk-fnpop { position: absolute; z-index: 58; max-width: min(380px, calc(100vw - 24px)); padding: 8px 12px; background: #fff; color: #212529;

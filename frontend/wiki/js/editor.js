@@ -331,7 +331,16 @@ const WikiEdit = (() => {
     if (block.kind !== 'p') { retype(c, block, 'p'); return true; }
     const prevBox = c.box.previousElementSibling;
     const prev = prevBox && Wiki.block(prevBox.dataset.cid);
-    if (!prev || !TEXT_KINDS.includes(prev.kind)) return false;
+    if (!prev || !TEXT_KINDS.includes(prev.kind)) {
+      /* 위가 그림·영상·표 같은 블록이면 먼저 그것을 고른다(테두리가 선다). 한 번 더 누르면 지워진다(blocks.js).
+         한 번에 지우지 않는 것은 표·가사처럼 큰 것을 실수로 날리지 않기 위해서다. */
+      let up = c.box.previousElementSibling;
+      while (up && !up.classList.contains('wk-block')) up = up.previousElementSibling;
+      const above = up && Wiki.block(up.dataset.cid);
+      if (!above || TEXT_KINDS.includes(above.kind) || Wiki.locked(up)) return false;
+      WikiBlocks.select(up);
+      return true;
+    }
     const mine = runsOf(c.host);
     const offset = textLen(prev.data.runs);
     cur = null;
