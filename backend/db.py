@@ -282,6 +282,9 @@ MIGRATIONS = [
     'CREATE INDEX IF NOT EXISTS idx_wikirevisions_recent ON wikiRevisions ("updatedAt" DESC)',
     'CREATE INDEX IF NOT EXISTS idx_wikialiases_page ON wikiAliases ("pageId")',
     'CREATE INDEX IF NOT EXISTS idx_wikitalks_page ON wikiTalks ("pageId", "id")',
+    # 멤버 문서의 프로필 표(2026-11-13). 제목이 멤버 닉네임과 같은 문서에는 화면이 프로필 표를 자동으로 넣는다(frontend/wiki/js/wiki.js profileFor).
+    # 그 표를 지우고 저장한 문서는 false 로 적어 둔다 — 안 그러면 지워도 다시 생긴다.
+    'ALTER TABLE wikiPages ADD COLUMN IF NOT EXISTS "autoProfile" BOOLEAN NOT NULL DEFAULT true',
     'CREATE INDEX IF NOT EXISTS idx_songcomments_song ON songComments ("songId", "id")',
     # 길드 꾸미기: 테마 이름과 문장(육각 틀 + 문양 + 색 둘)을 한 칸에 담는다.
     # {"theme":"miku","crest":{"shape":"wing","bg":"#00b8ad","fg":"#ffffff"}}

@@ -9,7 +9,7 @@
    지운 블록은 이력에 남아 있어 되돌릴 수 있다 — 그래서 되묻지 않는다. */
 const WikiBlocks = (() => {
   const { el, TEXT_KINDS } = WikiRender;
-  const SOFT = '.wk-toolbar, .wk-pop, .wk-menu';
+  const SOFT = '.wk-toolbar, .wk-pop, .wk-menu, .wk-rowtool';
   const ONE_LINE = '.wk-info-title, .wk-info-k, .wk-cap, .wk-fold-title, .wk-lo, .wk-lr, .wk-lt';
   const CLICKABLE = 'td, th, .wk-info-title, .wk-info-k, .wk-info-v, .wk-fig, .wk-fold-title, .wk-lyr';
   const KIND_LABEL = { p: '본문', h2: '대분류', h3: '중분류', h4: '소분류', ul: '목록', ol: '번호 목록', quote: '인용', notice: '알림' };
@@ -306,6 +306,162 @@ const WikiBlocks = (() => {
     }
   }
 
+  /* ---------- 줄 도구: 표·정보 상자의 줄에 마우스를 대면 + − ⋮⋮ ----------
+     + 는 그 줄 아래에 빈 줄을, − 는 그 줄을 빼고, ⋮⋮ 는 잡고 끌어 줄의 자리를 바꾼다. 표에는 칸의 + − 도 위쪽에 뜬다.
+     처음에는 줄 더하기가 표 아래의 긴 띠였고, 빼기는 손잡이 메뉴 속에 있었고, 줄의 자리는 바꿀 길이 없었다(2026-11-13 사용자 요청).
+
+     도구는 블록 안이 아니라 화면 위에 띄운다(body 에 붙인 고정 위치). 블록 안에 넣으면 고치는 칸을 읽을 때 같이 읽힌다.
+     하는 일은 전부 문서의 내용(block.data)을 고치고 다시 그리는 것이다 — 그 블록을 고치는 중이든 아니든 같은 길을 탄다.
+     마우스가 없는 기기에서는 커서가 든 줄에 뜬다. */
+  let rowTool = null;
+  let colTool = null;
+  let dropLine = null;
+  let hover = null;       /* { box, kind, row, cell } */
+  let hideTimer = 0;
+
+  function toolButton(act, label, name) {
+    const b = el('button', `wk-rt wk-rt-${act}`, label);
+    b.type = 'button';
+    b.dataset.act = act;
+    b.title = name;
+    b.setAttribute('aria-label', name);
+    return b;
+  }
+  function buildTools() {
+    rowTool = el('div', 'wk-rowtool');
+    rowTool.append(toolButton('add', '+', '아래에 줄 더하기'), toolButton('del', '−', '이 줄 빼기'), toolButton('drag', '', '끌어서 줄 옮기기'));
+    colTool = el('div', 'wk-rowtool wk-coltool');
+    colTool.append(toolButton('addcol', '+', '오른쪽에 칸 더하기'), toolButton('delcol', '−', '이 칸 빼기'));
+    dropLine = el('div', 'wk-dropline');
+    for (const t of [rowTool, colTool]) {
+      t.hidden = true;
+      t.addEventListener('pointerdown', (e) => { e.preventDefault(); if (e.target.closest('[data-act="drag"]')) startDrag(e); });
+      t.addEventListener('pointerenter', () => clearTimeout(hideTimer));
+      t.addEventListener('pointerleave', hideSoon);
+      t.addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b && b.dataset.act !== 'drag') rowAct(b.dataset.act); });
+    }
+    dropLine.hidden = true;
+    document.body.append(rowTool, colTool, dropLine);
+    window.addEventListener('scroll', hideTools, { passive: true });
+  }
+  function hideTools() {
+    clearTimeout(hideTimer);
+    hover = null;
+    if (rowTool) { rowTool.hidden = true; colTool.hidden = true; }
+  }
+  function hideSoon() {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(hideTools, 350);
+  }
+
+  function rowAt(node) {
+    const row = node && node.closest && node.closest('.wk-info-row, tr');
+    const box = row && row.closest('.wk-block');
+    if (!box || box.parentElement !== Wiki.$('wk-body') || Wiki.readonly || Wiki.locked(box)) return null;
+    if (box.dataset.kind !== 'infobox' && box.dataset.kind !== 'table') return null;
+    return { box, row, kind: box.dataset.kind, cell: node.closest('td, th') };
+  }
+  function showTools(h) {
+    clearTimeout(hideTimer);
+    hover = h;
+    const rect = h.row.getBoundingClientRect();
+    rowTool.hidden = false;
+    rowTool.style.left = `${Math.round(Math.min(rect.right + 3, innerWidth - rowTool.offsetWidth - 4))}px`;
+    rowTool.style.top = `${Math.round(rect.top + (rect.height - rowTool.offsetHeight) / 2)}px`;
+    colTool.hidden = !(h.kind === 'table' && h.cell);
+    if (!colTool.hidden) {
+      const cell = h.cell.getBoundingClientRect();
+      const table = h.box.querySelector('table').getBoundingClientRect();
+      colTool.style.left = `${Math.round(cell.left + (cell.width - colTool.offsetWidth) / 2)}px`;
+      colTool.style.top = `${Math.round(table.top - colTool.offsetHeight - 2)}px`;
+    }
+  }
+
+  /* 정보 상자의 화면 줄 번호 → 내용의 줄 번호. 고치는 중에는 맨 아래에 빈 줄이 하나 더 있고, 빈 줄은 내용에 들지 않는다. */
+  function infoRows(box) { return [...box.querySelectorAll('.wk-info-row')]; }
+  const filled = (row) => !!(row.textContent || '').trim();
+  function infoIndex(box, at) { return infoRows(box).slice(0, at).filter(filled).length; }
+
+  function infoChange(box, change, focus) {
+    Wiki.settle();
+    const block = Wiki.block(box.dataset.cid);
+    if (!block || block.kind !== 'infobox') return;
+    const rows = block.data.rows.map((r) => [...r]);
+    if (change(rows) === false) return;
+    block.data = { ...block.data, rows };
+    Wiki.save(block.cid);
+    WikiRender.paintAll();
+    activate(box, null, () => { const all = infoRows(box); const r = all[Math.max(0, Math.min(focus, all.length - 1))]; return r && r.firstElementChild; });
+  }
+
+  function rowAct(act) {
+    const h = hover;
+    hideTools();
+    if (!h || !h.row.isConnected) return;
+    if (h.kind === 'table') {
+      const r = [...h.box.querySelectorAll('tr')].indexOf(h.row);
+      const c = h.cell ? Number(h.cell.dataset.c) : 0;
+      if (act === 'add') reshape(h.box, (rows) => (rows.length < 300 ? WikiTable.insertRow(rows, r + 1) : false), r + 1, 0);
+      else if (act === 'del') reshape(h.box, (rows) => WikiTable.deleteRow(rows, r), r, 0);
+      else if (act === 'addcol') reshape(h.box, (rows) => (rows[0].length < 20 ? WikiTable.insertCol(rows, c + 1) : false), r, c + 1);
+      else if (act === 'delcol') reshape(h.box, (rows) => WikiTable.deleteCol(rows, c), r, c);
+      return;
+    }
+    const at = infoRows(h.box).indexOf(h.row);
+    const i = infoIndex(h.box, at);
+    const here = filled(h.row);
+    if (act === 'add') { if (here) infoChange(h.box, (rows) => { rows.splice(i + 1, 0, ['', '']); }, i + 1); }
+    else if (act === 'del') { if (here) infoChange(h.box, (rows) => { rows.splice(i, 1); }, i); }
+  }
+
+  /* ⋮⋮ 를 잡고 끈다. 끄는 동안 놓일 자리에 선을 보여 주고, 놓으면 줄을 그리로 옮긴다. */
+  function startDrag(e) {
+    const h = hover;
+    if (!h || !h.row.isConnected) return;
+    clearTimeout(hideTimer);
+    const rowsEl = h.kind === 'table' ? [...h.box.querySelectorAll('tr')] : infoRows(h.box);
+    const from = rowsEl.indexOf(h.row);
+    const frame = (h.kind === 'table' ? h.box.querySelector('table') : h.box.querySelector('.wk-info')).getBoundingClientRect();
+    let to = from;
+    const onMove = (ev) => {
+      let idx = rowsEl.length;
+      for (let i = 0; i < rowsEl.length; i += 1) {
+        const r = rowsEl[i].getBoundingClientRect();
+        if (ev.clientY < r.top + r.height / 2) { idx = i; break; }
+      }
+      to = idx;
+      const ref = rowsEl[Math.min(idx, rowsEl.length - 1)].getBoundingClientRect();
+      dropLine.hidden = false;
+      dropLine.style.left = `${Math.round(frame.left)}px`;
+      dropLine.style.width = `${Math.round(frame.width)}px`;
+      dropLine.style.top = `${Math.round((idx < rowsEl.length ? ref.top : ref.bottom) - 1)}px`;
+    };
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      dropLine.hidden = true;
+      hideTools();
+      if (to === from || to === from + 1) return;
+      if (h.kind === 'table') {
+        reshape(h.box, (rows) => {
+          if (WikiTable.moveRow(rows, from, to)) return true;
+          Wiki.status('세로로 합친 칸이 걸친 줄은 옮길 수 없습니다');
+          setTimeout(() => Wiki.status(''), 2500);
+          return false;
+        }, to > from ? to - 1 : to, 0);
+        return;
+      }
+      if (!filled(h.row)) return;
+      const a = infoIndex(h.box, from);
+      const b = infoIndex(h.box, to);
+      infoChange(h.box, (rows) => { const [row] = rows.splice(a, 1); rows.splice(b > a ? b - 1 : b, 0, row); }, b > a ? b - 1 : b);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+  }
+
   /* ---------- 넣기 · 옮기기 ---------- */
   async function insert(afterBox, kind, anchor) {
     Wiki.settle();
@@ -463,8 +619,6 @@ const WikiBlocks = (() => {
     if (block.kind === 'table') {
       const at = (change) => () => reshape(box, change, cell.r, cell.c);
       group('표', [
-        ['줄 지우기', at((rows) => WikiTable.deleteRow(rows, cell.r))],
-        ['칸 지우기', at((rows) => WikiTable.deleteCol(rows, cell.c))],
         ['오른쪽 칸과 합치기', at((rows) => WikiTable.merge(rows, cell.r, cell.c, 'right'))],
         ['아래 칸과 합치기', at((rows) => WikiTable.merge(rows, cell.r, cell.c, 'down'))],
         ['합치기 풀기', at((rows) => WikiTable.unmerge(rows, cell.r, cell.c))],
@@ -525,6 +679,12 @@ const WikiBlocks = (() => {
   function init(body) {
     act = null;
     closeMenu();
+    if (!rowTool) buildTools();
+    hideTools();
+    /* 줄 도구: 마우스를 댄 줄, 마우스가 없으면 커서가 든 줄 */
+    body.addEventListener('pointerover', (e) => { const h = rowAt(e.target); if (h) showTools(h); });
+    body.addEventListener('pointerleave', hideSoon);
+    body.addEventListener('focusin', (e) => { const h = rowAt(e.target); if (h) showTools(h); });
     const top = (e) => {
       const box = e.target.closest('.wk-block');
       return box && box.parentElement === body ? box : null;    /* 틀로 끼운 문서 속 블록은 건드리지 않는다 */
@@ -550,8 +710,6 @@ const WikiBlocks = (() => {
       if (Wiki.readonly || Wiki.locked(box)) return;
       const grip = e.target.closest('.wk-grip');
       if (grip) { openMenu(box, grip); return; }
-      if (e.target.closest('.wk-add-row')) { addRow(box, Wiki.block(box.dataset.cid).data.rows.length - 1); return; }
-      if (e.target.closest('.wk-add-col')) { addCol(box, Wiki.block(box.dataset.cid).data.rows[0].length - 1); return; }
       if (e.target.closest('.wk-info-pick') || (act && act.box === box && e.target.closest('.wk-info-pic'))) { setInfoImage(box); return; }
       if (e.target.closest('a') || !getSelection().isCollapsed) return;
       if (act && act.box === box) return;

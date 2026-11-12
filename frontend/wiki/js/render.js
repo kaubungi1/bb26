@@ -147,12 +147,7 @@ const WikiRender = (() => {
       const box = el('div', 'wk-table');
       const scroll = el('div', 'wk-table-scroll');
       scroll.append(document.createElement('table'));
-      const row = el('button', 'wk-add wk-add-row', '+');
-      const col = el('button', 'wk-add wk-add-col', '+');
-      row.type = 'button'; col.type = 'button';
-      row.setAttribute('aria-label', '줄 더하기');
-      col.setAttribute('aria-label', '칸 더하기');
-      box.append(scroll, col, row);
+      box.append(scroll);      /* 줄·칸을 더하고 빼는 단추는 마우스를 댄 줄 옆에 뜬다(blocks.js 줄 도구) */
       return box;
     }
     if (kind === 'infobox') {
@@ -256,14 +251,23 @@ const WikiRender = (() => {
     if (kind === 'infobox') {
       box.querySelector('.wk-info-title').replaceChildren(document.createTextNode(data.title || ''));
       const pic = box.querySelector('.wk-info-pic');
-      if (data.image) {
+      /* 그림을 안 올린 멤버 문서의 정보 상자는 사이트의 프로필 사진을 보여 준다 */
+      const face = !data.image && !ctx.depth ? Wiki.memberOf(ctx.doc) : null;
+      if (data.image || (face && face.hasImage)) {
         let img = pic.querySelector('img');
         if (!img) { pic.replaceChildren(); img = document.createElement('img'); pic.append(img); }
-        setImage(img, ctx.doc, data.image);
+        if (data.image) setImage(img, ctx.doc, data.image);
+        else {
+          const url = imageUrl(face);
+          if (img.getAttribute('src') !== url) img.src = url;
+          img.removeAttribute('width'); img.removeAttribute('height');
+          img.hidden = false; img.alt = '';
+        }
       } else pic.replaceChildren();
       const rows = box.querySelector('.wk-info-rows');
       rows.replaceChildren();
       for (const [k, v] of data.rows) {
+        if (!v && Wiki.readonly) continue;        /* 내용을 안 채운 줄은 읽는 화면에 보이지 않는다(프로필 표의 빈 항목) */
         const row = el('div', 'wk-info-row');
         const dd = el('div', 'wk-info-v');
         dd.append(autolinked(v, ctx));
@@ -335,6 +339,16 @@ const WikiRender = (() => {
     const body = document.getElementById('wk-body');
     if (!doc || !body) return;
     const ctx = context(doc);
+    /* 멤버 문서의 프로필 표. 아직 문서에 넣지 않은 것은 읽는 화면에서 그려만 준다(문서의 블록이 아니다).
+       편집에 들어가면 진짜 정보 상자 블록이 되어 문서에 들어간다(wiki.js edit). */
+    body.querySelectorAll(':scope > .wk-virtual').forEach((n) => n.remove());
+    const profile = Wiki.readonly && !Wiki.live && doc.exists ? Wiki.profileFor(doc) : null;
+    if (profile) {
+      const made = el('div', 'wk-virtual k-infobox');
+      made.append(skeleton('infobox'));
+      paint(made, { kind: 'infobox', data: profile }, ctx);
+      body.prepend(made);
+    }
     for (const box of body.querySelectorAll(':scope > .wk-block')) {
       if (box.classList.contains('is-editing')) continue;
       const block = Wiki.block(box.dataset.cid);

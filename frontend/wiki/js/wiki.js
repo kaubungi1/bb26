@@ -341,6 +341,25 @@ const Wiki = {
     this.paintHead();
   },
 
+  /* ---------- 멤버 문서의 프로필 표 ----------
+     문서 제목이 멤버 닉네임과 글자 그대로 같으면(띄어쓰기·대소문자도 같아야 한다. 다른 이름으로는 안 된다)
+     나무위키 인물 문서의 프로필 표 같은 정보 상자가 자동으로 생긴다(2026-11-13 사용자 결정: 대부분 만들 줄 모른다).
+       읽는 화면   아직 문서에 없으면 그려만 준다(render.js paintAll 의 .wk-virtual).
+       편집        문서 전체 편집에 들어갈 때 진짜 정보 상자 블록으로 문서 맨 위에 넣는다. 그 뒤로는 여느 정보 상자다.
+     이미 정보 상자가 있는 문서에는 생기지 않는다. 지우고 저장하면 문서에 autoProfile=false 를 적어 다시 생기지 않는다.
+     포지션·소속은 넣는 순간의 사이트 정보로 한 번 채울 뿐이다. 개인 정보 항목(본명·출생 등)은 두지 않는다. */
+  memberOf(doc) {
+    return (doc && typeof Profiles !== 'undefined' && Profiles.get(doc.title)) || null;
+  },
+  profileFor(doc) {
+    const m = this.memberOf(doc);
+    if (!m || doc.autoProfile === false || doc.deleted || doc.blocks.some((b) => b.kind === 'infobox')) return null;
+    const roles = (m.mainRoles || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const guilds = [...new Set((m.guilds || []).map((g) => g.name).filter(Boolean))];
+    return { title: doc.title, image: null,
+      rows: [['포지션', roles.join(', ')], ['소속', guilds.join(', ')], ['별명', ''], ['좋아하는 곡', ''], ['좋아하는 아티스트', '']] };
+  },
+
   /* ---------- 편집 상태 ---------- */
   /* 편집으로 들어간다. section 을 주면 그 문단 제목부터 다음 같은 단계 제목 앞까지만 고친다. */
   async edit(section) {
@@ -354,6 +373,12 @@ const Wiki = {
     this.touched = false;
     this.draft = { title: doc.title, categories: [...doc.categories], aliases: [...doc.aliases] };
     doc.removed = [];
+    if (!section) {
+      /* 멤버 문서: 프로필 표를 문서에 넣는다. 저장하면 남고 취소하면 없던 일이 된다 */
+      const profile = this.profileFor(doc);
+      if (profile) doc.blocks.unshift({ cid: this.newCid(), kind: 'infobox', data: profile, rev: 0, dirty: true });
+      doc.hadProfile = doc.blocks.some((b) => b.kind === 'infobox');
+    }
     this.mount();
     if (section) {
       /* 그 분류의 제목부터, 같거나 더 큰 분류의 제목이 나오기 전까지 */
@@ -375,10 +400,26 @@ const Wiki = {
   },
 
   /* 고친 것을 서버로 보낸다. 다 되면 읽는 화면으로 돌아간다. */
+  /* 분류·다른 이름 칸에 쓰다 만 글자를 목록에 올린다. 칸은 Enter 를 치거나 벗어날 때 목록에 올리는데,
+     '저장' 단추는 초점을 가져가지 않아서(고른 글자를 지키려고) 칸을 벗어난 것으로 치지 않는다. 여기서 챙기지 않으면
+     이름을 쓰고 바로 저장을 누른 사람의 다른 이름이 조용히 버려진다(2026-11-13 사용자 보고: 리다이렉트가 안 된다). */
+  flushMeta() {
+    if (!this.draft || this.scoped) return;
+    document.querySelectorAll('#wk-meta .wk-meta-add').forEach((input) => {
+      const v = input.value.replace(/\s+/g, ' ').trim();
+      const key = input.dataset.key;
+      input.value = '';
+      if (!v || !this.draft[key] || this.draft[key].some((n) => WikiLinks.key(n) === WikiLinks.key(v))) return;
+      this.draft[key] = [...this.draft[key], v];
+      this.touched = true;
+    });
+  },
+
   async commitAll() {
     const doc = this.doc;
     if (!this.editing || this.saving) return;
     this.settle();
+    this.flushMeta();
     if (!Nick.get() && !(await Nick.ensure())) return;
     const text = (b) => WikiRender.TEXT_KINDS.includes(b.kind);
     const blocks = doc.blocks.filter((b) => (b.dirty || b.moved || b.rev === 0) && !(text(b) && !b.data.runs.length));
@@ -389,6 +430,8 @@ const Wiki = {
       if (doc.exists && title && title !== doc.title) patch.title = title;
       if (JSON.stringify(draft.categories) !== JSON.stringify(doc.categories)) patch.categories = draft.categories;
       if (JSON.stringify(draft.aliases) !== JSON.stringify(doc.aliases)) patch.aliases = draft.aliases;
+      /* 멤버 문서에서 프로필 표(정보 상자)를 지우고 저장한다: 다시 자동으로 생기지 않게 적어 둔다 */
+      if (doc.hadProfile && doc.exists && doc.autoProfile !== false && this.memberOf(doc) && !doc.blocks.some((b) => b.kind === 'infobox')) patch.autoProfile = false;
     }
     const hasPatch = Object.keys(patch).length > 0;
     if (!blocks.length && !doc.removed.length && !hasPatch) { this.leaveEdit(doc.title); return; }
@@ -456,7 +499,7 @@ const Wiki = {
   shape(doc, title) {
     if (doc.exists) return { ...doc, removed: [] };
     return { exists: false, id: 0, title: doc.title || title, key: '', deleted: false, categories: [], aliases: [],
-      blocks: [], images: {}, version: '0', via: null, updatedAt: null, updatedBy: null, removed: [] };
+      blocks: [], images: {}, version: '0', via: null, updatedAt: null, updatedBy: null, removed: [], autoProfile: true };
   },
 
   /* 탭으로 돌아왔을 때 문서를 다시 맞춘다(판이 같으면 304). 편집 중이면 건드리지 않는다. */
@@ -628,6 +671,7 @@ const Wiki = {
         input.autocomplete = 'off';
         input.setAttribute('aria-label', `${label} 더하기`);
         const add = (again) => {
+          if (!this.draft) return;             /* 편집이 끝난 뒤 뒤늦게 칸이 닫히는 경우 */
           const v = input.value.replace(/\s+/g, ' ').trim();
           input.value = '';
           if (!v || items.some((n) => WikiLinks.key(n) === WikiLinks.key(v))) return;
@@ -828,6 +872,7 @@ const Wiki = {
       case 'table': return t ? `표: ${t}` : '표';
       case 'infobox': return t ? `정보 상자: ${t}` : '정보 상자';
       case 'lyric': return t ? `가사: ${t}` : '가사';
+      case 'profile': return `프로필 표 자동 넣기를 ${t}`;
       case 'embed': return `틀: ${t}`;
       case 'title': return `제목을 '${t}'(으)로`;
       case 'alias': return t ? `다른 이름: ${t}` : '다른 이름을 비움';
@@ -1028,6 +1073,10 @@ const Wiki = {
       e.returnValue = '';
     });
 
+    /* 멤버 정보는 사이트 공통(common.js Profiles)이 받아 온다. 오면 멤버 문서의 프로필 표를 그린다 */
+    document.addEventListener('profiles', () => {
+      if (this.view === 'doc' && this.doc && !this.editing && this.$('wk-body')) WikiRender.paintAll();
+    });
     await this.pollTitles();          /* 제목 목록이 있어야 첫 그림부터 링크가 맞다 */
     this.route();
     this.pollRecent(true);

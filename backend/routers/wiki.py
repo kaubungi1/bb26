@@ -42,7 +42,7 @@ RECENT = 60
 HISTORY = 100
 SEARCH = 30
 
-PAGE_COLS = '"id","title","key","categories","deleted"'
+PAGE_COLS = '"id","title","key","categories","deleted","autoProfile"'
 
 
 # ---------- 공통 ----------
@@ -130,6 +130,7 @@ def _doc(conn, page, via=None):
     last = _last(conn, page['id'])
     return {'exists': True, 'id': page['id'], 'title': page['title'], 'key': page['key'],
             'deleted': page['deleted'], 'categories': page['categories'], 'aliases': _aliases(conn, page['id']),
+            'autoProfile': page['autoProfile'],
             'blocks': blocks, 'images': _images(conn, blocks), 'version': _version(conn, page['id']), 'via': via,
             # 문서 머리의 '최근 수정 시각'
             'updatedAt': last and last['updatedAt'], 'updatedBy': last and last['nickname']}
@@ -138,7 +139,7 @@ def _doc(conn, page, via=None):
 def _meta(conn, page_id):
     page = _page(conn, page_id)
     return {'id': page['id'], 'title': page['title'], 'key': page['key'], 'deleted': page['deleted'],
-            'categories': page['categories'], 'aliases': _aliases(conn, page_id), 'version': _version(conn, page_id)}
+            'autoProfile': page['autoProfile'], 'categories': page['categories'], 'aliases': _aliases(conn, page_id), 'version': _version(conn, page_id)}
 
 
 def _snippet(text):
@@ -322,6 +323,12 @@ def update_page(page_id: int, body: dict):
             gone = bool(body['deleted'])
             conn.execute('UPDATE wikiPages SET "deleted"=%s, "updatedAt"=now() WHERE "id"=%s', (gone, page_id))
             _record(conn, page_id, nickname, '@gone', 'delete' if gone else 'restore', page['title'], fresh=True)
+            changed = True
+        if 'autoProfile' in body and bool(body['autoProfile']) != page['autoProfile']:
+            # 멤버 문서의 프로필 표를 지웠다(또는 다시 켠다). 화면이 표를 지우고 저장할 때 false 로 보낸다.
+            on = bool(body['autoProfile'])
+            conn.execute('UPDATE wikiPages SET "autoProfile"=%s, "updatedAt"=now() WHERE "id"=%s', (on, page_id))
+            _record(conn, page_id, nickname, '@profile', 'profile', '켬' if on else '끔')
             changed = True
         if changed:
             conn.commit()

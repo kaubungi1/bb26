@@ -112,6 +112,18 @@ const WikiTable = (() => {
     return true;
   }
 
+  /* from 번째 줄을 to 번째 줄 앞으로 옮긴다. 세로로 합친 칸이 그 줄이나 놓일 자리를 가로지르면 옮기지 않는다(합친 칸이 찢어진다). */
+  function moveRow(rows, from, to) {
+    if (to === from || to === from + 1) return false;
+    const clear = (r) => rows[r].every((cell, c) => (cell === null ? (owner(rows, r, c) || { r }).r === r : true));
+    if (!clear(from) || rows[from].some((cell) => span(cell).rs > 1)) return false;
+    if (to < rows.length && !clear(to)) return false;
+    if (from + 1 < rows.length && !clear(from + 1)) return false;
+    const [row] = rows.splice(from, 1);
+    rows.splice(to > from ? to - 1 : to, 0, row);
+    return true;
+  }
+
   /* 오른쪽(또는 아래) 칸과 합친다. 높이(또는 폭)가 같은 이웃하고만 된다. 두 칸의 글은 이어 붙는다. */
   function merge(rows, r, c, dir) {
     if (dir === 'down') {
@@ -189,5 +201,5 @@ const WikiTable = (() => {
   }
   const blank = (rows) => rows.every((row) => row.every((c) => c === null || !text(c).trim()));
 
-  return { paint, collect, blank, copy, text, owner, insertRow, deleteRow, insertCol, deleteCol, merge, unmerge, setAttr };
+  return { paint, collect, blank, copy, text, owner, insertRow, deleteRow, insertCol, deleteCol, moveRow, merge, unmerge, setAttr };
 })();
