@@ -35,10 +35,8 @@ const confirmedPeople = document.getElementById('confirmed-people');
 let voteOpen = false;         /* 확정 일정에서 날짜 투표 기록을 펼쳤는가 */
 const matrixEl = document.getElementById('matrix');
 const weekendOnlyEl = document.getElementById('weekend-only');
-const confirmDateEl = document.getElementById('confirm-date');
-const confirmStartEl = document.getElementById('confirm-start');
-const confirmEndEl = document.getElementById('confirm-end');
-const confirmPlaceEl = document.getElementById('confirm-place');
+const confirmPicksEl = document.getElementById('confirm-picks');
+const confirmAddBtn = document.getElementById('confirm-add');
 const confirmBtn = document.getElementById('confirm-btn');
 const confirmBar = document.getElementById('confirm-bar');
 const confirmedBar = document.getElementById('confirmed-bar');
@@ -174,6 +172,14 @@ function placeDetail() {
 function firstDate(ev) { return ev.dates.length ? ev.dates[0].date : null; }
 function lastDate(ev) { return ev.dates.length ? ev.dates[ev.dates.length - 1].date : null; }
 function isPast(ev) { return ev.status === 'confirmed' && !!ev.date && ev.date < todayStr(); }
+/* 유기 — 후보일이 전부 지나도록 확정되지 않은 투표. '날짜 정하는 중' 에서 빠져 지난 일정 맨 아래로 간다(2026-11-12).
+   홈·길드 홈은 처음부터 '오늘 이후 후보가 있는 투표' 만 보였는데(home.js upcoming) 여기만 그 규칙이 없어서,
+   10/15 하루짜리 투표가 11월에도 맨 위에 '투표 중' 으로 남아 있었다. 숨기지는 않는다 — 지우거나 뒤늦게 확정할 길이 있어야 한다. */
+function isDead(ev) {
+  if (ev.status === 'confirmed') return false;
+  const t = todayStr();
+  return !ev.dates.some((dr) => dr.date >= t);
+}
 
 function timeText(e) {
   return e.startTime ? `${e.startTime}${e.endTime ? ' ~ ' + e.endTime : ''}` : '시간 미정';
@@ -246,7 +252,7 @@ function grouped(list, key, label) {
 }
 
 function renderPolls() {
-  const upcoming = events.filter((e) => !isPast(e));
+  const upcoming = events.filter((e) => !isPast(e) && !isDead(e));
   const polls = upcoming.filter((e) => e.status !== 'confirmed')
     .sort((a, b) => {
       const fa = firstDate(a) || '9999', fb = firstDate(b) || '9999';
@@ -276,12 +282,18 @@ function renderPolls() {
   placeDetail();
 }
 
-/* ---------- 지난 합주 — 확정일이 지난 일정. 최근 것이 위, 달마다 묶는다 ---------- */
+/* ---------- 지난 일정 — 확정일이 지난 일정. 최근 것이 위, 달마다 묶는다. 맨 아래에 유기된 투표(isDead) ---------- */
 function renderPast() {
   const list = events.filter(isPast).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.id - a.id));
-  pastCardEl.hidden = list.length === 0;
-  if (!list.length) { lastPastHtml = ''; return; }
-  const html = grouped(list, (e) => e.date.slice(0, 7), (e) => monthLabel(e.date));
+  const dead = events.filter(isDead).sort((a, b) => {
+    const la = lastDate(a) || '', lb = lastDate(b) || '';
+    return la < lb ? 1 : la > lb ? -1 : b.id - a.id;
+  });
+  pastCardEl.hidden = list.length === 0 && dead.length === 0;
+  if (!list.length && !dead.length) { lastPastHtml = ''; return; }
+  const html = grouped(list, (e) => e.date.slice(0, 7), (e) => monthLabel(e.date))
+    + (dead.length ? `<div class="sched-dead"><div class="sched-group">유기 <b>${dead.length}</b></div>`
+      + dead.map((e) => pollEntry(e, pollHead(e))).join('') + `</div>` : '');
   if (html !== lastPastHtml) {
     parkDetail();
     pastListEl.innerHTML = html;
@@ -442,11 +454,16 @@ function matrixMembers() {
   }
   const names = [];
   pollEvent.avails.forEach((a) => { if (!names.includes(a.nickname)) names.push(a.nickname); });
-  const list = names.map((n) => ({ name: n, mine: n === currentUser, placeholder: false }));
-  if (pollEvent.status === 'confirmed') return list;      /* 확정 뒤에는 기록만 본다(참가는 요약의 단추) */
-  if (currentUser && !names.includes(currentUser)) list.push({ name: currentUser, mine: true, placeholder: false });
-  if (!currentUser) list.push({ name: '', mine: true, placeholder: true });
-  return list;
+  /* 내 열은 언제나 맨 왼쪽이다. 전에는 찍은 순서대로 서서 내 열이 일정마다 다른 자리에 끼었고,
+     가장 자주 누르는 칸을 매번 찾아야 했다. 나머지는 찍은 순서 그대로 — 파트로 나누자는 안은
+     한 사람이 여러 파트를 맡는 일이 많아 접었다(2026-11-12). 확정 요약의 참석 이름도 내가 먼저다. */
+  const others = names.filter((n) => n !== currentUser).map((n) => ({ name: n, mine: false, placeholder: false }));
+  const me = { name: currentUser, mine: true, placeholder: false };
+  if (pollEvent.status === 'confirmed') {                 /* 확정 뒤에는 기록만 본다(참가는 요약의 단추) */
+    return currentUser && names.includes(currentUser) ? [me, ...others] : others;
+  }
+  if (currentUser) return [me, ...others];
+  return [{ name: '', mine: true, placeholder: true }, ...others];
 }
 
 function countAvail(day) { return votesOn(pollEvent, day); }
@@ -468,15 +485,18 @@ function renderMatrix() {
   const t = todayStr();
   const counts = dates.map((dr) => countAvail(dr.date));
   const best = counts.length ? Math.max(...counts) : 0;
-  const bestDay = dates.find((dr, i) => counts[i] === best)?.date;
 
-  let html = `<table class="matrix"><thead><tr><th class="date-head">후보 날짜</th>`;
+  const unit = voteUnit(ev);
+  /* 날짜 칸은 날짜·요일·수 세 줄로 선다(.dc). 수는 격자 바로 옆에 오른쪽 맞춤으로 서서 세로로 훑어 견준다.
+     단위(명·길드)는 머리에 한 번만 쓴다 — 줄마다 붙이면 서른 번 되풀이된다.
+     --cols 는 표가 늘어날 수 있는 폭의 상한을 정한다(schedule.css .matrix). */
+  let html = `<table class="matrix" style="--cols:${members.length}"><thead><tr>`
+    + `<th class="date-head"><span class="dc"><span>후보 날짜</span><span class="date-cnt-head">${unit}</span></span></th>`;
   members.forEach((m) => {
     const label = m.placeholder ? '＋ 참여' : m.name;
     html += `<th class="member-col${m.mine ? ' mine' : ''}${m.guild ? ' guild-col' : ''}"${m.guild ? ` title="길드장 ${escapeHtml(m.guild.leader || '없음')}"` : ''}>`
       + `${m.guild ? guildMark(m.guild, 16, 'mx-gmark') : ''}${escapeHtml(label)}</th>`;
   });
-  const unit = voteUnit(ev);
   html += `</tr></thead><tbody>`;
 
   dates.forEach((dr, i) => {
@@ -493,7 +513,7 @@ function renderMatrix() {
     html += `<tr class="${cls.join(' ')}">`;
     // 날짜 칸을 누르면 아래 '되는 곡' 표가 그 날짜 기준으로 바뀐다
     /* 날짜 칸을 누르면 그날 되는 곡이 바뀐다. 길드 투표 중에는 되는 곡을 안 보이므로 누를 것이 없다 */
-    html += `<td class="date-cell"${locked || guildVote(ev) ? '' : ` data-pick-date="${dr.date}"`}>${monthDay(dr.date)} <span class="dow${dow === '일' ? ' sunday' : ''}${dow === '토' ? ' saturday' : ''}">(${dow})</span><span class="date-cnt"><span>${cnt}${unit}</span></span>${isFixed ? '<span class="date-fixed"><span>확정</span></span>' : ''}${locked || !canManage(ev) ? '' : `<button type="button" class="date-off" data-off-date="${dr.date}" title="이 날짜를 후보에서 빼기" aria-label="${monthDay(dr.date)} 후보에서 빼기">×</button>`}</td>`;
+    html += `<td class="date-cell"${locked || guildVote(ev) ? '' : ` data-pick-date="${dr.date}"`}><span class="dc"><span class="dc-day">${monthDay(dr.date)}</span><span class="dow${dow === '일' ? ' sunday' : ''}${dow === '토' ? ' saturday' : ''}">(${dow})</span>${isFixed ? '<span class="date-fixed"><span>확정</span></span>' : ''}${locked || !canManage(ev) ? '' : `<button type="button" class="date-off" data-off-date="${dr.date}" title="이 날짜를 후보에서 빼기" aria-label="${monthDay(dr.date)} 후보에서 빼기">×</button>`}<span class="date-cnt${cnt ? '' : ' zero'}" aria-label="${cnt}${unit}">${cnt}</span></span></td>`;
     /* 조율 중에는 내 열만 누른다. 확정 뒤에는 보기만 한다 — 참가·나가기는 확정 요약의 단추(2026-10-02).
        전에는 확정일 줄의 남의 칸까지 눌러 넣고 뺄 수 있었다 */
     const canToggle = !locked;
@@ -526,12 +546,55 @@ function renderMatrix() {
   matrixEl.innerHTML = html;
 
   if (locked) return;
-  const prev = confirmDateEl.value;
-  confirmDateEl.innerHTML = dates.map((dr) =>
-    `<option value="${dr.date}"${dr.date === bestDay ? ' selected' : ''}>${monthDay(dr.date)} (${DOW[parseDate(dr.date).getDay()]}) · ${countAvail(dr.date)}${voteUnit(pollEvent)}</option>`
-  ).join('');
-  if (prev) confirmDateEl.value = prev;
+  pickOptions = dates.map((dr, i) => ({
+    date: dr.date, count: counts[i],
+    label: `${monthDay(dr.date)} (${DOW[parseDate(dr.date).getDay()]}) · ${counts[i]}${unit}`,
+  }));
+  syncPicks();
 }
+
+/* ---------- 확정할 날짜 줄 ----------
+   한 줄 = 날짜 하나(날짜·시작·종료·장소). 평일과 주말은 시간·장소가 달라서 줄마다 따로 받는다.
+   값은 칸(DOM)이 갖는다 — 표를 다시 그려도 줄은 그대로 두고 날짜 목록만 갈아 끼운다.
+   새 줄의 날짜는 아직 안 고른 날짜 중 표가 가장 많은 날(같으면 이른 날)이다. 첫 줄은 전처럼 최다일이 된다. */
+const MAX_PICKS = 6;          /* 서버 routers/events.py MAX_PICKS 와 같다 */
+let pickOptions = [];         /* [{date, count, label}] — renderMatrix 가 채운다 */
+function pickRowHtml() {
+  return '<div class="confirm-row confirm-pick">'
+    + '<select class="confirm-select" data-pick="date" aria-label="확정할 날짜"></select>'
+    + '<input type="time" data-pick="start" aria-label="시작" />'
+    + '<input type="time" data-pick="end" aria-label="종료" />'
+    + '<input data-pick="place" maxlength="80" placeholder="장소 (선택)" aria-label="장소" />'
+    + '<button type="button" class="ghost pick-del" data-pick-del aria-label="이 날짜 빼기" title="이 날짜 빼기">×</button>'
+    + '</div>';
+}
+function resetPicks() { confirmPicksEl.innerHTML = pickRowHtml(); }
+function syncPicks() {
+  const sels = [...confirmPicksEl.querySelectorAll('[data-pick="date"]')];
+  const byVotes = [...pickOptions].sort((a, b) => b.count - a.count || (a.date < b.date ? -1 : 1));
+  const taken = new Set();
+  const optHtml = pickOptions.map((o) => `<option value="${o.date}">${o.label}</option>`).join('');
+  sels.forEach((sel) => {
+    const prev = sel.value;
+    sel.innerHTML = optHtml;
+    const next = pickOptions.some((o) => o.date === prev) ? prev : (byVotes.find((o) => !taken.has(o.date)) || {}).date || '';
+    sel.value = next;
+    taken.add(next);
+  });
+  confirmPicksEl.classList.toggle('is-multi', sels.length > 1);
+  confirmAddBtn.hidden = sels.length >= Math.min(MAX_PICKS, pickOptions.length);
+  confirmBtn.textContent = sels.length > 1 ? `${sels.length}일 확정` : '이 날짜로 확정';
+}
+confirmAddBtn.addEventListener('click', () => {
+  confirmPicksEl.insertAdjacentHTML('beforeend', pickRowHtml());
+  syncPicks();
+});
+confirmPicksEl.addEventListener('click', (e) => {
+  const del = e.target.closest('[data-pick-del]');
+  if (!del || confirmPicksEl.children.length <= 1) return;
+  del.closest('.confirm-pick').remove();
+  syncPicks();
+});
 
 /* ---------- 일정 다루기 권한 ----------
    확정·해제·수정·삭제는 만들 수 있는 사람과 같다(서버 events.can_manage). 안 되는 버튼은 처음부터 안 보인다.
@@ -724,11 +787,13 @@ function renderPollView() {
 }
 
 /* ---------- 날짜별 가능 곡 ---------- */
+/* 확정 뒤 제목은 '셋리스트 n곡' 한 번이다. 전에는 제목 '셋리스트' 바로 아래 표 첫 줄이 또 '셋리스트 n곡' 이었다(2026-11-12) */
+function setlistTitle(ev) { psTitleEl.innerHTML = `셋리스트 <b>${ev.songs.length}</b>곡`; }
 function renderPsDates() {
   const ev = pollEvent;
   if (ev.status === 'confirmed') {
     psDatesEl.innerHTML = '';
-    psTitleEl.textContent = '셋리스트';
+    setlistTitle(ev);
     return;
   }
   psTitleEl.textContent = playableDate ? `${monthDay(playableDate)} (${DOW[parseDate(playableDate).getDay()]})이면 되는 곡` : '되는 곡';
@@ -840,7 +905,8 @@ function renderPlayable() {
   const shown = playableAll || nobody || psQuery ? pool : pool.filter((s) => s.filled >= MIN_FILLED);
   const hidden = pool.length - shown.length;
   psToggleBtn.hidden = nobody || !!psQuery || (playableAll ? pool.length === 0 : hidden <= 0);
-  psToggleBtn.textContent = playableAll ? `${MIN_FILLED}개 이상만 보기` : `전체 보기 (+${hidden}곡)`;
+  /* '전체 보기' 라고 쓰면 곡 범위 칩의 '전체'(다른 길드 곡까지)와 같은 말이 된다 — 무엇이 더 나오는지를 쓴다 */
+  psToggleBtn.textContent = playableAll ? `${MIN_FILLED}개 이상만 보기` : `${MIN_FILLED}개 미만도 보기 (+${hidden}곡)`;
 
   const what = g && playableScope === 'guild' ? '이 길드 곡 중 ' : '';
   const emptyMsg = psQuery ? `'${escapeHtml(psQuery)}' 에 맞는 곡이 없습니다.`
@@ -895,7 +961,7 @@ function renderPlayable() {
         + ` data-skip-on="${bench ? '0' : '1'}" title="${escapeHtml(tip)}">`
         + `${avatarChip(n)}<span class="sl-pname">${escapeHtml(n)}</span></button>`;
     };
-    html += `<tr class="ps-group"><td colspan="${span}">셋리스트 <b>${setRows.length}</b>곡</td></tr>`;
+    setlistTitle(ev);
     if (!setRows.length) {
       html += `<tr class="ps-empty"><td colspan="${span}">아직 곡이 없습니다. 아래 곡의 ＋ 를 누르면 여기로 올라옵니다.</td></tr>`;
     }
@@ -910,7 +976,11 @@ function renderPlayable() {
       cols.forEach((role) => {
         const r = byRole[role];
         const playing = r ? r.members.filter((n) => !benched(role, n)) : [];
-        html += `<td class="ps-cell sl-cell">${playing.map((n) => person(s, role, n, false)).join('')}</td>`;
+        /* 칠 사람이 없는 파트는 아래 목록과 같은 점을 찍는다. 전에는 그냥 비워서 '이 곡에 없는 파트' 와
+           '있는데 올 사람이 없는 파트' 가 똑같은 흰 여백이었고, 덜 찬 곡이 셋리스트에서 안 드러났다 */
+        html += !r ? '<td class="ps-cell sl-cell none"></td>'
+          : `<td class="ps-cell sl-cell${playing.length ? '' : ' off'}">${playing.length
+            ? playing.map((n) => person(s, role, n, false)).join('') : '<span class="ps-hole"></span>'}</td>`;
       });
       html += `<td class="ps-cell sl-bench">${bench.map(([role, n]) => person(s, role, n, true)).join('')}</td>`
         + `<td class="ps-cell act"><button type="button" class="ps-add is-on" data-set-song="${s.songId}" title="셋리스트에서 빼기">✓</button></td></tr>`;
@@ -1095,10 +1165,7 @@ function openPoll(id) {
   pollEvent = ev;
   openId = id;
   currentUser = Nick.get();
-  confirmDateEl.value = '';
-  confirmStartEl.value = '';
-  confirmEndEl.value = '';
-  confirmPlaceEl.value = '';
+  resetPicks();
   weekendOnlyEl.checked = false;
   weekendOnlyEl.closest('.chk').classList.remove('is-on');
   weekendOnly = false;
@@ -1252,17 +1319,26 @@ function setAvail(ev, day, who, on) {
 }
 
 confirmBtn.addEventListener('click', async () => {
-  const day = confirmDateEl.value;
-  if (!day || !pollEvent) return;
-  const start = confirmStartEl.value || null;
-  const end = confirmEndEl.value || null;
-  const place = confirmPlaceEl.value.trim() || null;
-  const d = parseDate(day);
-  if (!confirm(`${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]})로 확정할까요?`)) return;
-  const ev = await Writes.commit(confirmBtn, `event:${pollEvent.id}`,
-    () => api.post(`/events/${pollEvent.id}/confirm`, { date: day, startTime: start, endTime: end, place, nickname: Nick.get() }));
-  if (!ev) return;
-  putEvent(ev);          /* 돌려받은 일정으로 바로 그린다 */
+  if (!pollEvent) return;
+  const val = (row, k) => row.querySelector(`[data-pick="${k}"]`).value;
+  const picks = [...confirmPicksEl.querySelectorAll('.confirm-pick')].map((row) => ({
+    date: val(row, 'date'), startTime: val(row, 'start') || null, endTime: val(row, 'end') || null,
+    place: val(row, 'place').trim() || null,
+  })).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (!picks.length || picks.some((p) => !p.date)) return;
+  if (new Set(picks.map((p) => p.date)).size !== picks.length) { alert('같은 날짜가 두 번 들어 있습니다.'); return; }
+  const days = picks.map((p) => { const d = parseDate(p.date); return `${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]})`; });
+  if (!confirm(picks.length > 1
+    ? `${days.join(', ')}\n${picks.length}일을 확정할까요? 날짜마다 일정이 하나씩 생깁니다.`
+    : `${days[0]}로 확정할까요?`)) return;
+  const id = pollEvent.id;
+  const res = await Writes.commit(confirmBtn, `event:${id}`,
+    () => api.post(`/events/${id}/confirm`, { picks, nickname: Nick.get() }));
+  if (!res) return;
+  /* 돌려받은 일정으로 바로 그린다. 여러 날을 확정했으면 새로 생긴 일정(made)도 같이 온다 */
+  const { made = [], ...ev } = res;
+  putEvent(ev);
+  made.forEach(putEvent);
   renderPolls();
   renderPast();
   renderPollView();

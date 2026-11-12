@@ -33,7 +33,7 @@
 
     <section class="card" id="past-card" hidden>
       <div class="section-head">
-        <h2>지난 합주</h2>
+        <h2>지난 일정</h2>
       </div>
       <div id="past-list" class="poll-list"></div>
     </section>
@@ -140,14 +140,12 @@
       </div>
 
       <!-- 확정 칸은 날짜 표 바로 아래다. 전에는 되는 곡 목록 뒤에 있어서 곡이 많으면 한참 내려가야 했다. -->
+      <!-- 한 줄 = 확정할 날짜 하나(날짜·시작·종료·장소). 줄은 schedule.js 가 그린다(pickRowHtml).
+           '평일·주말 하나씩' 처럼 여러 날을 정하는 투표는 줄을 늘려 한 번에 확정한다 — 날짜마다 일정이 하나씩 생긴다. -->
       <div class="confirm-bar" id="confirm-bar">
-        <div class="confirm-row">
-          <select id="confirm-date" class="confirm-select"></select>
-          <input type="time" id="confirm-start" placeholder="시작" />
-          <input type="time" id="confirm-end" placeholder="종료" />
-        </div>
-        <div class="confirm-row">
-          <input id="confirm-place" placeholder="장소 (선택)" />
+        <div class="confirm-picks" id="confirm-picks"></div>
+        <div class="confirm-row confirm-acts">
+          <button type="button" class="ghost" id="confirm-add">＋ 날짜 추가</button>
           <button type="button" class="pink" id="confirm-btn">이 날짜로 확정</button>
         </div>
       </div>

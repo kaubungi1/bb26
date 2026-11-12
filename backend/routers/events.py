@@ -419,29 +419,86 @@ def toggle_guild_avail(event_id: int, body: dict):
 
 
 # ---------- 확정·해제 ----------
+MAX_PICKS = 6     # 한 투표에서 한 번에 확정하는 날짜 수
+
+
+def _picks(body):
+    """확정할 날짜 줄. picks=[{date,startTime,endTime,place}] 이거나, 옛 화면처럼 date 하나."""
+    raw = body.get('picks')
+    if raw is None:
+        raw = [{k: body.get(k) for k in ('date', 'startTime', 'endTime', 'place')}]
+    if not isinstance(raw, list) or not raw or not all(isinstance(p, dict) for p in raw):
+        raise HTTPException(400, 'picks 가 올바르지 않습니다.')
+    if len(raw) > MAX_PICKS:
+        raise HTTPException(400, f'한 번에 {MAX_PICKS}일까지 확정할 수 있습니다.')
+    picks = [{'date': (p.get('date') or '').strip(), 'startTime': p.get('startTime') or None,
+              'endTime': p.get('endTime') or None, 'place': (p.get('place') or '').strip() or None} for p in raw]
+    if not all(p['date'] for p in picks):
+        raise HTTPException(400, 'date는 필수입니다.')
+    if len({p['date'] for p in picks}) != len(picks):
+        raise HTTPException(400, '같은 날짜가 두 번 들어 있습니다.')
+    return picks
+
+
 @router.post('/{event_id}/confirm')
 def confirm_event(event_id: int, body: dict):
-    day = (body.get('date') or '').strip()
-    if not day:
-        raise HTTPException(400, 'date는 필수입니다.')
+    """날짜 확정. 날짜를 여럿 보내면(picks) 첫 날짜로 이 일정이 확정되고, 나머지는 날짜마다 확정 일정이 하나씩 생긴다
+    (2026-11-12). '평일·주말 하나씩' 처럼 한 투표로 여러 날을 정하는데 확정은 하루만 돼서, 둘째 날은 일정을 새로
+    만들고 투표도 다시 받아야 했다. 일정 하나 = 날짜 하나는 그대로다 — 셋리스트·참석이 일정에 묶여 있다.
+    새 일정은 제목·메모·종류·길드·참가 길드를 물려받고, 그 날짜에 찍힌 사람 표가 참석이 된다
+    (정기합주·정기공연은 길드가 찍으므로 지금처럼 참석이 빈 채로 시작한다).
+
+    새 일정은 '투표 중 → 확정' 으로 넘어가는 그 한 번에만 만든다. 같은 요청이 두 번 와도 일정이 또 생기지 않는다 —
+    이미 확정된 일정에 여러 날짜가 오면 지금 상태를 그대로 돌려준다. 줄을 잠가(FOR UPDATE) 동시에 온 둘도 하나만 만든다.
+    응답은 이 일정이고, 새로 생긴 일정들은 made 에 담는다."""
+    picks = _picks(body)
     conn = get_db()
-    _require_manage(conn, _load(conn, event_id), body.get('nickname'))
-    date_row = conn.execute(
-        'SELECT * FROM eventDates WHERE "eventId"=%s AND "date"=%s AND "active"', (event_id, day)
-    ).fetchone()
-    if not date_row:
+    try:
+        _require_manage(conn, _load(conn, event_id), body.get('nickname'))
+        event = conn.execute('SELECT * FROM events WHERE "id"=%s FOR UPDATE', (event_id,)).fetchone()
+        if not event:
+            raise HTTPException(404, '일정을 찾을 수 없습니다.')
+        made_ids = []
+        if not (len(picks) > 1 and event['status'] == 'confirmed'):
+            for p in picks:
+                if not conn.execute('SELECT 1 FROM eventDates WHERE "eventId"=%s AND "date"=%s AND "active"',
+                                    (event_id, p['date'])).fetchone():
+                    raise HTTPException(400, '후보에 없거나 꺼 둔 날짜입니다.')
+            first = picks[0]
+            conn.execute(
+                'UPDATE events SET status=\'confirmed\', "date"=%s, "startTime"=%s, "endTime"=%s, place=%s, '
+                '"updatedAt"=now() WHERE "id"=%s',
+                (first['date'], first['startTime'], first['endTime'], first['place'], event_id),
+            )
+            for p in picks[1:]:
+                new_id = conn.execute(
+                    'INSERT INTO events (title, status, "date", "startTime", "endTime", place, note, "createdBy", '
+                    '"guildId", "kind") VALUES (%s,\'confirmed\',%s,%s,%s,%s,%s,%s,%s,%s) RETURNING "id"',
+                    (event['title'], p['date'], p['startTime'], p['endTime'], p['place'], event['note'],
+                     event['createdBy'], event['guildId'], event['kind']),
+                ).fetchone()['id']
+                # 확정 일정도 그 날짜가 후보에 있어야 참가하기가 된다(toggle_avail 이 eventDates 를 본다)
+                conn.execute('INSERT INTO eventDates ("eventId", "date") VALUES (%s,%s)', (new_id, p['date']))
+                conn.execute(
+                    'INSERT INTO eventAvails ("eventId", "date", nickname) '
+                    'SELECT %s, "date", nickname FROM eventAvails WHERE "eventId"=%s AND "date"=%s',
+                    (new_id, event_id, p['date']))
+                conn.execute(
+                    'INSERT INTO eventGuilds ("eventId", "guildId") '
+                    'SELECT %s, "guildId" FROM eventGuilds WHERE "eventId"=%s', (new_id, event_id))
+                made_ids.append(new_id)
+            conn.commit()
+        row = conn.execute('SELECT * FROM events WHERE "id"=%s', (event_id,)).fetchone()
+        result = serialize_event(conn, row)
+        if made_ids:
+            ph = ','.join('%s' for _ in made_ids)
+            result['made'] = serialize_events(
+                conn, conn.execute(f'SELECT * FROM events WHERE "id" IN ({ph}) ORDER BY "date"', made_ids).fetchall())
+        else:
+            result['made'] = []
+        return result
+    finally:
         conn.close()
-        raise HTTPException(400, '후보에 없거나 꺼 둔 날짜입니다.')
-    conn.execute(
-        'UPDATE events SET status=\'confirmed\', "date"=%s, "startTime"=%s, "endTime"=%s, place=%s, '
-        '"updatedAt"=now() WHERE "id"=%s',
-        (day, body.get('startTime'), body.get('endTime'), body.get('place'), event_id),
-    )
-    conn.commit()
-    row = conn.execute('SELECT * FROM events WHERE "id"=%s', (event_id,)).fetchone()
-    result = serialize_event(conn, row)
-    conn.close()
-    return result
 
 
 @router.post('/{event_id}/unconfirm')

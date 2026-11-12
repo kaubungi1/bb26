@@ -128,6 +128,9 @@
   border-spacing: 3px;
   width: 100%;
   min-width: max-content;
+  /* 사람 열은 115px 남짓까지만 늘어난다(--cols 는 schedule.js 가 열 수로 넣는다. 150 은 날짜 열 몫).
+     상한이 없으면 남는 폭이 전부 칸으로 가서, 찍은 사람이 한둘일 때 칸 하나가 수백 px 이 된다. */
+  max-width: calc(150px + var(--cols, 99) * 115px);
 }
 .matrix th {
   font-size: 11px;
@@ -147,6 +150,11 @@
   background: #fff;
   text-align: left;
   padding-left: 10px;
+  padding-right: 10px;
+  /* 날짜 열은 내용만큼만 선다. 전에는 남는 폭을 이 열이 다 먹어 표의 3분의 1이 빈 띠였고,
+     날짜에서 첫 칸까지 눈이 멀리 건너가야 했다. 남는 폭은 사람 열이 나눠 갖는다.
+     % 로 쓰면 안 된다 — 표의 min-width: max-content 가 '내용 ÷ 1%' 로 계산돼 표가 만 px 을 넘는다(실측). */
+  width: 1px;
 }
 /* border-spacing 이 3px 이라 고정 칸 바로 오른쪽에 칸이 아닌 3px 띠가 남는다.
    칸은 고정 칸 밑으로 지나가지만 이 띠는 배경이 없어서, 지나가는 체크 표시가
@@ -173,23 +181,31 @@
   white-space: nowrap;
   border-radius: 0;
 }
-.matrix .date-cell .dow { color: var(--ink-muted); font-weight: 600; margin-left: 3px; }
+/* 날짜 칸 속의 줄 맞춤. 날짜·요일은 고정 폭이라 '11/1' 과 '11/10' 뒤의 요일이 같은 세로줄에 서고,
+   수는 오른쪽 끝(격자 바로 옆)에 맞춘다. 전에는 글자를 이어 붙여 줄마다 요일과 수가 좌우로 흔들렸다. */
+.matrix .dc { display: flex; align-items: center; }
+.matrix .dc-day { flex: none; min-width: 40px; font-variant-numeric: tabular-nums; }
+.matrix .date-cell .dow { flex: none; min-width: 26px; color: var(--ink-muted); font-weight: 600; margin-left: 3px; }
 .matrix .date-cell .dow.sunday { color: var(--pink); }
 .matrix .date-cell .dow.saturday { color: #2f6f9e; }
+/* 이 표의 답은 '그날 몇' 이다. 날짜(12px)보다 작던 딱지(10px)를 걷고 줄에서 가장 큰 숫자로 세운다.
+   단위는 머리(.date-cnt-head)에 한 번만 있다. 0 은 흐리게 — 서른 줄에 굵은 0 이 서면 그게 소음이다. */
 .date-cnt {
-  display: inline-block;
-  margin-left: 6px;
-  font-size: 10px;
+  flex: none;
+  margin-left: auto;
+  padding-left: 12px;
+  min-width: 20px;
+  text-align: right;
+  font-size: 14px;
   font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
   color: var(--teal-deep);
-  background: var(--teal-soft);
-  transform: skewX(var(--skew));
-  border-radius: 0;
-  padding: 1px 7px;
 }
-.date-cnt > span { display: inline-block; transform: skewX(calc(var(--skew) * -1)); }
+.date-cnt.zero { color: var(--ink-faint); font-weight: 600; }
+.date-cnt-head { margin-left: auto; padding-left: 12px; }
 .matrix tr.hot .date-cell { color: var(--teal-deep); background: var(--teal-soft); }
-.matrix tr.hot .date-cnt { color: var(--pink); background: var(--pink-soft); }
+.matrix tr.hot .date-cnt { color: var(--pink); }
 .matrix tr.past .date-cell { color: var(--ink-muted); }
 .matrix tr.past .avail-cell { opacity: 0.55; }
 /* 칸마다 테두리를 두르면 격자가 시끄럽다. 배경 농도로만 구분한다. */
@@ -225,7 +241,7 @@
 
 /* --- 확정된 일정 매트릭스 --- */
 .matrix tr.fixed .date-cell { color: var(--teal-deep); background: var(--teal-soft); }
-.matrix tr.fixed .date-cnt { color: var(--pink); background: var(--pink-soft); }
+.matrix tr.fixed .date-cnt { color: var(--pink); }
 .matrix tr.locked .date-cell,
 .matrix tr.locked .avail-cell { opacity: 0.4; }
 .date-fixed {
@@ -303,6 +319,7 @@
 .ps-scope { display: flex; gap: 2px; margin-right: auto; }
 .ps-scope[hidden] { display: none; }
 .ps-title { font-size: 15px; font-weight: 800; margin: 0; }
+.ps-title b { color: var(--teal-deep); }
 .ps-wrap {
   overflow-x: auto;
   border-radius: 0;
@@ -363,7 +380,9 @@
 .ps-table th.ps-song-head { position: sticky; left: 44px; z-index: 4; }
 .ps-score strong { font-size: 17px; font-weight: 800; color: var(--ink-muted); }
 .ps-score .skew-gauge { display: none; }
-.ps-score span { font-size: 11px; font-weight: 700; color: var(--ink-muted); opacity: 0.7; }
+/* '/6' 만 흐리게. `.ps-score span` 으로 쓰면 같은 칸의 셋리스트 순번(.sl-no 와 그 안의 span)에도 걸려
+   흰 글자가 회색이 되고 흐림이 두 번 먹어 순번이 안 보였다(2026-11-12) */
+.ps-score > span:not(.sl-no) { font-size: 11px; font-weight: 700; color: var(--ink-muted); opacity: 0.7; }
 .ps-row.full .ps-score strong { color: var(--pink); }
 .ps-row.good .ps-score strong { color: var(--teal-deep); }
 .ps-row.half .ps-score strong { color: var(--teal); }
@@ -410,13 +429,15 @@
    실측상 한 파트에 서는 사람은 최대 셋이다. */
 .ps-chips[data-n="2"] > * + * { margin-left: -14px; }
 .ps-chips[data-n="3"] > * + * { margin-left: -17px; }
-/* 빈 세션은 빈 원 — 채움/빔 대비가 한눈에 */
+/* 빈 세션은 작은 점. 전에는 얼굴 칩(20px)과 같은 크기의 회색 원(18px)이라 회색 사진을 쓰는 사람과
+   구분이 안 됐다 — 채워진 칸만 눈에 들어오고 빈 자리는 '있다' 만 알리면 된다(2026-11-12). 셋리스트 줄도 같이 쓴다. */
 .ps-hole {
   display: inline-block;
-  width: 18px;
-  height: 18px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: rgba(22, 40, 47, 0.07);
+  background: rgba(22, 40, 47, 0.18);
+  vertical-align: middle;
 }
 /* 채워진 세션이 많은 곡일수록 행 전체가 또렷하게 */
 .ps-row.low td { opacity: 0.72; }
@@ -436,6 +457,14 @@
 .confirm-row input, .confirm-row select { flex: 1 1 110px; min-width: 0; }
 .confirm-row button { flex: 0 0 auto; }
 .confirm-select { font-weight: 700; }
+/* 확정할 날짜 줄(한 줄 = 날짜 하나). 줄이 하나일 때는 빼기 단추가 없다 — 뺄 것이 없다. */
+.confirm-picks { display: flex; flex-direction: column; gap: 8px; }
+.confirm-pick .pick-del { display: none; min-height: 0; padding: 0 8px; border: 0; background: none; box-shadow: none;
+  font-size: 16px; line-height: 1; color: var(--ink-faint); }
+.confirm-picks.is-multi .pick-del { display: block; }
+.confirm-pick .pick-del:hover { color: var(--pink); background: none; filter: none; }
+.confirm-acts { justify-content: flex-end; }
+.confirm-acts #confirm-add { margin-right: auto; }
 
 /* 288px 바닥이 화면보다 넓어지는 구간. 바닥을 그대로 두면 이번엔 Dr 이 잘린다 —
    고치려던 것과 같은 증상이다. 충족 칸과 파트 칸에서 조금씩 빼서 여섯 칸을 지킨다.
@@ -615,7 +644,8 @@
 
 @media (min-width: 900px) {
   .ps-split { grid-template-columns: minmax(0, 1fr) 320px; }
-  .ps-stage { display: block; }
+  /* 무대는 스크롤을 따라온다. 곡이 수십 줄이라 아래에서 줄을 눌러도 무대가 맨 위에 남아 안 보였다(2026-11-12) */
+  .ps-stage { display: block; position: sticky; top: 12px; }
   .ps-stage-row { display: none; }
 }
 
@@ -899,3 +929,9 @@
 .sched-date em { display: block; margin-top: 1px; font-style: normal; font-size: 10.5px; font-weight: 800;
   letter-spacing: 0.02em; color: var(--ink-faint); }
 .sched-row.is-poll .poll-item-count { color: var(--ink-faint); }
+
+/* 유기 — 후보일이 다 지나도록 확정 안 된 투표(schedule.js isDead). 지난 일정 맨 아래에 흐리게 둔다.
+   묶음 머리가 '유기' 라고 말하므로 줄마다의 '투표 중' 은 감춘다(더는 투표 중이 아니다). 펼친 줄은 다시 진하게. */
+.sched-dead .sched-group b { margin-left: 4px; }
+.sched-dead .poll-entry:not(.is-open) .poll-item { opacity: 0.55; }
+.sched-dead .sched-date em { display: none; }
