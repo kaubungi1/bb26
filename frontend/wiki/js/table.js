@@ -166,6 +166,100 @@ const WikiTable = (() => {
     return true;
   }
 
+
+  /* ---------- 칸 너비 ----------
+     data.cw = [칸마다 px]. 사람이 칸 너비를 끌어서 정한 표다. 표는 그 합만큼 넓고, 화면이 좁으면 같은 비율로 줄어든다
+     (칸 너비는 % 로 건다). cw 가 없으면 브라우저가 내용에 맞춰 정한다.
+
+     좁은 화면에서 맞춰 주기(fit): 브라우저의 자동 배치는 긴 칸이 남는 너비를 거의 다 가져가서, 짧은 칸이 최소 너비로
+     눌려 두세 글자마다 줄이 바뀐다(2026-11-14 사용자 지적: 모바일에서 한 열만 내용이 많으면 분배가 안 된다).
+     그래서 읽는 화면에서는 직접 나눈다 — 한 줄에 다 들어가는 짧은 칸은 제 너비를 그대로 주고, 남는 너비를 긴 칸들이
+     고르게 나눠 가진다. 표가 화면에 다 들어가면 손대지 않는다. */
+  const COL_MIN = 40;
+  const COL_FLOOR = 64;       /* 맞춰 줄 때 칸 하나의 바닥. 이보다 좁아질 만큼 칸이 많으면 표를 옆으로 민다 */
+  const widths = (data) => (Array.isArray(data.cw) && data.rows[0] && data.cw.length === data.rows[0].length ? data.cw : null);
+  function clearCols(table) {
+    const group = table.querySelector(':scope > colgroup');
+    if (group) group.remove();
+    table.style.tableLayout = '';
+    table.style.width = '';
+    table.style.maxWidth = '';
+    table.style.minWidth = '';
+    delete table.dataset.cw;
+  }
+  function setCols(table, list, byHand) {
+    clearCols(table);
+    const sum = list.reduce((a, b) => a + b, 0) || 1;
+    const group = el('colgroup');
+    for (const w of list) {
+      const col = el('col');
+      col.style.width = `${((w / sum) * 100).toFixed(3)}%`;
+      group.append(col);
+    }
+    table.prepend(group);
+    table.style.tableLayout = 'fixed';
+    table.style.width = `${Math.round(sum)}px`;
+    table.style.maxWidth = '100%';
+    table.style.minWidth = `${Math.min(Math.round(sum), list.length * COL_MIN)}px`;
+    if (byHand) table.dataset.cw = '1';
+  }
+  const colCount = (table) => Math.max(0, ...[...table.querySelectorAll('td, th')].map((td) => Number(td.dataset.c) + td.colSpan));
+  /* 지금 화면에 그려진 칸마다의 너비(px). 합친 칸이 있어도 칸의 경계를 모아서 잰다 */
+  function measure(table, n) {
+    const left = table.getBoundingClientRect().left;
+    const xs = new Array(n + 1).fill(null);
+    table.querySelectorAll('td, th').forEach((td) => {
+      const r = td.getBoundingClientRect();
+      const c = Number(td.dataset.c);
+      if (c > n || c + td.colSpan > n) return;
+      xs[c] = r.left - left;
+      xs[c + td.colSpan] = r.right - left;
+    });
+    xs[0] = 0;
+    if (xs[n] === null) xs[n] = table.getBoundingClientRect().width;
+    for (let i = 1; i < n; i += 1) {
+      if (xs[i] !== null) continue;                 /* 어느 줄에서도 경계가 안 드러난 칸: 양옆 사이를 고르게 나눈다 */
+      let j = i;
+      while (xs[j] === null) j += 1;
+      for (let k = i; k < j; k += 1) xs[k] = xs[i - 1] + ((xs[j] - xs[i - 1]) * (k - i + 1)) / (j - i + 1);
+    }
+    return xs.slice(1).map((x, i) => Math.max(1, x - xs[i]));
+  }
+  function fit(table) {
+    if (table.dataset.cw) return;                   /* 사람이 정한 너비는 그대로 */
+    clearCols(table);
+    const host = table.parentElement;
+    const n = colCount(table);
+    if (!host || n < 2 || !host.clientWidth) return;        /* 접혀서 안 보이는 표는 펼칠 때 다시 온다 */
+    table.classList.add('is-measure');              /* 줄을 바꾸지 않고 다 펼친 너비 */
+    const avail = host.clientWidth;
+    const natural = measure(table, n);
+    table.classList.remove('is-measure');
+    if (natural.reduce((a, b) => a + b, 0) <= avail + 1) return;
+    let left = Math.max(avail, n * COL_FLOOR);
+    let rest = n;
+    const out = new Array(n);
+    natural.map((w, i) => [w, i]).sort((a, b) => a[0] - b[0]).forEach(([w, i]) => {
+      const got = Math.max(Math.min(w + 1, left / rest), Math.min(COL_FLOOR, left / rest));
+      out[i] = got;
+      left -= got;
+      rest -= 1;
+    });
+    setCols(table, out, false);
+  }
+  let fitWired = false;
+  let fitTimer = 0;
+  function fitAll(root) {
+    if (!root || !Wiki.readonly) return;
+    root.querySelectorAll('.wk-table table').forEach(fit);
+    if (fitWired) return;
+    fitWired = true;
+    window.addEventListener('resize', () => {
+      clearTimeout(fitTimer);
+      fitTimer = setTimeout(() => fitAll(document.getElementById('wk-body')), 150);
+    });
+  }
+
   /* 표를 그린다. fill(td, 조각) 이 칸의 내용을 채운다 — 읽을 때와 고칠 때가 다르다. */
   function paint(table, data, fill) {
     table.replaceChildren();
@@ -187,6 +281,8 @@ const WikiTable = (() => {
       });
       table.append(tr);
     });
+    const cw = widths(data);
+    if (cw) setCols(table, cw, true); else clearCols(table);
   }
 
   /* 고치던 표를 다시 내용으로. 칸의 글은 문단과 같은 방법(editor.js runsOf)으로 읽는다. */
@@ -201,5 +297,5 @@ const WikiTable = (() => {
   }
   const blank = (rows) => rows.every((row) => row.every((c) => c === null || !text(c).trim()));
 
-  return { paint, collect, blank, copy, text, owner, insertRow, deleteRow, insertCol, deleteCol, moveRow, merge, unmerge, setAttr };
+  return { paint, collect, blank, copy, text, owner, widths, setCols, measure, fitAll, insertRow, deleteRow, insertCol, deleteCol, moveRow, merge, unmerge, setAttr };
 })();

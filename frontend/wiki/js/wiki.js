@@ -341,6 +341,65 @@ const Wiki = {
     this.paintHead();
   },
 
+  /* ---------- 분류 접기 · 목차와 각주를 오가기 ----------
+     읽는 화면에서 분류 제목을 누르면 그 분류가 접힌다(아래 분류까지). 다시 누르면 펴진다. 접은 것은 이 화면에서만 기억한다.
+     제목의 번호를 누르면 목차로, 목차를 누르면 그 분류로 간다. 문서 끝 각주 목록의 번호를 누르면 본문의 그 각주로 올라간다.
+     가려는 곳이 접힌 분류나 접기 블록 안이면 먼저 편다(reveal). */
+  folded: new Set(),
+  toggleFold(cid) {
+    if (this.folded.has(cid)) this.folded.delete(cid); else this.folded.add(cid);
+    this.noteHide();
+    WikiRender.relayout();
+  },
+  reveal(node) {
+    const body = this.$('wk-body');
+    let box = node;
+    while (box && box.parentElement !== body) box = box.parentElement;
+    if (!box) return;
+    for (let f = node.closest('.wk-fold'); f; f = f.parentElement.closest('.wk-fold')) {
+      f.classList.add('is-open');
+      const tog = f.querySelector(':scope > .wk-fold-tog');
+      if (tog) tog.setAttribute('aria-label', '접기');
+    }
+    /* 이 블록을 품은 분류들: 위로 올라가며 저보다 얕은 제목을 만날 때마다 그것이 한 겹 바깥 분류다 */
+    let level = box.dataset.head ? Number(box.dataset.head) : 4;
+    let changed = false;
+    for (let p = box.previousElementSibling; p && level > 1; p = p.previousElementSibling) {
+      const e = p.dataset && p.dataset.head ? Number(p.dataset.head) : 0;
+      if (!e || e >= level) continue;
+      level = e;
+      if (this.folded.delete(p.dataset.cid)) changed = true;
+    }
+    if (changed) WikiRender.relayout();
+    else WikiTable.fitAll(body);                /* 접기 블록을 편 경우: 그 안의 표를 다시 맞춘다 */
+  },
+  wireJumps(body) {
+    body.addEventListener('click', (e) => {
+      if (!this.readonly) return;
+      const host = e.target.closest('.wk-block[data-head] > .wk-text');
+      const box = host && host.parentElement;
+      if (!box || box.parentElement !== body) return;
+      if (e.target.closest('a') || !getSelection().isCollapsed) return;       /* 번호(목차로)·본문 링크는 제 일을 한다 */
+      this.toggleFold(box.dataset.cid);
+    });
+    this.$('wk-toc').addEventListener('click', (e) => {
+      const a = e.target.closest('a[href^="#"]');
+      const target = a && document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)));
+      if (target) this.reveal(target);
+    });
+    this.$('wk-notes').addEventListener('click', (e) => {
+      const a = e.target.closest('a.wk-note-num');
+      if (!a) return;
+      e.preventDefault();
+      const ref = document.getElementById(a.getAttribute('href').slice(1));
+      if (!ref) return;
+      this.reveal(ref);
+      ref.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      ref.classList.add('is-flash');
+      setTimeout(() => ref.classList.remove('is-flash'), 1800);
+    });
+  },
+
   /* ---------- 각주 판 ----------
      본문의 각주 번호에 마우스를 올리면 바로 그 자리에 내용이 뜬다. 누르면 판이 떠 있는 채로 남는다 —
      마우스가 없는 기기에서는 누르는 것이 보는 방법이다. 바깥을 누르면 닫힌다.
@@ -612,6 +671,7 @@ const Wiki = {
 
   show(doc) {
     const { el } = WikiRender;
+    if (!this.doc || this.doc.id !== doc.id) this.folded = new Set();      /* 접어 둔 분류는 그 문서를 보는 동안만 */
     this.doc = doc;
     this.live = null;
     document.title = `${doc.title} - 불법위키`;
@@ -641,6 +701,7 @@ const Wiki = {
     WikiPanel.init();
     WikiTools.init(this.$('wk-toolbar'));
     this.wireNotes(body);
+    this.wireJumps(body);
     this.$('wk-tools').addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]');
       if (!act) return;
@@ -768,6 +829,14 @@ const Wiki = {
         a.href = this.href(`분류:${name}`);
         line.append(a);
       });
+      meta.append(line);
+    }
+    /* 이 문서로 넘어오는 이름들. 분류 아래, 본문 위에 한 줄로 알린다. 넘어온 사람에게만 "'X'에서 넘어옴" 을 보여 주던 것으로는
+       문서에 리다이렉트가 걸려 있는지 읽는 사람이 알 길이 없었다(2026-11-14 사용자 질의). */
+    if (!this.editing && doc.exists && doc.aliases && doc.aliases.length) {
+      const line = el('p', 'wk-alias');
+      doc.aliases.forEach((name, i) => { if (i) line.append(', '); line.append(el('b', '', `'${name}'`)); });
+      line.append('(으)로도 들어올 수 있습니다.');
       meta.append(line);
     }
     meta.hidden = !meta.childNodes.length;

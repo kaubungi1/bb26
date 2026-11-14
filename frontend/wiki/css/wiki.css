@@ -349,7 +349,8 @@ td[data-plain]:focus, th[data-plain]:focus, .wk-info-k[data-plain]:focus, .wk-in
 .wk-notes[hidden] { display: none; }
 .wk-notes ol { margin: 0; padding: 0; list-style: none; }
 .wk-notes li:target { background: var(--accent-soft); }
-.wk-note-num { color: var(--wk-link); }
+.wk-note-num { color: var(--wk-link); text-decoration: none; }
+a.wk-note-num:hover { text-decoration: underline; }
 .wk-back { clear: both; margin-top: 18px; font-size: 13px; color: var(--ink-muted); }
 .wk-back[hidden] { display: none; }
 .wk-back summary { cursor: pointer; }
@@ -480,6 +481,29 @@ td[data-plain]:focus, th[data-plain]:focus, .wk-info-k[data-plain]:focus, .wk-in
 .wk-dropline[hidden] { display: none; }
 /* 멤버 문서의 프로필 표(아직 문서에 넣지 않은 것). 여느 정보 상자와 같은 모양이다. */
 .wk-virtual { position: relative; }
+
+/* ---------- 분류 접기 · 제목 번호 · 각주로 올라가기 · 리다이렉트 안내 (읽는 화면) ---------- */
+.wk-hpre { user-select: none; }
+.wiki .wk-hfold { width: 0.9em; margin-right: 6px; padding: 0; color: var(--ink-faint); font-size: 0.55em; line-height: 1; vertical-align: 0.25em; }
+.wk-hfold::before { content: '\25BC'; }
+.wk-block.is-folded > .wk-text .wk-hfold::before { content: '\25B6'; }
+.wk-hnum { margin-right: 8px; color: var(--wk-link); text-decoration: none; }
+.wk-hnum::before { content: attr(data-num); }
+.wk-hnum:hover { text-decoration: underline; }
+.wk-block.has-hpre > .wk-text[data-num]::before { content: none; }
+.wk-doc.is-readonly .wk-body > .wk-block[data-head] > .wk-text { cursor: pointer; }
+.wk-doc.is-readonly .wk-body > .wk-block[data-head]:hover .wk-hfold { color: var(--wk-text); }
+.wk-body > .wk-block.is-tucked { display: none; }
+.wk-block.is-folded > .wk-text { color: var(--ink-muted); }
+.wk-fn.is-flash { background: #ffe58a; box-shadow: 0 0 0 3px #ffe58a; border-radius: 2px; }
+.wk-alias { margin: 8px 0 0; font-size: 13px; color: var(--ink-muted); }
+.wk-alias b { font-weight: 700; color: var(--wk-text); }
+
+/* ---------- 표의 칸 너비 ---------- */
+.wk-table table.is-measure td, .wk-table table.is-measure th { white-space: pre; }
+.wk-rowtool .wk-rt-wide, .wk-rowtool .wk-rt-auto { width: auto; padding: 0 7px; font-size: 12px; white-space: nowrap; }
+.wk-rowtool .wk-rt-wide { cursor: ew-resize; touch-action: none; }
+.wk-rowtool .wk-rt[hidden] { display: none; }
 
 /* ---------- 블록 지우기: 글이 아닌 블록 위에, 편집 중에는 늘 보인다 ---------- */
 .wiki .wk-del { display: none; margin: 0 0 3px; padding: 1px 8px; border: 1px solid var(--wk-line); border-radius: 3px; background: #fff; color: #c0392b; font-size: 12px; line-height: 1.6; }

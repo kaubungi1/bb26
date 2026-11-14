@@ -157,13 +157,20 @@ const WikiBlocks = (() => {
   }
 
   /* 표를 고친 뒤 다시 편집 상태로 세우고 그 칸(없으면 그 칸을 덮은 칸)에 커서를 둔다. change 가 false 를 주면 그만둔다. */
-  function reshape(box, change, r, c) {
+  function reshape(box, change, r, c, cols) {
     Wiki.settle();
     const block = Wiki.block(box.dataset.cid);
     if (!block || block.kind !== 'table') return;
     const rows = WikiTable.copy(block.data.rows);
     if (change(rows) === false) return;
-    block.data = { ...block.data, rows };
+    const next = { ...block.data, rows };
+    /* 정해 둔 칸 너비(cw)는 칸 수와 같이 간다. cols 가 그 칸을 넣거나 뺀다. 수가 안 맞으면 자동으로 돌린다 */
+    if (Array.isArray(next.cw)) {
+      const cw = [...next.cw];
+      if (cols) cols(cw);
+      if (cw.length === rows[0].length) next.cw = cw; else delete next.cw;
+    }
+    block.data = next;
     Wiki.save(block.cid);
     WikiRender.paintAll();
     const rr = Math.min(r, rows.length - 1);
@@ -364,14 +371,19 @@ const WikiBlocks = (() => {
     rowTool = el('div', 'wk-rowtool');
     rowTool.append(toolButton('add', '+', '아래에 줄 더하기'), toolButton('del', '−', '이 줄 빼기'), toolButton('drag', '', '끌어서 줄 옮기기'));
     colTool = el('div', 'wk-rowtool wk-coltool');
-    colTool.append(toolButton('addcol', '+', '오른쪽에 칸 더하기'), toolButton('delcol', '−', '이 칸 빼기'));
+    colTool.append(toolButton('addcol', '+', '오른쪽에 칸 더하기'), toolButton('delcol', '−', '이 칸 빼기'),
+      toolButton('wide', '↔ 너비', '옆으로 끌어서 칸 너비 바꾸기'), toolButton('auto', '자동', '칸 너비를 내용에 맞게 되돌리기'));
     dropLine = el('div', 'wk-dropline');
     for (const t of [rowTool, colTool]) {
       t.hidden = true;
-      t.addEventListener('pointerdown', (e) => { e.preventDefault(); if (e.target.closest('[data-act="drag"]')) startDrag(e); });
+      t.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (e.target.closest('[data-act="drag"]')) startDrag(e);
+        else if (e.target.closest('[data-act="wide"]')) startResize(e);
+      });
       t.addEventListener('pointerenter', () => clearTimeout(hideTimer));
       t.addEventListener('pointerleave', hideSoon);
-      t.addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b && b.dataset.act !== 'drag') rowAct(b.dataset.act); });
+      t.addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b && b.dataset.act !== 'drag' && b.dataset.act !== 'wide') rowAct(b.dataset.act); });
     }
     dropLine.hidden = true;
     document.body.append(rowTool, colTool, dropLine);
@@ -403,6 +415,8 @@ const WikiBlocks = (() => {
     rowTool.style.top = `${Math.round(rect.top + (rect.height - rowTool.offsetHeight) / 2)}px`;
     colTool.hidden = !(h.kind === 'table' && h.cell);
     if (!colTool.hidden) {
+      const tb = Wiki.block(h.box.dataset.cid);
+      colTool.querySelector('[data-act="auto"]').hidden = !(tb && tb.data.cw);       /* 너비를 정한 표에서만 */
       const cell = h.cell.getBoundingClientRect();
       const table = h.box.querySelector('table').getBoundingClientRect();
       colTool.style.left = `${Math.round(cell.left + (cell.width - colTool.offsetWidth) / 2)}px`;
@@ -436,8 +450,9 @@ const WikiBlocks = (() => {
       const c = h.cell ? Number(h.cell.dataset.c) : 0;
       if (act === 'add') reshape(h.box, (rows) => (rows.length < 300 ? WikiTable.insertRow(rows, r + 1) : false), r + 1, 0);
       else if (act === 'del') reshape(h.box, (rows) => WikiTable.deleteRow(rows, r), r, 0);
-      else if (act === 'addcol') reshape(h.box, (rows) => (rows[0].length < 20 ? WikiTable.insertCol(rows, c + 1) : false), r, c + 1);
-      else if (act === 'delcol') reshape(h.box, (rows) => WikiTable.deleteCol(rows, c), r, c);
+      else if (act === 'addcol') reshape(h.box, (rows) => (rows[0].length < 20 ? WikiTable.insertCol(rows, c + 1) : false), r, c + 1, (cw) => cw.splice(c + 1, 0, cw[Math.min(c, cw.length - 1)]));
+      else if (act === 'delcol') reshape(h.box, (rows) => WikiTable.deleteCol(rows, c), r, c, (cw) => cw.splice(c, 1));
+      else if (act === 'auto') autoWidth(h.box);
       return;
     }
     const at = infoRows(h.box).indexOf(h.row);
@@ -493,6 +508,57 @@ const WikiBlocks = (() => {
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
     document.addEventListener('pointercancel', onUp);
+  }
+
+  /* ↔ 너비: 잡고 옆으로 끌면 그 칸의 너비가 바뀐다. 처음 끌 때 지금 보이는 너비가 모든 칸의 너비로 굳는다(data.cw).
+     화면이 좁아 표가 줄어 있으면 끈 거리도 그 비율로 센다. '자동' 은 정한 너비를 지우고 내용에 맞추게 돌린다. */
+  function startResize(e) {
+    const h = hover;
+    if (!h || !h.cell || !h.cell.isConnected) return;
+    clearTimeout(hideTimer);
+    const box = h.box;
+    const c = Number(h.cell.dataset.c) + h.cell.colSpan - 1;
+    Wiki.settle();
+    const block = Wiki.block(box.dataset.cid);
+    const table = box.querySelector('table');
+    if (!block || block.kind !== 'table' || !table) return;
+    const n = block.data.rows[0].length;
+    const list = (WikiTable.widths(block.data) || WikiTable.measure(table, n)).map((w) => Math.round(w));
+    WikiTable.setCols(table, list, true);
+    const sum = list.reduce((a, b) => a + b, 0);
+    const scale = sum / (table.getBoundingClientRect().width || sum);
+    const x0 = e.clientX;
+    const w0 = list[c];
+    let moved = false;
+    const onMove = (ev) => {
+      moved = true;
+      list[c] = Math.round(Math.max(40, Math.min(1200, w0 + (ev.clientX - x0) * scale)));
+      WikiTable.setCols(table, list, true);
+    };
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      hideTools();
+      const now = Wiki.block(box.dataset.cid);
+      if (moved && now && now.kind === 'table') {
+        now.data = { ...now.data, cw: list };
+        Wiki.save(now.cid);
+      }
+      WikiRender.paintAll();
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+  }
+  function autoWidth(box) {
+    Wiki.settle();
+    const block = Wiki.block(box.dataset.cid);
+    if (!block || block.kind !== 'table' || !block.data.cw) return;
+    const { cw, ...rest } = block.data;
+    block.data = rest;
+    Wiki.save(block.cid);
+    WikiRender.paintAll();
   }
 
   /* ---------- 넣기 · 옮기기 ---------- */
@@ -723,6 +789,7 @@ const WikiBlocks = (() => {
       if (tog) {
         const open = tog.parentElement.classList.toggle('is-open');
         tog.setAttribute('aria-label', open ? '접기' : '펼치기');
+        if (open) WikiTable.fitAll(tog.parentElement);        /* 접혀 있던 표는 펼칠 때 너비를 맞춘다 */
         return;
       }
       /* 분류 더하기 · 빈 분류의 '내용을 입력하세요' (render.js layout 이 편집 상태에서 끼워 넣는 줄) */

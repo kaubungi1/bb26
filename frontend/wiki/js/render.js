@@ -95,6 +95,7 @@ const WikiRender = (() => {
              한참 뒤에 뜨고 모양도 사이트와 다르다. 화면 읽기 프로그램에는 이름으로 내용을 알려 준다. */
           a.setAttribute('aria-label', `각주 ${ctx.notes.length}: ${r.f}`);
           sup.dataset.n = ctx.notes.length;
+          if (!ctx.depth) sup.id = `wk-fnref-${ctx.notes.length}`;       /* 문서 끝 각주 목록의 번호가 이리로 올라온다 */
           sup.append(a);
         } else {
           sup.contentEditable = 'false';
@@ -378,6 +379,15 @@ const WikiRender = (() => {
     }
     layout(body);
     paintNotes(ctx.notes);
+    WikiTable.fitAll(body);
+  }
+
+  /* 분류를 접고 펼 때: 내용은 그대로이고 번호·감춤만 다시 매긴다 */
+  function relayout() {
+    const body = document.getElementById('wk-body');
+    if (!Wiki.doc || !body) return;
+    layout(body);
+    WikiTable.fitAll(body);
   }
 
   /* ---------- 분류의 구조: 번호 · 목차 · 편집 상자 ----------
@@ -418,6 +428,8 @@ const WikiRender = (() => {
   function layout(body) {
     const editing = !Wiki.readonly;
     body.querySelectorAll(':scope > .wk-deco').forEach((n) => n.remove());
+    body.querySelectorAll(':scope > .wk-block > .wk-text > .wk-hpre').forEach((n) => n.remove());
+    let tuck = 0;                      /* 접힌 분류의 단계. 그 안의 블록은 감춘다(읽는 화면에서만) */
     const state = { nums: [0, 0, 0], open: 0 };
     const stack = [];                  /* 열려 있는 분류: { e 단계, cid 제목 블록, kids 아래 분류 수, filled 본문이 있는가, num } */
     const toc = [];
@@ -460,10 +472,34 @@ const WikiRender = (() => {
         box.id = `wk-h-${block.cid}`;
         box.dataset.head = e;
         box.dataset.depth = e - 1;                 /* 제목 줄은 바깥 상자 안에 있고, 제 상자의 윗변은 제목 칸이 그린다 */
+        if (tuck && e <= tuck) tuck = 0;
+        const folded = !editing && Wiki.folded.has(block.cid);
+        box.classList.toggle('is-tucked', !!tuck);
+        box.classList.toggle('is-folded', folded);
+        if (!tuck && folded) tuck = e;
         if (stack.length) stack[stack.length - 1].kids += 1;
         stack.push({ e, cid: block.cid, kids: 0, filled: false, num });
         toc.push({ id: box.id, num, text: host.textContent, level: e });
+        /* 읽는 화면의 제목 앞머리: 접기 표시와 번호. 번호는 목차로 가는 링크다. 글자는 CSS 가 그린다 — 제목 칸에
+           글자를 더하면 제목을 읽는 곳(목차·검색)마다 같이 읽힌다. 편집 중에는 두지 않는다(제목 칸이 입력칸이 된다). */
+        box.classList.toggle('has-hpre', !editing);
+        if (!editing) {
+          const pre = el('span', 'wk-hpre');
+          pre.contentEditable = 'false';
+          const fold = el('button', 'wk-hfold');
+          fold.type = 'button';
+          fold.setAttribute('aria-label', folded ? '펼치기' : '접기');
+          fold.setAttribute('aria-expanded', String(!folded));
+          const link = el('a', 'wk-hnum');
+          link.href = '#wk-toc';
+          link.dataset.num = num;
+          link.setAttribute('aria-label', `${num} 목차로`);
+          pre.append(fold, link);
+          host.prepend(pre);
+        }
       } else {
+        box.classList.toggle('is-tucked', !!tuck);
+        box.classList.remove('is-folded', 'has-hpre');
         delete box.dataset.head;
         box.dataset.depth = state.open;
         if (stack.length) stack[stack.length - 1].filled = true;
@@ -515,7 +551,11 @@ const WikiRender = (() => {
     notes.forEach((text, i) => {
       const li = el('li');
       li.id = `wk-note-${i + 1}`;
-      li.append(el('span', 'wk-note-num', `[${i + 1}]`), document.createTextNode(' ' + text));
+      /* 번호를 누르면 본문의 그 각주로 올라간다(wiki.js wireJumps) */
+      const num = el('a', 'wk-note-num', `[${i + 1}]`);
+      num.href = `#wk-fnref-${i + 1}`;
+      num.setAttribute('aria-label', `각주 ${i + 1}: 본문으로`);
+      li.append(num, document.createTextNode(' ' + text));
       list.append(li);
     });
     box.replaceChildren(list);
@@ -528,5 +568,5 @@ const WikiRender = (() => {
     paintAll();
   }
 
-  return { TEXT_KINDS, HEAD, SIZE, el, href, inline, make, retype, mount, paintAll, setImage };
+  return { TEXT_KINDS, HEAD, SIZE, el, href, inline, make, retype, mount, paintAll, relayout, setImage };
 })();

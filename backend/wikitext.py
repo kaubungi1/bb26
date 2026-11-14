@@ -50,6 +50,7 @@ LEVEL_MAX = 3              # 들여쓰기 단계(0 이 맨 앞)
 SIZE_MIN, SIZE_MAX = -2, 4  # 글자 크기 단계. 브라우저의 글자 크기 일곱 단계(1~7)에서 보통(3)을 0 으로 둔 값이다
 CATEGORY_PREFIX = '분류:'   # /wiki/분류:이름 은 분류 목록 화면이다. 문서 제목으로는 못 쓴다
 
+COL_MIN, COL_MAX = 40, 1200               # 표의 칸 너비(px)
 HEAD_KINDS = ('h2', 'h3', 'h4')          # 대분류 · 중분류 · 소분류
 TEXT_KINDS = ('p', 'h2', 'h3', 'h4', 'ul', 'ol', 'quote', 'notice')
 KINDS = TEXT_KINDS + ('img', 'yt', 'table', 'fold', 'infobox', 'embed', 'lyric')
@@ -272,6 +273,10 @@ def block(kind, data):
         out = {'rows': clean, 'head': bool(data.get('head', True))}
         if data.get('align') in ('c', 'r'):          # 표를 놓는 자리: 가운데 · 오른쪽(본문이 왼쪽으로 흐른다)
             out['align'] = data['align']
+        # cw: 사람이 끌어서 정한 칸 너비(px). 칸 수와 맞을 때만 받는다. 화면은 이 비율로 칸을 나눈다(table.js).
+        cw = data.get('cw')
+        if isinstance(cw, list) and len(cw) == width and all(isinstance(w, (int, float)) and not isinstance(w, bool) for w in cw):
+            out['cw'] = [max(COL_MIN, min(COL_MAX, int(w))) for w in cw]
         return out
     if kind == 'lyric':
         # 가사. 소절마다 원문(o)·발음(r)·번역(t) 세 줄이고 줄은 조각이다. gap 은 그 소절 앞에서 절이 바뀐다는 표시.

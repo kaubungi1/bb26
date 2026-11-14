@@ -500,8 +500,79 @@ const WikiEdit = (() => {
     else if (act === 'g') document.execCommand('hiliteColor', false, value);
     else if (act === 'up' || act === 'down') resize(sel, act === 'up' ? 1 : -1);
     else if (act === 'clear') document.execCommand('removeFormat');
+    else if (act === 'x') {
+      const linked = linkedAt(sel.getRangeAt(0));
+      if (sel.isCollapsed && !linked) return;
+      if (linked && sel.isCollapsed) selectNode(sel, linked);
+      if (linked) document.execCommand('unlink');
+      else document.execCommand('createLink', false, 'nolink:');
+    } else if (act === 'f') {
+      const r = sel.getRangeAt(0).cloneRange();
+      r.collapse(false);
+      const sup = WikiRender.inline([{ t: '', f: '' }], null).firstChild;
+      r.insertNode(sup);
+      footnoteInCell(sup);
+      return;
+    }
     Wiki.touch();
   }
+
+  /* 표의 칸·가사의 줄에 다는 각주와 링크. 문단의 것(footnote · link)과 하는 일은 같고, 문단 편집(cur)이 아니라
+     지금 고른 자리와 그 칸을 쓴다. 처음에는 칸에서 굵게·색만 됐고 각주·링크 단추는 아무 일도 하지 않았다(2026-11-14 사용자 질의). */
+  async function footnoteInCell(sup) {
+    const cell = sup.closest('[data-rich]');
+    const text = await Wiki.ask(sup.getBoundingClientRect(), { value: sup.dataset.f, placeholder: '각주' });
+    if (!sup.isConnected) return;
+    if (text === null ? !sup.dataset.f : !text.trim()) sup.remove();
+    else if (text !== null) sup.dataset.f = text.trim().slice(0, 500);
+    if (cell && cell.isConnected) {
+      cell.focus({ preventScroll: true });
+      if (sup.isConnected) {
+        const r = document.createRange();
+        r.setStartAfter(sup);
+        r.collapse(true);
+        getSelection().removeAllRanges();
+        getSelection().addRange(r);
+      }
+    }
+    Wiki.touch();
+  }
+  async function linkInCell(anchor) {
+    const sel = inCell();
+    if (!sel) return;
+    const range = sel.getRangeAt(0).cloneRange();
+    const start = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+    const cell = start.closest('[data-rich]');
+    const old = linkedAt(range);
+    const picked = range.toString().replace(/\s+/g, ' ').trim();
+    const before = old ? (old.dataset.w || decodeLink(old.getAttribute('href') || '')) : picked;
+    const rect = range.getBoundingClientRect();
+    const value = await Wiki.ask(rect.width || rect.height ? rect : anchor,
+      { value: before.slice(0, 200), placeholder: '문서 제목 또는 주소', titles: true });
+    const target = (value || '').trim();
+    if (!cell.isConnected || !cell.isContentEditable) return;
+    cell.focus({ preventScroll: true });
+    const now = getSelection();
+    now.removeAllRanges();
+    now.addRange(range);
+    if (!target) return;
+    const url = /^https?:\/\/\S+$/i.test(target) ? target : 'wiki:' + encodeURIComponent(target.slice(0, 60));
+    if (now.isCollapsed && old) selectNode(now, old);
+    if (now.isCollapsed) {
+      const a = document.createElement('a');
+      a.className = url.startsWith('wiki:') ? 'wk-link' : 'wk-ext';
+      a.setAttribute('href', url);
+      a.textContent = target;
+      const r = now.getRangeAt(0);
+      r.insertNode(a);
+      r.setStartAfter(a);
+      r.collapse(true);
+      now.removeAllRanges();
+      now.addRange(r);
+    } else document.execCommand('createLink', false, url);
+    Wiki.touch();
+  }
+
 
   /* 글자 크기를 한 단계 키우거나 줄인다. 지금 자리의 크기에서 센다. */
   function resize(sel, by) {
@@ -587,7 +658,8 @@ const WikiEdit = (() => {
      작은 입력창에 문서 제목이 자동 완성으로 뜬다. http 로 시작하면 바깥 링크다. */
   async function link(anchor) {
     const c = cur;
-    if (!c || !restore()) return;
+    if (!c) { await linkInCell(anchor); return; }
+    if (!restore()) return;
     const range = c.range.cloneRange();
     const old = linkedAt(range);
     const picked = range.toString().replace(/\s+/g, ' ').trim();
@@ -701,6 +773,9 @@ const WikiEdit = (() => {
     }
     cur = null;
     body.addEventListener('click', (e) => {
+      /* 고치는 중인 표 칸·가사 줄의 각주: 누르면 고치는 창 */
+      const cellNote = e.target.closest('[data-rich] [data-f]');
+      if (cellNote && !Wiki.readonly) { footnoteInCell(cellNote); return; }
       const host = e.target.closest('.wk-text');
       const box = host && host.closest('.wk-block');
       if (!box || box.parentElement !== body) return;           /* 틀로 끼운 문서의 문단은 여기서 고치지 않는다 */
