@@ -50,6 +50,13 @@ function stats(pairs) {
   return pairs.filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(' · ');
 }
 
+/* 그 사람이 속한 길드 수. m.guilds 는 소속 '행' 이라 한 길드에 파트 둘로 들어가면 두 줄이다
+   (guildMembers 는 길드·닉네임·파트로 유일). 줄 수를 세면 길드 1곳이 '길드 2' 로 나왔다.
+   멤버 탭 명함(members.js)과 같이 길드 주소로 묶어 센다. */
+function guildCount(m) {
+  return new Set((m.guilds || []).map((g) => g.slug)).size;
+}
+
 function paintMembers() {
   /* 딱지가 있는 사람이 위로. 그다음은 이름순(목록이 이미 이름순이다). */
   const rows = [...members].sort((a, b) => rankOf(b.badge) - rankOf(a.badge));
@@ -59,7 +66,7 @@ function paintMembers() {
       ${avatarChip(m.nickname, 'lg')}
       <span class="cell-main">
         <b>${escapeHtml(m.nickname)}</b>
-        <small>${stats([['길드', (m.guilds || []).length], ['지원', m.supportCount]])}</small>
+        <small>${stats([['길드', guildCount(m)], ['지원', m.supportCount]])}</small>
       </span>
       ${badgeCell(m)}
       ${canTouch(m) ? `<button type="button" class="del" data-del-member="${escapeHtml(m.nickname)}">삭제</button>` : ''}
